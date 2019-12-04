@@ -12,7 +12,7 @@ from aiocflib.crtp import (
     CRTPPacket,
     CRTPPortLike,
 )
-from aiocflib.utils.concurrency import create_daemon_task_group
+from aiocflib.utils.concurrency import create_daemon_task_group, ObservableValue
 
 __all__ = ("Crazyflie",)
 
@@ -119,6 +119,15 @@ class Crazyflie:
         messages you are interested in.
         """
         return self._dispatcher
+
+    @property
+    def link_quality(self) -> ObservableValue[float]:
+        """Returns an observable link quality measure from the underlying
+        link.
+        """
+        return (
+            self._driver.link_quality if self._driver else ObservableValue.constant(0.0)
+        )
 
     @property
     def platform(self) -> Platform:

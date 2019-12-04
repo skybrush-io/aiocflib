@@ -5,6 +5,7 @@ from async_generator import asynccontextmanager, async_generator, yield_
 from typing import Callable, Dict, List, Type
 
 from aiocflib.crtp.crtpstack import CRTPPacket
+from aiocflib.utils.concurrency import ObservableValue
 
 from .exceptions import WrongURIType
 
@@ -64,7 +65,6 @@ class CRTPDriver(metaclass=ABCMeta):
             the context is entered and that closes the connection when the
             context is exited
         """
-        # TODO(ntamas): how to replace link quality callbacks?
         raise NotImplementedError
 
     @abstractmethod
@@ -88,9 +88,9 @@ class CRTPDriver(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractproperty
-    def link_quality(self) -> float:
-        """Returns the most recent measurement of link quality, as a float between
-        0 (no link) and 1 (perfect link).
+    def link_quality(self) -> ObservableValue[float]:
+        """Observable measurement of link quality, as a float between 0 (no
+        link) and 1 (perfect link).
         """
         raise NotImplementedError
 

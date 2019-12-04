@@ -1,6 +1,7 @@
 """Utility functions related to concurrency management."""
 
 from anyio import (
+    create_condition,
     create_event,
     create_task_group,
     open_cancel_scope,
@@ -14,7 +15,13 @@ from queue import Full, Queue
 from typing import Any, Callable, Generic, Optional, TypeVar
 from sys import exc_info
 
-__all__ = ("AwaitableValue", "create_daemon_task_group", "Full", "ThreadContext")
+__all__ = (
+    "AwaitableValue",
+    "create_daemon_task_group",
+    "Full",
+    "ObservableValue",
+    "ThreadContext",
+)
 
 T = TypeVar("T")
 
@@ -30,13 +37,6 @@ class AwaitableValue(Generic[T]):
         self._event = create_event()
         self._value = None
 
-    async def wait(self) -> T:
-        """Waits for the value to be populated, and returns the value when
-        it is populated.
-        """
-        await self._event.wait()
-        return self._value
-
     async def set(self, value: T) -> None:
         """Sets a value and notifies all tasks waiting for the value."""
         if self._event.is_set():
@@ -44,6 +44,13 @@ class AwaitableValue(Generic[T]):
 
         self._value = value
         await self._event.set()
+
+    async def wait(self) -> T:
+        """Waits for the value to be populated, and returns the value when
+        it is populated.
+        """
+        await self._event.wait()
+        return self._value
 
 
 class DaemonTaskGroup(TaskGroup):
@@ -88,6 +95,58 @@ class DaemonTaskGroup(TaskGroup):
 
 
 create_daemon_task_group = DaemonTaskGroup
+
+
+class ObservableValue(Generic[T]):
+    """Object that combines an asyncio-style condition and a value. Tasks may
+    observe value changes in the object either by waiting for the value to
+    change using the `wait()` method, or by starting a generator that yields
+    new values by using the ObservableValue_ in an `async for` loop.
+
+    Note that observers of the value are not guaranteed to receive all values
+    if the value is changing rapidly. Whenever the generator running the observer
+    task gets waken up, it retrieves the _current_ value and yields that to the
+    caller.
+    """
+
+    @classmethod
+    def constant(cls, value: T):
+        return cls(value)
+
+    def __init__(self, value: T):
+        """Constructor.
+
+        Parameters:
+            value: the initial value
+        """
+        self._condition = create_condition()
+        self._value = value
+
+    async def set(self, value: T) -> None:
+        """Sets a new value and notifies all tasks waiting for the value."""
+        async with self._condition:
+            self._value = value
+            await self._condition.notify_all()
+
+    update = set
+
+    @property
+    def value(self) -> T:
+        """Returns the current value of the observable."""
+        return self._value
+
+    async def wait(self) -> T:
+        """Waits for the value to be change, and returns the most recent value
+        at the earliest possible occasion.
+        """
+        async with self._condition:
+            await self._condition.wait()
+            return self._value
+
+    def __aiter__(self):
+        return self
+
+    __anext__ = wait
 
 
 class ThreadContext(Generic[T]):

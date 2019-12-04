@@ -16,7 +16,7 @@ class SlidingWindowMean:
         self.reset()
 
     def add(self, value: float) -> float:
-        if len(self._data) == self._fill:
+        if len(self._data) == self._window_size:
             self._sum += value - self._data[0]
         else:
             self._sum += value

@@ -1,12 +1,16 @@
 from async_generator import asynccontextmanager, async_generator, yield_
-from typing import List
+from typing import List, Optional
 from urllib.parse import urlparse
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.drivers.cfusb import CfUsb
+from aiocflib.utils.concurrency import ObservableValue
 
 from .crtpdriver import CRTPDriver, register
 from .exceptions import WrongURIType
+
+
+_link_quality = None  # type: Optional[ObservableValue[float]]
 
 
 @register("usb")
@@ -43,6 +47,13 @@ class USBDriver(CRTPDriver):
     @property
     def is_safe(self) -> bool:
         return True
+
+    @property
+    def link_quality(self) -> ObservableValue[float]:
+        global _link_quality
+        if _link_quality is None:
+            _link_quality = ObservableValue.constant(1.0)
+        return _link_quality
 
     @property
     def name(self) -> str:

@@ -137,8 +137,6 @@ class CfUsb:
         communication over the given low-level device. Returns when the
         thread has been started.
         """
-        # TODO(ntamas): block until we can lock the device
-
         self._version = None
         self._exit_stack = AsyncExitStack()
 

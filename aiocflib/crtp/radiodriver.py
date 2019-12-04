@@ -1,6 +1,6 @@
 import sys
 
-from anyio import create_condition, create_queue, move_on_after, sleep
+from anyio import create_queue, move_on_after, sleep
 from async_generator import asynccontextmanager, async_generator, yield_
 from functools import partial
 from typing import Callable, Tuple, List
@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.drivers.crazyradio import Crazyradio, RadioConfiguration
-from aiocflib.utils.concurrency import create_daemon_task_group
+from aiocflib.utils.concurrency import create_daemon_task_group, ObservableValue
 from aiocflib.utils.statistics import SlidingWindowMean
 
 from .crtpdriver import CRTPDriver, register
@@ -105,8 +105,7 @@ class RadioDriver(CRTPDriver):
                 with null packets and how it should handle packet resending
         """
         self._has_safe_link = False
-        self._link_quality = 0.0
-        self._link_quality_condition = create_condition()
+        self._link_quality = ObservableValue(0.0)
 
         preset = self.PRESETS.get(preset)
         if not preset:
@@ -126,7 +125,7 @@ class RadioDriver(CRTPDriver):
         return self._has_safe_link
 
     @property
-    def link_quality(self) -> float:
+    def link_quality(self) -> ObservableValue[float]:
         return self._link_quality
 
     @property
@@ -161,14 +160,6 @@ class RadioDriver(CRTPDriver):
         """
         # TODO(ntamas)
         return []
-
-    async def _set_link_quality(self, value: float) -> None:
-        """Sets a new link quality measure and notifies all listeners
-        waiting for a new link quality measure.
-        """
-        self._link_quality = value
-        async with self._link_quality_condition:
-            await self._link_quality_condition.notify_all()
 
     async def _worker(
         self, radio: Crazyradio, configuration: RadioConfiguration
@@ -207,7 +198,8 @@ class RadioDriver(CRTPDriver):
             # mean link quality between 0 and 1.
             score = 9 - response.retry_count + int(response.ack)
             link_quality_estimator.add(score)
-            await self._set_link_quality(link_quality_estimator.mean / 10.0)
+            print(repr(link_quality_estimator._data))
+            await self._link_quality.update(link_quality_estimator.mean / 10.0)
 
             # Check whether the packet has to be re-sent
             action = self.resending_strategy(response.ack, to_send)
