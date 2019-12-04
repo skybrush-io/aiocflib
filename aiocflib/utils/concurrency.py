@@ -3,6 +3,7 @@
 from anyio import (
     create_event,
     create_task_group,
+    open_cancel_scope,
     run_async_from_thread,
     run_in_thread,
     TaskGroup,
@@ -13,9 +14,53 @@ from queue import Full, Queue
 from typing import Any, Callable, Generic, Optional, TypeVar
 from sys import exc_info
 
-__all__ = ("AwaitableValue", "Full", "ThreadContext")
+__all__ = ("AwaitableValue", "create_daemon_task_group", "Full", "ThreadContext")
 
 T = TypeVar("T")
+
+
+class DaemonTaskGroup(TaskGroup):
+    """Task group that cancels all its child tasks when the execution is about
+    to leave the context (instead of waiting for the child tasks to finish).
+    """
+
+    def __init__(self):
+        self._cancel_scopes = []
+        self._task_group = None
+        self._spawner = None
+
+    async def __aenter__(self):
+        self._task_group = create_task_group()
+        self._spawner = await self._task_group.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, tb):
+        for cancel_scope in reversed(self._cancel_scopes):
+            try:
+                await cancel_scope.cancel()
+            except Exception:
+                # well, meh
+                pass
+        return await self._task_group.__aexit__(exc_type, exc_value, tb)
+
+    async def spawn(self, func, *args, **kwds):
+        scope = open_cancel_scope()
+        self._cancel_scopes.append(scope)
+        try:
+            return await self._spawner.spawn(self._run, scope, func, *args, **kwds)
+        except Exception:
+            self._cancel_scopes.remove(scope)
+            raise
+
+    async def _run(self, scope, func, *args, **kwds):
+        try:
+            async with scope:
+                return await func(*args, **kwds)
+        finally:
+            self._cancel_scopes.remove(scope)
+
+
+create_daemon_task_group = DaemonTaskGroup
 
 
 class AwaitableValue(Generic[T]):

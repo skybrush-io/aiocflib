@@ -21,13 +21,16 @@ class CRTPDriver(metaclass=ABCMeta):
     @staticmethod
     @asynccontextmanager
     @async_generator
-    async def connected_to(uri):
+    async def connected_to(uri, *args, **kwds):
         """Creates a CRTPDriver_ instance from a URI specification and connects
         to the Crazyflie located at the given URI. Closes the connection when the
         execution exits the context.
 
         Parameters:
             uri: the URI to create the driver instance from
+
+        Additional positional and keyword arguments are forwarded to the
+        driver factory determined from the URI scheme.
         """
         scheme, sep, rest = uri.partition("://")
         if not sep:
@@ -37,7 +40,7 @@ class CRTPDriver(metaclass=ABCMeta):
         if driver_factory is None:
             raise WrongURIType("Unknown CRTP driver URI: {0!r}".format(scheme))
 
-        driver = driver_factory()
+        driver = driver_factory(*args, **kwds)
         async with driver._connected_to(uri):
             await yield_(driver)
 
@@ -128,7 +131,10 @@ class CRTPDriver(metaclass=ABCMeta):
 _registry = {}  # type: Dict[str, Type[CRTPDriver]]
 
 
-def register(scheme: str) -> Callable[[Type[CRTPDriver]], Type[CRTPDriver]]:
+CRTPDriverFactory = Callable[[], CRTPDriver]
+
+
+def register(scheme: str) -> Callable[[CRTPDriverFactory], CRTPDriverFactory]:
     """Class decorator factory that returns a decorator that registers a class
     as a CRTP driver with the given URI scheme.
 

@@ -20,4 +20,5 @@ def init_drivers():
     drivers you wish to use in the driver URIs before constructing a driver
     object.
     """
+    from .radiodriver import RadioDriver  # noqa
     from .usbdriver import USBDriver  # noqa

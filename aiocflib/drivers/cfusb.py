@@ -10,6 +10,7 @@ import usb
 
 from aiocflib.utils.concurrency import Full, ThreadContext
 from aiocflib.utils.usb import (
+    claim_device,
     find_devices,
     is_pyusb1,
     send_vendor_setup,
@@ -142,6 +143,7 @@ class CfUsb:
         self._exit_stack = AsyncExitStack()
 
         stack = await self._exit_stack.__aenter__()
+        await stack.enter_async_context(claim_device(self._device))
         receiver = await stack.enter_async_context(self._receiver_thread_context)
         sender = await stack.enter_async_context(self._sender_thread_context)
 

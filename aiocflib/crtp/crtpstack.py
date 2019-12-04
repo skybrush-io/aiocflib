@@ -61,6 +61,11 @@ class CRTPPacket:
             header = data[0]
         return cls(header=header, data=data[1:])
 
+    @classmethod
+    def null(cls):
+        """Constructs a null CRTP packet."""
+        return cls(header=0xFF)
+
     def __init__(
         self,
         header: Optional[int] = None,

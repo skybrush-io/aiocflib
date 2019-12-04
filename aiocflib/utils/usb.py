@@ -1,6 +1,9 @@
 """USB-related low-level utility functions."""
 
+from anyio import create_lock
+from async_generator import asynccontextmanager, async_generator, yield_
 from typing import Any, List
+from weakref import WeakValueDictionary
 
 import os
 
@@ -16,6 +19,9 @@ __all__ = (
 #: Type variable to represent a USB device
 USBDevice = Any
 
+#: Module-level variable to hold a mapping from unique USB device IDs to their
+#: locks that prevent concurrent access to these devices
+_locks = WeakValueDictionary()
 
 try:
     import usb.core
@@ -30,6 +36,24 @@ try:
 except Exception:
     _backend = None
     is_pyusb1 = False
+
+
+@asynccontextmanager
+@async_generator
+async def claim_device(device: USBDevice):
+    """Asynchronous context manager that claims a USB device and prevents
+    others from claiming the same device as long as the execution stays
+    within the context.
+    """
+    global _locks
+
+    uid = get_device_uid(device)
+    lock = _locks.get(uid)
+    if lock is None:
+        _locks[uid] = lock = create_lock()
+
+    async with lock:
+        await yield_()
 
 
 def find_devices(vid: int, pid: int) -> List[USBDevice]:
@@ -68,6 +92,17 @@ def get_vendor_setup(handle, request, value, index, length, timeout=1000):
             index=index,
             timeout=timeout,
         )
+
+
+def get_device_uid(device: USBDevice) -> str:
+    """Returns a string that can be used to uniquely identify a USB device
+    that is currently plugged in.
+
+    Currently the string contains the bus number and the device number of the
+    device. This means that the unique identifier may change if the device is
+    unplugged and then plugged in again at a different port.
+    """
+    return "{0.bus}:{0.address}".format(device)
 
 
 def send_vendor_setup(handle, request, value, index=0, data=(), timeout=1000):

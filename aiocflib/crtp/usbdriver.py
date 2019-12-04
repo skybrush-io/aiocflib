@@ -28,19 +28,19 @@ class USBDriver(CRTPDriver):
         if index < 0:
             raise WrongURIType("USB port index must be non-negative")
 
-        driver = await CfUsb.detect_one(index=index)
-        driver.use_crtp_to_usb = True
+        device = await CfUsb.detect_one(index=index)
+        device.use_crtp_to_usb = True
 
         try:
-            async with driver as self._driver:
+            async with device as self._device:
                 await yield_(self)
         finally:
-            self._driver = None
+            self._device = None
 
     def get_name(self) -> str:
         return "USBCDC"
 
-    def get_status(self):
+    async def get_status(self):
         return "No information available"
 
     def is_safe(self) -> bool:
@@ -52,7 +52,7 @@ class USBDriver(CRTPDriver):
         Returns:
             the next CRTP packet that was received
         """
-        data = await self._driver.receive_bytes()
+        data = await self._device.receive_bytes()
         return CRTPPacket.from_bytes(data)
 
     async def send_packet(self, packet: CRTPPacket):
@@ -61,7 +61,7 @@ class USBDriver(CRTPDriver):
         Parameters:
             packet: the packet to send
         """
-        await self._driver.send_bytes(packet.to_bytes())
+        await self._device.send_bytes(packet.to_bytes())
 
     @classmethod
     async def scan_interface(cls, address=None) -> List[str]:

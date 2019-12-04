@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from anyio import create_event, create_task_group, Event, open_cancel_scope
+from anyio import create_event, Event
 from async_generator import async_generator, yield_from_
 from typing import Optional
 
@@ -11,6 +11,7 @@ from aiocflib.crtp import (
     CRTPPacket,
     CRTPPortLike,
 )
+from aiocflib.utils.concurrency import create_daemon_task_group
 
 __all__ = ("Crazyflie",)
 
@@ -44,7 +45,6 @@ class Crazyflie:
         self._uri = uri
         self._dispatcher = CRTPDispatcher()
 
-        self._cancel_scope = None
         self._driver = None
         self._task_group = None
 
@@ -56,18 +56,16 @@ class Crazyflie:
         self._platform = Platform(self)
 
     async def __aenter__(self):
-        task_group = create_task_group()
-        self._task_group = await task_group.__aenter__()
+        self._task_group = create_daemon_task_group()
+        spawner = await self._task_group.__aenter__()
 
         on_opened = create_event()
-        await self._task_group.spawn(self._open_connection, on_opened)
+        await spawner.spawn(self._open_connection, on_opened)
         await on_opened.wait()
 
         return self
 
     async def __aexit__(self, exc_type, exc_value, tb):
-        if self._cancel_scope:
-            await self._cancel_scope.cancel()
         return await self._task_group.__aexit__(exc_type, exc_value, tb)
 
     async def _message_handler(self, driver):
@@ -92,21 +90,15 @@ class Crazyflie:
             on_opened: an event that must be set when the connection has been
                 established
         """
-        async with open_cancel_scope() as scope:
-            self._cancel_scope = scope
+        async with CRTPDriver.connected_to(self._uri) as driver:
+            self._driver = driver
+            await on_opened.set()
 
+            # TODO(ntamas): maybe handle IOError here?
             try:
-                async with CRTPDriver.connected_to(self._uri) as driver:
-                    self._driver = driver
-                    await on_opened.set()
-
-                    # TODO(ntamas): maybe handle IOError here?
-                    try:
-                        await self._message_handler(driver)
-                    finally:
-                        self._driver = None
+                await self._message_handler(driver)
             finally:
-                self._cancel_scope = None
+                self._driver = None
 
     @property
     def console(self) -> Console:
@@ -212,7 +204,7 @@ async def test():
     def print_packets(packet):
         print(repr(packet))
 
-    uri = "usb://0"
+    uri = "bradio://0/80/2M/E7E7E7E704"
     async with Crazyflie(uri) as cf:
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())

@@ -1,6 +1,7 @@
 """Asynchronous USB driver for the Crazyradio USB dongle."""
 
 from aiocflib.utils.usb import (
+    claim_device,
     find_devices,
     get_vendor_setup,
     is_pyusb1,
@@ -8,9 +9,11 @@ from aiocflib.utils.usb import (
     USBDevice,
     USBError,
 )
-from anyio import run_in_thread
+from anyio import create_lock, run_in_thread
 from array import array
 from async_exit_stack import AsyncExitStack
+from async_generator import asynccontextmanager, async_generator, yield_
+from binascii import unhexlify
 from enum import IntEnum
 from functools import total_ordering, wraps
 from typing import Iterable, List, Optional, Union
@@ -29,7 +32,10 @@ CRADIO_PID = 0x7777
 CrazyradioAddress = bytes
 
 #: Type alias for objects that can be converted into Crazyradio addresses
-CrazyradioAddressLike = Union[int, bytes]
+CrazyradioAddressLike = Union[int, bytes, str]
+
+#: The default Crazyradio address
+DEFAULT_ADDRESS = b"\xe7\xe7\xe7\xe7\xe7"  # type: CrazyradioAddress
 
 
 class CrazyradioConfigurationRequest(IntEnum):
@@ -56,6 +62,18 @@ class CrazyradioDataRate(IntEnum):
     DR_250KPS = 0
     DR_1MPS = 1
     DR_2MPS = 2
+
+    @classmethod
+    def from_string(cls, value):
+        value = value.upper()
+        if value in ("250K", "250KPS", "250KBPS"):
+            return cls.DR_250KPS
+        elif value in ("1M", "1MPS", "1MBPS"):
+            return cls.DR_1MPS
+        elif value in ("2M", "2MPS", "2MBPS"):
+            return cls.DR_2MPS
+        else:
+            return cls(value)
 
 
 class CrazyradioPower(IntEnum):
@@ -141,11 +159,74 @@ class Acknowledgment:
 
 
 @total_ordering
-class ScanTarget:
-    """Simple value class that describes a single target of a radio scan that
-    aims to detect a device at a particular channel with a particular data
-    rate.
+class RadioConfiguration:
+    """Simple value class that contains the commonly used configuration variables
+    of a Crazyradio instance that we expect the user to provide when sending
+    packets.
+
+    This class is also used to specify a single configuration of a radio scan
+    for reachable devices.
     """
+
+    @classmethod
+    def from_uri_path(cls, path: str):
+        """Creates a RadioConfiguration_ object from the format typically found
+        in ``radio://`` URIs.
+
+        The path must look like this: ``/channel/rate/address``, where
+        ``channel`` is the numeric index of the radio channel in decimal
+        format, ``rate`` is the data rate (one of ``250K``, ``1M`` or ``2M``),
+        and ``address`` is the address in hexadecimal format. The address may
+        also be a single decimal number between 0 and 255, in which case it is
+        assumed to be prepended by four ``0xE7`` bytes.
+
+        The channel defaults to 2, the rate defaults to 2M, and the address
+        defaults to E7E7E7E7E7.
+        """
+        if not path or path == "/":
+            path = []
+        else:
+            path = path.split("/")
+            if path[0] == "":
+                path.pop(0)
+
+        # Parse channel
+        if path:
+            channel = path.pop(0)
+            try:
+                channel = int(channel)
+            except ValueError:
+                raise ValueError("Invalid channel index: {0!r}".format(channel))
+            if channel < 0 or channel > 125:
+                raise ValueError("Invalid channel index: {0!r}".format(channel))
+        else:
+            channel = 2
+
+        # Parse data rate
+        if path:
+            data_rate = path.pop(0)
+            try:
+                data_rate = CrazyradioDataRate.from_string(data_rate)
+            except ValueError:
+                raise ValueError("Invalid data rate: {0!r}".format(data_rate))
+        else:
+            data_rate = CrazyradioDataRate.DR_2MPS
+
+        # Parse address
+        if path:
+            address = path.pop(0)
+            try:
+                address = Crazyradio.to_address(address)
+            except Exception as ex:
+                raise ValueError("Invalid address: {0!r}".format(address)) from ex
+        else:
+            address = DEFAULT_ADDRESS
+
+        # Extra parts at the end
+        if path:
+            raise ValueError("Excess parts at the end of the path")
+
+        return cls(address=address, channel=channel, data_rate=data_rate)
 
     def __init__(
         self,
@@ -157,8 +238,12 @@ class ScanTarget:
         """Constructor.
 
         Parameters:
-            data_rate: the data rate to use during the scan
-            channel: the channel to scan; `None` means all channels
+            address: the address to use for sending packets
+            data_rate: the data rate to use for sending packets
+            channel: the channel to use for sending packets; `None` is usable
+                for radio channel scans where we want to specify that the
+                scan will happen on all channels. `None` is not allowed if the
+                object is used for declaring where packets should be sent.
         """
         self._address = Crazyradio.to_address(address) if address is not None else None
         self._channel = channel
@@ -166,18 +251,27 @@ class ScanTarget:
 
     @property
     def address(self) -> Optional[CrazyradioAddress]:
-        """The address to use during the scan."""
+        """The address to use when sending packets."""
         return self._address
 
     @property
     def channel(self) -> Optional[int]:
-        """The channel to use during the scan."""
+        """The channel to use when sending packets."""
         return self._channel
 
     @property
     def data_rate(self) -> CrazyradioDataRate:
-        """The data rate to use during the scan."""
+        """The data rate to use when sending packets."""
         return self._data_rate
+
+    @property
+    def is_full(self) -> bool:
+        """Returns whether the configuration is fully specified."""
+        return (
+            self._address is not None
+            and self._channel is not None
+            and self._data_rate is not None
+        )
 
     def replace(
         self,
@@ -185,6 +279,9 @@ class ScanTarget:
         data_rate: Optional[CrazyradioDataRate] = None,
         channel: Optional[int] = None,
     ):
+        """Replaces the address, the data rate and/or the channel in the
+        configuration object and returns a new configuration object.
+        """
         return self.__class__(
             address=address if address is not None else self._address,
             data_rate=data_rate if data_rate is not None else self._data_rate,
@@ -199,6 +296,10 @@ class ScanTarget:
         )
 
     def __lt__(self, other):
+        # Order is important here: we want RadioConfiguration objects to be
+        # sortable in a way that same data rates are clustered together. This
+        # is because it is faster to switch addresses than channels or data
+        # rates, and we want the radio scans to be as fast as possible.
         return (self._data_rate, self._channel, self._address) < (
             other._data_rate,
             other._channel,
@@ -214,7 +315,30 @@ class ScanTarget:
 
 
 class Crazyradio:
-    """ Used for communication with the Crazyradio USB dongle """
+    """Low-level driver object that is used for communication with the
+    Crazyflie via a Crazyradio.
+
+    This object is intended to be used as an asynchronous context manager as
+    follows::
+
+        device = await CfUsb.detect_one()
+        async with device as radio:
+            response = await radio.send_and_receive_bytes(b"1234")
+            if response and response.ack:
+                print(repr(response.data))
+
+    In the context, a background thread is running and managing the low-level
+    communication with the device; you may call `radio.send_and_receive_bytes()`
+    to send raw bytes to and receive raw bytes from the device. The thread is
+    terminated when the execution exits the context.
+
+    Note that you cannot receive data from the Crazyflie without sending some
+    as the downstream is contained in the acknowledgment packets. If you need
+    to receive data but you have nothing to say, send a CRTP null packet.
+
+    If there is another thread that is already using the same device, the
+    context blocks upon entering until the device becomes available.
+    """
 
     @classmethod
     async def detect_all(cls):
@@ -244,19 +368,33 @@ class Crazyradio:
         """Converts a Crazyradio address-like object to a valid address.
 
         When the input is a bytes object of length 5, it is returned intact.
+
         When the input is an integer between 0 and 255, inclusive, it is
         appended in hexadecimal form to E7E7E7E7 and the extended byte sequence
         is returned.
+
+        When the input is a hexadecimal string of length 10, it is unhexlified
+        and returned as a bytes object.
         """
         if isinstance(address, int) and address >= 0 and address <= 255:
             return bytes((0xE7, 0xE7, 0xE7, 0xE7, address))
-        elif isinstance(address, bytes) and len(address) == 5:
+        if isinstance(address, bytes) and len(address) == 5:
             return address
-        else:
-            raise TypeError(
-                "expected bytes object of length 5 or an integer between 0 "
-                "and 255, inclusive, got {0!r}".format(address)
-            )
+        if isinstance(address, str) and len(address) == 10:
+            try:
+                return unhexlify(address)
+            except Exception:
+                pass
+        if isinstance(address, str):
+            try:
+                return bytes((0xE7, 0xE7, 0xE7, 0xE7, int(address)))
+            except ValueError:
+                pass
+        raise TypeError(
+            "expected a bytes object of length 5, a hexadecimal string of "
+            "length 10 or an integer between 0 and 255, inclusive, "
+            "got {0!r}".format(address)
+        )
 
     def __init__(self, device: USBDevice):
         """Constructor.
@@ -269,16 +407,17 @@ class Crazyradio:
         self._device = device
 
         self._arc = -1  # type: int
-        self._current_channel = None  # type: Optional[int]
         self._current_address = None  # type: Optional[CrazyradioAddress]
+        self._current_channel = None  # type: Optional[int]
+        self._current_configuration = None  # type: Optional[RadioConfiguration]
         self._current_data_rate = None  # type: Optional[CrazyradioDataRate]
+        self._version = None  # type: Optional[float]
 
         self._sender_thread_context = ThreadContext.create_worker(
             setup=self._configure_device, teardown=self._teardown_device
         )
 
         self._exit_stack = None  # type: Optional[AsyncExitStack]
-        self._version = None  # type: Optional[float]
 
     @property
     def version(self) -> Optional[float]:
@@ -299,10 +438,10 @@ class Crazyradio:
         """
         # TODO(ntamas): block until we can lock the device
 
-        self._version = None
         self._exit_stack = AsyncExitStack()
 
         stack = await self._exit_stack.__aenter__()
+        await stack.enter_async_context(claim_device(self._device))
         sender = await stack.enter_async_context(self._sender_thread_context)
 
         return _CfRadioCommunicator(sender, self)
@@ -319,6 +458,9 @@ class Crazyradio:
         This function is executed in the worker thread.
         """
         device = self._device
+
+        self._current_configuration = None
+        self._version = None
 
         if is_pyusb1:
             try:
@@ -360,9 +502,11 @@ class Crazyradio:
 
         This function is executed in the worker thread.
         """
-        self._current_channel = None
         self._current_address = None
+        self._current_channel = None
+        self._current_configuration = None
         self._current_data_rate = None
+        self._version = None
 
         try:
             if self._use_crtp_to_usb:
@@ -379,6 +523,22 @@ class Crazyradio:
         finally:
             self._handle = None
             self._version = None
+
+    def _configure(self, configuration: RadioConfiguration) -> None:
+        """Sets the address, channel and data rate of the radio in a single
+        call.
+
+        This function also caches the last configuration object it was called
+        with. If the current configuration object is the same as the last one
+        and there were no manual changes to the address, channel and data
+        rates in the meanwile with the appropriate methods, the configuration
+        step will be skipped to save some USB bandwidth.
+        """
+        if configuration is not self._current_configuration:
+            self._set_data_rate(configuration.data_rate)
+            self._set_channel(configuration.channel)
+            self._set_address(configuration.address)
+            self._current_configuration = configuration
 
     def _has_fw_scan(self):
         """Returns whether the Crazyradio supports accelerated firmware-driven
@@ -410,6 +570,7 @@ class Crazyradio:
                 address,
             )
             self._current_address = address
+            self._current_configuration = None
 
     def _set_arc(self, arc: int) -> None:
         """Sets the ACK retry count in a synchronous manner.
@@ -467,6 +628,7 @@ class Crazyradio:
                 self._handle, CrazyradioConfigurationRequest.SET_RADIO_CHANNEL, channel
             )
             self._current_channel = channel
+            self._current_configuration = None
 
     def _set_cont_carrier(self, active):
         """Enables or disables continuous carrier mode on the radio.
@@ -493,6 +655,7 @@ class Crazyradio:
                 self._handle, CrazyradioConfigurationRequest.SET_DATA_RATE, data_rate
             )
             self._current_data_rate = data_rate
+            self._current_configuration = None
 
     def _set_power(self, power: CrazyradioPower) -> None:
         """Sets the radio power to be used in a synchronous manner.
@@ -506,12 +669,12 @@ class Crazyradio:
 
     def _scan(
         self,
-        targets: Optional[List[ScanTarget]] = None,
+        targets: Optional[List[RadioConfiguration]] = None,
         address: Optional[
             Union[CrazyradioAddressLike, Iterable[CrazyradioAddressLike]]
         ] = None,
         packet: bytes = b"\xff\xff\xff",
-    ) -> List[ScanTarget]:
+    ) -> List[RadioConfiguration]:
         """Scans a selected combination of channels and data rates to detect
         devices listening on these channels.
 
@@ -537,7 +700,8 @@ class Crazyradio:
         # If no targets are given, scan all channels and all data rates
         if targets is None:
             targets = [
-                ScanTarget(data_rate=data_rate) for data_rate in CrazyradioDataRate
+                RadioConfiguration(data_rate=data_rate)
+                for data_rate in CrazyradioDataRate
             ]
 
         # If an address is given, replace all address-less targets with the
@@ -583,7 +747,7 @@ class Crazyradio:
                 result.extend(target.replace(channel=channel) for channel in matches)
             else:
                 self._set_channel(target.channel)
-                status = self._send_bytes(packet)
+                status = self._send_and_receive_bytes(packet)
                 if status and status.ack:
                     result.append(target)
 
@@ -641,12 +805,12 @@ class Crazyradio:
             result = []
             for i in range(first, last + 1):
                 self._set_channel(i)
-                status = self._send_bytes(packet)
+                status = self._send_and_receive_bytes(packet)
                 if status and status.ack:
                     result.append(i)
             return result
 
-    def _send_bytes(self, data: array) -> Optional[Acknowledgment]:
+    def _send_and_receive_bytes(self, data: array) -> Optional[Acknowledgment]:
         """Sends some data via the radio connection in a synchronous manner.
 
         This function is executed in the worker thread.
@@ -689,6 +853,10 @@ class _CfRadioCommunicator:
             radio: the Crazyradio object that constructed this instance
         """
 
+        self._configuration_lock = create_lock()
+        self._radio = radio
+        self._sender = sender
+
         def create_proxy_for(name):
             target = getattr(radio, "_" + name)
 
@@ -699,24 +867,43 @@ class _CfRadioCommunicator:
                 except Full:
                     raise IOError("Request queue to radio outbound thread is full")
 
-            return proxy
+            return wraps(target)(proxy)
 
         methods = (
             "scan",
             "scan_channels",
-            "send_bytes",
+            "send_and_receive_bytes",
             "set_ack_enable",
-            "set_address",
             "set_arc",
             "set_ard_bytes",
             "set_ard_time",
-            "set_channel",
             "set_cont_carrier",
-            "set_data_rate",
             "set_power",
         )
+
         for name in methods:
             setattr(self, name, create_proxy_for(name))
+
+    @asynccontextmanager
+    @async_generator
+    async def configure(self, configuration: RadioConfiguration):
+        """Configures the radio address, channel and data rate according to
+        the given configuration object, and establishes a context. While the
+        context is open, any other tasks trying to call `configure()` will
+        block upon entering the context.
+
+        This ensures that tasks do not step on each other's foot by modifying
+        the address, channel or data rate without other tasks knowing about it.
+
+        Parameters:
+            configuration: the configuration to establish
+        """
+        async with self._configuration_lock:
+            try:
+                await self._sender(self._radio._configure, configuration)
+            except Full:
+                raise IOError("Request queue to radio outbound thread is full")
+            await yield_()
 
 
 async def test():
@@ -727,10 +914,8 @@ async def test():
             print("No Crazyflie found")
         else:
             # \xfd\x01 sends a "get version" command to the link control port
-            await radio.set_data_rate(targets[0].data_rate)
-            await radio.set_channel(targets[0].channel)
-            await radio.set_address(targets[0].address)
-            response = await radio.send_bytes(b"\xfd\x01")
+            await radio.activate(targets[0])
+            response = await radio.send_and_receive_bytes(b"\xfd\x01")
             print(repr(response))
 
 
