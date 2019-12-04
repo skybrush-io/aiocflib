@@ -11,6 +11,16 @@ from .crazyflie import Crazyflie
 __all__ = ("Platform",)
 
 
+class LinkControlChannel(IntEnum):
+    """Enum representig the names of the link control channels in the link
+    control service of the CRTP protocol.
+    """
+
+    ECHO = 0
+    SOURCE = 1
+    SINK = 2
+
+
 class PlatformChannel(IntEnum):
     """Enum representing the names of the channels of the platform service in
     the CRTP protocol.
@@ -127,7 +137,7 @@ class Platform:
 
     async def _is_crazyflie(self) -> bool:
         response = await self._crazyflie.run_command(
-            port=CRTPPort.LINKCTRL, channel=1, data=b"\x00"
+            port=CRTPPort.LINKCTRL, channel=LinkControlChannel.SOURCE, data=b"\x00"
         )
         return response.startswith(b"Bitcraze Crazyflie")
 

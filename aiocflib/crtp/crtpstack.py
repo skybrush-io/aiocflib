@@ -66,6 +66,15 @@ class CRTPPacket:
         """Constructs a null CRTP packet."""
         return cls(header=0xFF)
 
+    @classmethod
+    def safe_link(cls, value: bool = True):
+        """Constructs a special CRTP packet that turns safe link mode on or off.
+
+        Parameters:
+            value: whether the safe link mode should be enabled or disabled
+        """
+        return cls(header=0xFF, data=b"\x05\x01" if value else b"\x05\x00")
+
     def __init__(
         self,
         header: Optional[int] = None,
@@ -155,9 +164,9 @@ class CRTPPacket:
     def port(self, value: Union[CRTPPort, int]) -> None:
         self._header = (self._header & 0x0F) | ((value << 4) & 0xF0)
 
-    def to_bytes(self) -> bytes:
+    def to_bytes(self, safelink_bits: int = 12) -> bytes:
         """Convers the packet to its raw byte-level representation."""
-        return bytes((self._header,)) + self._data
+        return bytes(((self._header & 0xF3) | safelink_bits,)) + self._data
 
     __bytes__ = to_bytes
 

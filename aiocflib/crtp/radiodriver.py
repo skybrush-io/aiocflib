@@ -7,7 +7,7 @@ from typing import Callable, Tuple, List
 from urllib.parse import urlparse
 
 from aiocflib.crtp.crtpstack import CRTPPacket
-from aiocflib.drivers.crazyradio import Crazyradio, RadioConfiguration
+from aiocflib.drivers.crazyradio import Acknowledgment, Crazyradio, RadioConfiguration
 from aiocflib.utils.concurrency import create_daemon_task_group, ObservableValue
 from aiocflib.utils.statistics import SlidingWindowMean
 
@@ -58,6 +58,49 @@ RadioDriverPreset = Tuple[
 ]
 
 
+class _SafeLinkState:
+    """Private class that stores the current state of the safe link mode."""
+
+    def __init__(self):
+        """Constructor."""
+        self._enabled = True
+        self.enabled = False
+
+    @property
+    def enabled(self) -> bool:
+        """Returns whether the safe link mode is enabled."""
+        return self._enabled
+
+    @enabled.setter
+    def enabled(self, value: bool) -> None:
+        value = bool(value)
+
+        if self._enabled == value:
+            return
+
+        if value:
+            self._up, self._down = 0, 0
+        else:
+            self._up, self._down = 8, 4
+
+        self._enabled = value
+
+    def encode(self, packet: CRTPPacket) -> bytes:
+        """Encodes the given CRTP packet, incorporating the safe link status
+        bits in the header.
+        """
+        return packet.to_bytes(safelink_bits=self._up + self._down)
+
+    def update(self, response: Acknowledgment) -> None:
+        """Processes an acknowledgment received from the peer."""
+        if not response.ack:
+            return
+        if response.ack:
+            self._up = 8 - self._up
+            if response.data and response.data[0] & 0x04 == self._down:
+                self._down = 4 - self._down
+
+
 @register("radio")
 class RadioDriver(CRTPDriver):
     """CRTP driver that allows us to communicate with a Crazyflie via a
@@ -104,8 +147,8 @@ class RadioDriver(CRTPDriver):
                 that determines how often the driver should poll the downlink
                 with null packets and how it should handle packet resending
         """
-        self._has_safe_link = False
         self._link_quality = ObservableValue(0.0)
+        self._safe_link_state = _SafeLinkState()
 
         preset = self.PRESETS.get(preset)
         if not preset:
@@ -122,7 +165,7 @@ class RadioDriver(CRTPDriver):
 
     @property
     def is_safe(self) -> bool:
-        return self._has_safe_link
+        return self._safe_link_state.enabled
 
     @property
     def link_quality(self) -> ObservableValue[float]:
@@ -161,6 +204,24 @@ class RadioDriver(CRTPDriver):
         # TODO(ntamas)
         return []
 
+    async def _enable_safe_link_mode(self, radio: Crazyradio) -> bool:
+        """Attempts to enable safe link mode on the Crazyflie found at the
+        address, channel and data rate that the radio is currently configured to.
+
+        Returns:
+            whether safe link mode was successfully enabled
+        """
+        safe_link_packet = CRTPPacket.safe_link().to_bytes()
+
+        for _ in range(10):
+            response = await radio.send_and_receive_bytes(safe_link_packet)
+            if response and response.data == safe_link_packet:
+                self._safe_link_state.enabled = True
+                return True
+
+        self._safe_link_state.enabled = False
+        return False
+
     async def _worker(
         self, radio: Crazyradio, configuration: RadioConfiguration
     ) -> None:
@@ -173,20 +234,24 @@ class RadioDriver(CRTPDriver):
                 channel, the data rate and the address to send the packets to
         """
         null_packet = outbound_packet = CRTPPacket.null()
-        to_send = outbound_packet.to_bytes()
         delay_before_next_null_packet = 0.01
 
-        # TODO(ntamas): try enabling safelink
+        async with radio.configure(configuration):
+            await self._enable_safe_link_mode(radio)
 
         link_quality_estimator = SlidingWindowMean(100)
 
         while True:
+            to_send = self._safe_link_state.encode(outbound_packet)
             async with radio.configure(configuration):
                 response = await radio.send_and_receive_bytes(to_send)
 
             if response is None:
                 # Resend immediately
                 continue
+
+            # Update the safe-link state
+            self._safe_link_state.update(response)
 
             # Link quality is determined as the mean of the score of the
             # last 100 packets, where the score is determined as follows.
@@ -198,7 +263,6 @@ class RadioDriver(CRTPDriver):
             # mean link quality between 0 and 1.
             score = 9 - response.retry_count + int(response.ack)
             link_quality_estimator.add(score)
-            print(repr(link_quality_estimator._data))
             await self._link_quality.update(link_quality_estimator.mean / 10.0)
 
             # Check whether the packet has to be re-sent
