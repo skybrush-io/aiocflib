@@ -1,6 +1,6 @@
 import sys
 
-from anyio import create_queue, move_on_after, sleep
+from anyio import create_condition, create_queue, move_on_after, sleep
 from async_generator import asynccontextmanager, async_generator, yield_
 from functools import partial
 from typing import Callable, Tuple, List
@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.drivers.crazyradio import Crazyradio, RadioConfiguration
 from aiocflib.utils.concurrency import create_daemon_task_group
+from aiocflib.utils.statistics import SlidingWindowMean
 
 from .crtpdriver import CRTPDriver, register
 from .exceptions import WrongURIType
@@ -41,7 +42,6 @@ async def SharedCrazyradio(index: int):
         _instances[index] = (radio, instance, count + 1)
 
     try:
-        # TODO(ntamas): set ARC count
         await yield_(instance)
     finally:
         radio, instance, count = _instances[index]
@@ -105,6 +105,8 @@ class RadioDriver(CRTPDriver):
                 with null packets and how it should handle packet resending
         """
         self._has_safe_link = False
+        self._link_quality = 0.0
+        self._link_quality_condition = create_condition()
 
         preset = self.PRESETS.get(preset)
         if not preset:
@@ -116,14 +118,20 @@ class RadioDriver(CRTPDriver):
         self._in_queue = create_queue(256)
         self._out_queue = create_queue(1)
 
-    def get_name(self) -> str:
-        return "radio"
-
     async def get_status(self) -> str:
         return "Crazyradio version {0}".format(self._device.version)
 
+    @property
     def is_safe(self) -> bool:
         return self._has_safe_link
+
+    @property
+    def link_quality(self) -> float:
+        return self._link_quality
+
+    @property
+    def name(self) -> str:
+        return "radio"
 
     async def receive_packet(self) -> CRTPPacket:
         """Receives a single CRTP packet.
@@ -154,6 +162,14 @@ class RadioDriver(CRTPDriver):
         # TODO(ntamas)
         return []
 
+    async def _set_link_quality(self, value: float) -> None:
+        """Sets a new link quality measure and notifies all listeners
+        waiting for a new link quality measure.
+        """
+        self._link_quality = value
+        async with self._link_quality_condition:
+            await self._link_quality_condition.notify_all()
+
     async def _worker(
         self, radio: Crazyradio, configuration: RadioConfiguration
     ) -> None:
@@ -171,16 +187,27 @@ class RadioDriver(CRTPDriver):
 
         # TODO(ntamas): try enabling safelink
 
+        link_quality_estimator = SlidingWindowMean(100)
+
         while True:
             async with radio.configure(configuration):
-                # TODO(ntamas): error handling, raise IOError if needed
                 response = await radio.send_and_receive_bytes(to_send)
 
             if response is None:
                 # Resend immediately
                 continue
 
-            # TODO(ntamas): track link quality, send callback here
+            # Link quality is determined as the mean of the score of the
+            # last 100 packets, where the score is determined as follows.
+            # The score of a packet is 10 if it went through the first
+            # time we tried to send it (retry count is zero). The score
+            # decreases by 1 for every retry, and also by 1 if the
+            # packet was not acknowledged at the end (meaning that it
+            # got lost). Then the score is divided by 10 so we get a
+            # mean link quality between 0 and 1.
+            score = 9 - response.retry_count + int(response.ack)
+            link_quality_estimator.add(score)
+            await self._set_link_quality(link_quality_estimator.mean / 10.0)
 
             # Check whether the packet has to be re-sent
             action = self.resending_strategy(response.ack, to_send)

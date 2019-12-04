@@ -436,8 +436,6 @@ class Crazyradio:
         communication over the given low-level device. Returns when the
         thread has been started.
         """
-        # TODO(ntamas): block until we can lock the device
-
         self._exit_stack = AsyncExitStack()
 
         stack = await self._exit_stack.__aenter__()
@@ -909,14 +907,15 @@ class _CfRadioCommunicator:
 async def test():
     device = await Crazyradio.detect_one()
     async with device as radio:
-        targets = await radio.scan(address=4)
-        if not targets:
-            print("No Crazyflie found")
-        else:
-            # \xfd\x01 sends a "get version" command to the link control port
-            await radio.activate(targets[0])
-            response = await radio.send_and_receive_bytes(b"\xfd\x01")
-            print(repr(response))
+        async with device as radio:
+            targets = await radio.scan(address=4)
+            if not targets:
+                print("No Crazyflie found")
+            else:
+                # \xfd\x01 sends a "get version" command to the link control port
+                await radio.activate(targets[0])
+                response = await radio.send_and_receive_bytes(b"\xfd\x01")
+                print(repr(response))
 
 
 if __name__ == "__main__":

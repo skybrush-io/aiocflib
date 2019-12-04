@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from anyio import create_event, Event
 from async_generator import async_generator, yield_from_
+from sys import exc_info
 from typing import Optional
 
 from aiocflib.crtp import (
@@ -57,11 +58,15 @@ class Crazyflie:
 
     async def __aenter__(self):
         self._task_group = create_daemon_task_group()
-        spawner = await self._task_group.__aenter__()
-
         on_opened = create_event()
-        await spawner.spawn(self._open_connection, on_opened)
-        await on_opened.wait()
+
+        try:
+            spawner = await self._task_group.__aenter__()
+            await spawner.spawn(self._open_connection, on_opened)
+            await on_opened.wait()
+        except BaseException:
+            await self._task_group.__aexit__(*exc_info())
+            raise
 
         return self
 

@@ -68,15 +68,6 @@ class CRTPDriver(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def get_name(self) -> str:
-        """Returns a human-readable name of the interface.
-
-        Returns:
-            a human-readable name of the interface
-        """
-        raise NotImplementedError
-
-    @abstractmethod
     async def get_status(self) -> str:
         """Returns a status string that describes the current state of the
         interface.
@@ -94,6 +85,18 @@ class CRTPDriver(metaclass=ABCMeta):
         eventually gets delivered to the peer, _or_ that the link gets closed
         if the delivery fails.
         """
+        raise NotImplementedError
+
+    @abstractproperty
+    def link_quality(self) -> float:
+        """Returns the most recent measurement of link quality, as a float between
+        0 (no link) and 1 (perfect link).
+        """
+        raise NotImplementedError
+
+    @abstractproperty
+    def name(self) -> str:
+        """Returns a human-readable name of the interface."""
         raise NotImplementedError
 
     @abstractmethod

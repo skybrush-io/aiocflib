@@ -19,6 +19,33 @@ __all__ = ("AwaitableValue", "create_daemon_task_group", "Full", "ThreadContext"
 T = TypeVar("T")
 
 
+class AwaitableValue(Generic[T]):
+    """Object that combines an asyncio-style event and a value. Initially, the
+    object contains no value and the corresponding event is not set. Tasks may
+    wait for the object to be populated with a value.
+    """
+
+    def __init__(self):
+        """Constructor."""
+        self._event = create_event()
+        self._value = None
+
+    async def wait(self) -> T:
+        """Waits for the value to be populated, and returns the value when
+        it is populated.
+        """
+        await self._event.wait()
+        return self._value
+
+    async def set(self, value: T) -> None:
+        """Sets a value and notifies all tasks waiting for the value."""
+        if self._event.is_set():
+            raise RuntimeError("awaitable value is already set")
+
+        self._value = value
+        await self._event.set()
+
+
 class DaemonTaskGroup(TaskGroup):
     """Task group that cancels all its child tasks when the execution is about
     to leave the context (instead of waiting for the child tasks to finish).
@@ -61,33 +88,6 @@ class DaemonTaskGroup(TaskGroup):
 
 
 create_daemon_task_group = DaemonTaskGroup
-
-
-class AwaitableValue(Generic[T]):
-    """Object that combines an asyncio-style event and a value. Initially, the
-    object contains no value and the corresponding event is not set. Tasks may
-    wait for the object to be populated with a value.
-    """
-
-    def __init__(self):
-        """Constructor."""
-        self._event = create_event()
-        self._value = None
-
-    async def wait(self) -> T:
-        """Waits for the value to be populated, and returns the value when
-        it is populated.
-        """
-        await self._event.wait()
-        return self._value
-
-    async def set(self, value: T) -> None:
-        """Sets a value and notifies all tasks waiting for the value."""
-        if self._event.is_set():
-            raise RuntimeError("awaitable value is already set")
-
-        self._value = value
-        await self._event.set()
 
 
 class ThreadContext(Generic[T]):

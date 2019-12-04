@@ -37,14 +37,16 @@ class USBDriver(CRTPDriver):
         finally:
             self._device = None
 
-    def get_name(self) -> str:
-        return "USBCDC"
-
     async def get_status(self):
         return "No information available"
 
+    @property
     def is_safe(self) -> bool:
         return True
+
+    @property
+    def name(self) -> str:
+        return "USBCDC"
 
     async def receive_packet(self) -> CRTPPacket:
         """Receives a single CRTP packet.
