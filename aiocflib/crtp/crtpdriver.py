@@ -108,17 +108,8 @@ class CRTPDriver(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    async def send_packet(self, packet: CRTPPacket):
-        """Sends a CRTP packet.
-
-        Parameters:
-            packet: the packet to send
-        """
-        raise NotImplementedError
-
     @classmethod
-    async def scan_interface(cls, address=None) -> List[str]:
+    async def scan_interfaces(cls) -> List[str]:
         """Scans all interfaces of this type for available Crazyflie quadcopters
         and returns a list with appropriate connection URIs that could be used
         to connect to them.
@@ -128,6 +119,15 @@ class CRTPDriver(metaclass=ABCMeta):
             list is returned for interfaces that do not support scanning
         """
         return []
+
+    @abstractmethod
+    async def send_packet(self, packet: CRTPPacket):
+        """Sends a CRTP packet.
+
+        Parameters:
+            packet: the packet to send
+        """
+        raise NotImplementedError
 
 
 #: Mapping that maps URI schemes to the corresponding CRTPDriver classes

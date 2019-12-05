@@ -345,7 +345,8 @@ class Crazyradio:
         """Creates a list of low-level driver objects by scanning the USB buses
         for a suitable USB dongle.
         """
-        return await run_in_thread(_find_devices)
+        devices = await run_in_thread(_find_devices)
+        return [cls(device) for device in devices]
 
     @classmethod
     async def detect_one(cls, *, index: int = 0):
@@ -360,7 +361,7 @@ class Crazyradio:
         Raises:
             IndexError: if there is no such device with the given index
         """
-        devices = await cls.detect_all()
+        devices = await run_in_thread(_find_devices)
         return cls(devices[index])
 
     @staticmethod
@@ -907,15 +908,14 @@ class _CfRadioCommunicator:
 async def test():
     device = await Crazyradio.detect_one()
     async with device as radio:
-        async with device as radio:
-            targets = await radio.scan(address=4)
-            if not targets:
-                print("No Crazyflie found")
-            else:
-                # \xfd\x01 sends a "get version" command to the link control port
-                await radio.activate(targets[0])
-                response = await radio.send_and_receive_bytes(b"\xfd\x01")
-                print(repr(response))
+        targets = await radio.scan(address=4)
+        if not targets:
+            print("No Crazyflie found")
+        else:
+            # \xfd\x01 sends a "get version" command to the link control port
+            await radio.activate(targets[0])
+            response = await radio.send_and_receive_bytes(b"\xfd\x01")
+            print(repr(response))
 
 
 if __name__ == "__main__":

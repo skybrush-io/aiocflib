@@ -77,7 +77,7 @@ class USBDriver(CRTPDriver):
         await self._device.send_bytes(packet.to_bytes())
 
     @classmethod
-    async def scan_interface(cls, address=None) -> List[str]:
+    async def scan_interfaces(cls) -> List[str]:
         """Scans all interfaces of this type for available Crazyflie quadcopters
         and returns a list with appropriate connection URIs that could be used
         to connect to them.

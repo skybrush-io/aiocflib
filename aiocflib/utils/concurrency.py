@@ -1,6 +1,8 @@
 """Utility functions related to concurrency management."""
 
 from anyio import (
+    CapacityLimiter,
+    create_capacity_limiter,
     create_condition,
     create_event,
     create_task_group,
@@ -10,10 +12,21 @@ from anyio import (
     TaskGroup,
 )
 from functools import partial
+from inspect import iscoroutinefunction
 from outcome import capture
 from queue import Full, Queue
-from typing import Any, Callable, Generic, Optional, TypeVar
 from sys import exc_info
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 __all__ = (
     "AwaitableValue",
@@ -95,6 +108,50 @@ class DaemonTaskGroup(TaskGroup):
 
 
 create_daemon_task_group = DaemonTaskGroup
+
+
+async def _gather_execute(func: Callable[..., T], args: Any, result: List, index: int):
+    result[index] = await func(*args)
+
+
+async def _gather_execute_limited(
+    limiter: Optional[CapacityLimiter],
+    func: Callable[..., T],
+    args: Any,
+    result: List,
+    index: int,
+):
+    async with limiter:
+        result[index] = await func(*args)
+
+
+async def gather(
+    funcs: Iterable[Union[Callable[[], T], Tuple[Callable[..., T], ...]]],
+    limiter: Optional[Union[CapacityLimiter, int]] = None,
+):
+    to_execute = [
+        (func, ()) if callable(func) else (func[0], func[1:]) for func in funcs
+    ]
+    result = []
+
+    if isinstance(limiter, int):
+        limiter = create_capacity_limiter(limiter)
+
+    run = (
+        _gather_execute
+        if limiter is None
+        else partial(_gather_execute_limited, limiter)
+    )
+
+    async with create_task_group() as group:
+        for func, args in to_execute:
+            if iscoroutinefunction(func):
+                result.append(None)
+                await group.spawn(run, func, args, result, len(result) - 1)
+            else:
+                result.append(func(*args))
+
+    return result
 
 
 class ObservableValue(Generic[T]):

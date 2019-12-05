@@ -3,12 +3,17 @@ import sys
 from anyio import create_queue, move_on_after, sleep
 from async_generator import asynccontextmanager, async_generator, yield_
 from functools import partial
-from typing import Callable, Tuple, List
+from typing import Callable, Optional, Tuple, List
 from urllib.parse import urlparse
 
 from aiocflib.crtp.crtpstack import CRTPPacket
-from aiocflib.drivers.crazyradio import Acknowledgment, Crazyradio, RadioConfiguration
-from aiocflib.utils.concurrency import create_daemon_task_group, ObservableValue
+from aiocflib.drivers.crazyradio import (
+    Acknowledgment,
+    Crazyradio,
+    CrazyradioAddress,
+    RadioConfiguration,
+)
+from aiocflib.utils.concurrency import create_daemon_task_group, gather, ObservableValue
 from aiocflib.utils.statistics import SlidingWindowMean
 
 from .crtpdriver import CRTPDriver, register
@@ -192,17 +197,26 @@ class RadioDriver(CRTPDriver):
         return await self._out_queue.put(packet)
 
     @classmethod
-    async def scan_interface(cls, address=None) -> List[str]:
+    async def scan_interfaces(
+        cls, address: Optional[CrazyradioAddress] = None
+    ) -> List[str]:
         """Scans all interfaces of this type for available Crazyflie quadcopters
         and returns a list with appropriate connection URIs that could be used
         to connect to them.
+
+        Parameters:
+            address: the address of the Crazyflie to look for; `None` means to
+                use the default address
 
         Returns:
             the list of connection URIs where a Crazyflie was detected; an empty
             list is returned for interfaces that do not support scanning
         """
-        # TODO(ntamas)
-        return []
+        devices = await Crazyradio.detect_all()
+        results = await gather(
+            (cls._scan_single_interface, device, address) for device in devices
+        )
+        return sum(results, [])
 
     async def _enable_safe_link_mode(self, radio: Crazyradio) -> bool:
         """Attempts to enable safe link mode on the Crazyflie found at the
@@ -221,6 +235,26 @@ class RadioDriver(CRTPDriver):
 
         self._safe_link_state.enabled = False
         return False
+
+    @classmethod
+    async def _scan_single_interface(
+        cls, radio: Crazyradio, address: Optional[CrazyradioAddress] = None
+    ) -> List[str]:
+        """Scans a single interface for available Crazyflie quadcopters and
+        returns a list with appropriate connection URIs that could be used
+        to connect to them.
+
+        Parameters:
+            radio: the radio device to use for scanning
+            address: the address of the Crazyflie to look for; `None` means to
+                use the default address
+
+        Returns:
+            the list of connection URIs where a Crazyflie was detected; an empty
+            list is returned for interfaces that do not support scanning
+        """
+        async with radio as device:
+            return await device.scan(address=address)
 
     async def _worker(
         self, radio: Crazyradio, configuration: RadioConfiguration
