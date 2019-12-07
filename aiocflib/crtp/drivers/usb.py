@@ -6,8 +6,10 @@ from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.drivers.cfusb import CfUsb
 from aiocflib.utils.concurrency import ObservableValue
 
-from .crtpdriver import CRTPDriver, register
-from .exceptions import WrongURIType
+from ..exceptions import WrongURIType
+
+from .base import CRTPDriver
+from .registry import register
 
 
 _link_quality = None  # type: Optional[ObservableValue[float]]
@@ -43,6 +45,18 @@ class USBDriver(CRTPDriver):
 
     async def get_status(self):
         return "No information available"
+
+    @property
+    def index(self) -> Optional[int]:
+        """The index of the USB device on the USB hub, or `None` if not known."""
+        if not self.uri:
+            return None
+
+        parts = urlparse(self.uri)
+        try:
+            return int(parts.netloc)
+        except ValueError:
+            return None
 
     @property
     def is_safe(self) -> bool:

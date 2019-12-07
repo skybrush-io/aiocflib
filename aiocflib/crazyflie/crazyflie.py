@@ -218,7 +218,7 @@ async def test():
     def print_packets(packet):
         print(repr(packet))
 
-    uri = "bradio://0/80/2M/E7E7E7E704"
+    uri = "bradio+log://0/80/2M/E7E7E7E704"
     async with Crazyflie(uri) as cf:
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())

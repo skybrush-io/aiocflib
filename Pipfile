@@ -16,6 +16,8 @@ async-exit-stack = "*"
 async-generator = "*"
 outcome = "*"
 pyusb = ">=1.0.0b2"
+colorama = "*"
+hexdump = "*"
 
 [requires]
 python_version = "3.7"

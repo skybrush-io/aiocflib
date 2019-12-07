@@ -2,12 +2,12 @@
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 from async_generator import asynccontextmanager, async_generator, yield_
-from typing import Callable, Dict, List, Type
+from typing import List, Optional
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.utils.concurrency import ObservableValue
 
-from .exceptions import WrongURIType
+from ..exceptions import WrongURIType
 
 __author__ = "CollMot Robotics Ltd"
 __all__ = ("CRTPDriver",)
@@ -33,15 +33,27 @@ class CRTPDriver(metaclass=ABCMeta):
         Additional positional and keyword arguments are forwarded to the
         driver factory determined from the URI scheme.
         """
+        from .registry import find as find_driver
+        from ..middleware.registry import find as find_middleware
+
         scheme, sep, rest = uri.partition("://")
         if not sep:
             raise ValueError("CRTP driver URI must contain ://")
 
-        driver_factory = _registry.get(scheme)
-        if driver_factory is None:
+        scheme, *middleware = scheme.split("+")
+
+        try:
+            driver_factory = find_driver(scheme)
+        except KeyError:
             raise WrongURIType("Unknown CRTP driver URI: {0!r}".format(scheme))
 
         driver = driver_factory(*args, **kwds)
+        driver.uri = uri
+
+        for middleware_name in middleware:
+            middleware = find_middleware(middleware_name)
+            driver = middleware(driver)
+
         async with driver._connected_to(uri):
             await yield_(driver)
 
@@ -129,35 +141,11 @@ class CRTPDriver(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
+    @property
+    def uri(self) -> Optional[str]:
+        """The URI with which the driver was created, if known."""
+        return getattr(self, "_uri", None)
 
-#: Mapping that maps URI schemes to the corresponding CRTPDriver classes
-_registry = {}  # type: Dict[str, Type[CRTPDriver]]
-
-
-CRTPDriverFactory = Callable[[], CRTPDriver]
-
-
-def register(scheme: str) -> Callable[[CRTPDriverFactory], CRTPDriverFactory]:
-    """Class decorator factory that returns a decorator that registers a class
-    as a CRTP driver with the given URI scheme.
-
-    Parameters:
-        scheme: the URI scheme for which the driver will be registered
-
-    Returns:
-        an appropriate decorator that can then be applied to a CRTPDriver
-        subclass
-    """
-
-    def decorator(cls):
-        existing_cls = _registry.get(scheme)
-        if existing_cls:
-            raise ValueError(
-                "URI scheme {0!r} is already registered for {1!r}".format(
-                    scheme, existing_cls
-                )
-            )
-        _registry[scheme] = cls
-        return cls
-
-    return decorator
+    @uri.setter
+    def uri(self, value: str) -> None:
+        self._uri = value

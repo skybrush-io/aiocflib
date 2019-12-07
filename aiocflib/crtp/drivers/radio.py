@@ -16,9 +16,8 @@ from aiocflib.drivers.crazyradio import (
 from aiocflib.utils.concurrency import create_daemon_task_group, gather, ObservableValue
 from aiocflib.utils.statistics import SlidingWindowMean
 
-from .crtpdriver import CRTPDriver, register
-from .exceptions import WrongURIType
-from .strategies import (
+from ..exceptions import WrongURIType
+from ..strategies import (
     BackoffPollingStrategy,
     DefaultPollingStrategy,
     DefaultResendingStrategy,
@@ -26,6 +25,9 @@ from .strategies import (
     PollingStrategy,
     ResendingStrategy,
 )
+
+from .base import CRTPDriver
+from .registry import register
 
 __all__ = ("RadioDriver",)
 
@@ -137,11 +139,11 @@ class RadioDriver(CRTPDriver):
         if index < 0:
             raise WrongURIType("Radio port index must be non-negative")
 
-        configuration = RadioConfiguration.from_uri_path(parts.path)
+        self._configuration = RadioConfiguration.from_uri_path(parts.path)
 
         async with SharedCrazyradio(index) as radio:
             async with create_daemon_task_group() as task_group:
-                await task_group.spawn(self._worker, radio, configuration)
+                await task_group.spawn(self._worker, radio)
                 await yield_(self)
 
     def __init__(self, preset: str = "default"):
@@ -152,6 +154,7 @@ class RadioDriver(CRTPDriver):
                 that determines how often the driver should poll the downlink
                 with null packets and how it should handle packet resending
         """
+        self._configuration = None
         self._link_quality = ObservableValue(0.0)
         self._safe_link_state = _SafeLinkState()
 
@@ -167,6 +170,29 @@ class RadioDriver(CRTPDriver):
 
     async def get_status(self) -> str:
         return "Crazyradio version {0}".format(self._device.version)
+
+    @property
+    def address(self) -> Optional[CrazyradioAddress]:
+        """The address that the driver will be configured for, or ``None`` if
+        the driver has no URI.
+        """
+        if not self._uri:
+            return None
+
+        try:
+            parts = urlparse(self._uri)
+            config = RadioConfiguration.from_uri_path(parts.path)
+        except Exception:
+            return None
+
+        return config.address if config else None
+
+    @property
+    def configuration(self) -> Optional[RadioConfiguration]:
+        """The address, channel and data rate that the driver is configured for,
+        or ``None`` if the driver is not configured.
+        """
+        return self._configuration
 
     @property
     def is_safe(self) -> bool:
@@ -256,28 +282,24 @@ class RadioDriver(CRTPDriver):
         async with radio as device:
             return await device.scan(address=address)
 
-    async def _worker(
-        self, radio: Crazyradio, configuration: RadioConfiguration
-    ) -> None:
+    async def _worker(self, radio: Crazyradio) -> None:
         """Worker task that runs continuously and handles the sending and
         receiving of packets to/from a given Crazyradio instance.
 
         Parameters:
             radio: the Crazyradio instance to use
-            configuration: the radio configuration to use; specifies the
-                channel, the data rate and the address to send the packets to
         """
         null_packet = outbound_packet = CRTPPacket.null()
         delay_before_next_null_packet = 0.01
 
-        async with radio.configure(configuration):
+        async with radio.configure(self._configuration):
             await self._enable_safe_link_mode(radio)
 
         link_quality_estimator = SlidingWindowMean(100)
 
         while True:
             to_send = self._safe_link_state.encode(outbound_packet)
-            async with radio.configure(configuration):
+            async with radio.configure(self._configuration):
                 response = await radio.send_and_receive_bytes(to_send)
 
             if response is None:

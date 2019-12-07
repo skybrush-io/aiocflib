@@ -15,6 +15,27 @@ __author__ = "CollMot Robotics Ltd"
 __all__ = ("CRTPDataLike", "CRTPDispatcher", "CRTPPacket", "CRTPPort", "CRTPPortLike")
 
 
+#: Mapping from CRTP port names to short three-letter identifiers
+_crtp_port_codes = [
+    "CON",
+    "P01",
+    "PRM",
+    "CMD",
+    "MEM",
+    "LOG",
+    "LOC",
+    "CMD",
+    "HLC",
+    "P09",
+    "P10",
+    "P11",
+    "P12",
+    "PLT",
+    "DBG",
+    "LNK",
+]
+
+
 class CRTPPort(IntEnum):
     """Enum representing the available ports of the CRTP protocol."""
 
@@ -34,6 +55,10 @@ class CRTPPort(IntEnum):
     PLATFORM = 0x0D
     DEBUGDRIVER = 0x0E
     LINKCTRL = 0x0F
+
+    @property
+    def code(self):
+        return _crtp_port_codes[int(self)]
 
 
 #: Type alias for objects that can be converted into the data of a CRTP packet
@@ -123,17 +148,6 @@ class CRTPPacket:
         return self._data[0] if self._data else None
 
     @property
-    def header(self) -> int:
-        """Returns the header byte of the CRTP packet."""
-        return self._header
-
-    @header.setter
-    def header(self, value: int):
-        # The two bits in position 3 and 4 needs to be set for legacy
-        # support of the bootloader, according to the official cflib library
-        self._header = (value & 0xFF) | (0x3 << 2)
-
-    @property
     def data(self) -> bytes:
         """Get the packet data as a raw immutable bytes object."""
         return self._data
@@ -154,6 +168,22 @@ class CRTPPacket:
                 "Data must be None, bytes, bytearray, string, list or tuple,"
                 " not {}".format(type(value))
             )
+
+    @property
+    def header(self) -> int:
+        """Returns the header byte of the CRTP packet."""
+        return self._header
+
+    @header.setter
+    def header(self, value: int):
+        # The two bits in position 3 and 4 needs to be set for legacy
+        # support of the bootloader, according to the official cflib library
+        self._header = (value & 0xFF) | (0x3 << 2)
+
+    @property
+    def is_null(self) -> bool:
+        """Returns whether this packet is a null packet."""
+        return (self._header & 0xF3) == 0xF3 and not self._data
 
     @property
     def port(self) -> CRTPPort:
