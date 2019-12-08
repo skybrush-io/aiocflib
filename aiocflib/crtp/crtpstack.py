@@ -24,7 +24,7 @@ _crtp_port_codes = [
     "MEM",
     "LOG",
     "LOC",
-    "CMD",
+    "GEN",
     "HLC",
     "P09",
     "P10",
@@ -41,9 +41,9 @@ class CRTPPort(IntEnum):
 
     CONSOLE = 0x00
     UNUSED_1 = 0x01
-    PARAM = 0x02
+    PARAMETERS = 0x02
     COMMANDER = 0x03
-    MEM = 0x04
+    MEMORY = 0x04
     LOGGING = 0x05
     LOCALIZATION = 0x06
     COMMANDER_GENERIC = 0x07
@@ -53,8 +53,8 @@ class CRTPPort(IntEnum):
     UNUSED_11 = 0x0B
     UNUSED_12 = 0x0C
     PLATFORM = 0x0D
-    DEBUGDRIVER = 0x0E
-    LINKCTRL = 0x0F
+    DEBUG = 0x0E
+    LINK_CONTROL = 0x0F
 
     @property
     def code(self):

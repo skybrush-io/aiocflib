@@ -299,8 +299,9 @@ class RadioDriver(CRTPDriver):
 
         while True:
             to_send = self._safe_link_state.encode(outbound_packet)
-            async with radio.configure(self._configuration):
-                response = await radio.send_and_receive_bytes(to_send)
+            response = await radio.configure_send_and_receive_bytes(
+                self._configuration, to_send
+            )
 
             if response is None:
                 # Resend immediately
@@ -342,14 +343,21 @@ class RadioDriver(CRTPDriver):
 
             # No resending needed, process response and get next packet to send
             if response.data:
-                await self._in_queue.put(CRTPPacket.from_bytes(response.data))
+                inbound_packet = CRTPPacket.from_bytes(response.data)
+                await self._in_queue.put(inbound_packet)
 
             # Figure out how much to wait before the next null packet is sent
             delay_before_next_null_packet = self.polling_strategy(response.data)
-            outbound_packet = null_packet
-            async with move_on_after(delay_before_next_null_packet):
-                outbound_packet = await self._out_queue.get()
-            to_send = outbound_packet.to_bytes()
+            if delay_before_next_null_packet:
+                outbound_packet = null_packet
+                async with move_on_after(delay_before_next_null_packet):
+                    outbound_packet = await self._out_queue.get()
+            else:
+                outbound_packet = (
+                    null_packet
+                    if self._out_queue.empty()
+                    else await self._out_queue.get()
+                )
 
 
 register("bradio")(partial(RadioDriver, preset="patient"))

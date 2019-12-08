@@ -137,7 +137,7 @@ class Platform:
 
     async def _is_crazyflie(self) -> bool:
         response = await self._crazyflie.run_command(
-            port=CRTPPort.LINKCTRL, channel=LinkControlChannel.SOURCE, data=b"\x00"
+            port=CRTPPort.LINK_CONTROL, channel=LinkControlChannel.SOURCE, data=b"\x00"
         )
         return response.startswith(b"Bitcraze Crazyflie")
 

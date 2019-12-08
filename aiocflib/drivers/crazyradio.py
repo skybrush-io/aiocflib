@@ -832,6 +832,24 @@ class Crazyradio:
         except USBError:
             return None
 
+    def _configure_send_and_receive_bytes(
+        self, configuration: RadioConfiguration, data: array
+    ) -> Optional[Acknowledgment]:
+        """Shortcut for a common use-case that arises frequently: configure the
+        radio link, then send a single packet and wait for the acknowledgment.
+
+        This function is executed in the worker thread.
+
+        Returns:
+            the acknowledgment received from the radio, or `None` if no
+            acknowledgment was received in time
+
+        Raises:
+            IOError: when the Crazyflie was disconnected
+        """
+        self._configure(configuration)
+        return self._send_and_receive_bytes(data)
+
 
 class _CfRadioCommunicator:
     """Object that is returned when entering a Crazyradio context and that allows
@@ -869,6 +887,7 @@ class _CfRadioCommunicator:
             return wraps(target)(proxy)
 
         methods = (
+            "configure_send_and_receive_bytes",
             "scan",
             "scan_channels",
             "send_and_receive_bytes",

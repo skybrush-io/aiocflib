@@ -9,6 +9,7 @@ trio = "*"
 mypy = "*"
 pytest = "*"
 pytest-cov = "*"
+profiling = "*"
 
 [packages]
 anyio = "*"

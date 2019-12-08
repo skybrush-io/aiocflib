@@ -19,6 +19,8 @@ __all__ = ("Crazyflie",)
 MYPY = False
 if MYPY:
     from .console import Console
+    from .mem import Memory
+    from .param import Parameters
     from .platform import Platform
 
 
@@ -51,9 +53,13 @@ class Crazyflie:
 
         # Initialize sub-modules; avoid circular import
         from .console import Console
+        from .mem import Memory
+        from .param import Parameters
         from .platform import Platform
 
         self._console = Console(self)
+        self._memory = Memory(self)
+        self._parameters = Parameters(self)
         self._platform = Platform(self)
 
     async def __aenter__(self):
@@ -130,6 +136,32 @@ class Crazyflie:
         )
 
     @property
+    def mem(self) -> Memory:
+        """The memory subsystem of the Crazyflie. This is a compatibility alias
+        of ``self.memory`` for sake of compatibility with the official
+        Crazyflie library.
+        """
+        return self._memory
+
+    @property
+    def memory(self) -> Memory:
+        """The memory subsystem of the Crazyflie."""
+        return self._memory
+
+    @property
+    def param(self) -> Parameters:
+        """The parameters subsystem of the Crazyflie. This is a compatibility
+        alias of ``self.parameters`` for sake of compatibility with the official
+        Crazyflie library.
+        """
+        return self._parameters
+
+    @property
+    def parameters(self) -> Parameters:
+        """The parameters subsystem of the Crazyflie."""
+        return self._parameters
+
+    @property
     def platform(self) -> Platform:
         """The platform-related message handler module of the Crazyflie."""
         return self._platform
@@ -153,10 +185,11 @@ class Crazyflie:
         The response packet is expected to have the same CRTP port and channel
         as the packet that was sent as a request. Additionally, if a command
         byte is present, the data section of the response packet is expected to
-        start with the same command byte and only the rest of the data section
-        is returned as the response. Otherwise, if there is no command byte
-        specified, the entire data section of the response packet will be
-        returned.
+        start with the same command byte _and_ the data bytes used in the
+        request, and _only_ the rest of the data section is returned as the
+        response. If there is no command byte specified, the response must
+        match the port and the channel only, and the entire data section of the
+        response packet will be returned.
 
         Parameters:
             port: the CRTP port to send the packet to
@@ -166,17 +199,19 @@ class Crazyflie:
                 packet is expected to have the same byte as the first byte of
                 the packet.
             data: the data section of the request packet. When a command byte
-                is present, it is inserted before the data section.
+                is present, the command byte is inserted before the data
+                section.
 
         Returns:
             the data section of the response packet
         """
         if command is not None:
             packet = CRTPPacket(port=port, channel=channel)
-            packet.data = bytes((command,)) + (bytes(data) if data else b"")
+            request = bytes((command,)) + (bytes(data) if data else b"")
+            packet.data = request
 
             def matching_response(packet: CRTPPacket) -> bool:
-                return packet.channel == channel and packet.command == command
+                return packet.channel == channel and packet.data.startswith(request)
 
         else:
             packet = CRTPPacket(port=port, channel=channel, data=data)
@@ -191,7 +226,7 @@ class Crazyflie:
             response = await value.wait()
 
         response = response.data
-        return response[1:] if command is not None else response
+        return response[len(request) :] if command is not None else response
 
     @async_generator
     async def packets(
@@ -215,19 +250,26 @@ class Crazyflie:
 
 
 async def test():
+    from time import time
+
     def print_packets(packet):
         print(repr(packet))
 
-    uri = "bradio+log://0/80/2M/E7E7E7E704"
+    uri = "radio+log://0/80/2M/E7E7E7E704"
     async with Crazyflie(uri) as cf:
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
+        start = time()
+        await cf.parameters.validate()
+        print("Fetching parameters TOC took", time() - start, "seconds")
+        print(await cf.parameters.get("posCtlPid.velFFGainX"))
+        # await cf.memory.validate()
 
 
 if __name__ == "__main__":
     from aiocflib.crtp import init_drivers
-    import trio
+    import anyio
 
     init_drivers()
-    trio.run(test)
+    anyio.run(test)
