@@ -169,8 +169,7 @@ class Memory:
         response = await self._crazyflie.run_command(
             port=CRTPPort.MEMORY,
             channel=MemoryChannel.INFO,
-            command=MemoryInfoCommand.GET_DETAILS,
-            data=bytes((index,)),
+            command=(MemoryInfoCommand.GET_DETAILS, index),
         )
         if response:
             return MemoryElement.from_bytes(response)

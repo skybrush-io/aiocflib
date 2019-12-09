@@ -3,9 +3,10 @@
 from collections import namedtuple
 from enum import IntEnum
 from struct import Struct, error as StructError
-from typing import Tuple
+from typing import Tuple, Union
 
 from aiocflib.crtp import CRTPPort
+from aiocflib.utils import error_to_string
 
 from .crazyflie import Crazyflie
 
@@ -26,6 +27,9 @@ class ParameterChannel(IntEnum):
 class ParameterTOCCommand(IntEnum):
     """Enum representing the names of the table-of-contents commands in the
     parameter service of the CRTP protocol.
+
+    These commadns are valid for ParameterChannel.TABLE_OF_CONTENTS (i.e.
+    channel 0).
     """
 
     RESET = 0
@@ -33,9 +37,89 @@ class ParameterTOCCommand(IntEnum):
     READ_TOC_INFO_V2 = 3
 
 
+class ParameterCommand(IntEnum):
+    """Enum representing the names of the generic commands in the parameter
+    service of the CRTP protocol.
+
+    These commadns are valid for ParameterChannel.COMMAND (i.e. channel 3).
+    """
+
+    SET_BY_NAME = 0
+
+
 _ParameterSpecification = namedtuple(
     "_ParameterSpecification", "id type group name read_only"
 )
+
+#: Dictionary mapping integer type codes to their C types, Python structs and
+#: aliases
+_type_properties = {
+    # C type, Python struct, aliases
+    0x08: ("uint8_t", Struct("<B"), ("uint8", "u8")),
+    0x09: ("uint16_t", Struct("<H"), ("uint16", "u16")),
+    0x0A: ("uint32_t", Struct("<L"), ("uint32", "u32")),
+    0x0B: ("uint64_t", Struct("<Q"), ("uint64", "u64")),
+    0x00: ("int8_t", Struct("<b"), ("int8", "i8")),
+    0x01: ("int16_t", Struct("<h"), ("int16", "i16")),
+    0x02: ("int32_t", Struct("<i"), ("int32", "i32")),
+    0x03: ("int64_t", Struct("<q"), ("int64", "i64")),
+    0x06: ("float", Struct("<f"), ()),
+    0x07: ("double", Struct("<d"), ()),
+}
+
+
+class ParameterType(IntEnum):
+    """Enum containing the possible types of a parameter and the corresponding
+    numeric identifiers.
+    """
+
+    INT8 = 0
+    INT16 = 1
+    INT32 = 2
+    INT64 = 3
+    FLOAT = 6
+    DOUBLE = 7
+    UINT8 = 8
+    UINT16 = 9
+    UINT32 = 10
+    UINT64 = 11
+
+    @classmethod
+    def to_type(cls, value):
+        """Converts an integer, string or ParameterType_ instance to a
+        ParameterType.
+        """
+        if isinstance(value, cls):
+            return value
+        elif isinstance(value, str):
+            return _type_names.get(value)
+        else:
+            return ParameterType(value)
+
+    @property
+    def aliases(self) -> Tuple[str]:
+        """Returns the registered type aliases of this type."""
+        return (_type_properties[self][0],) + _type_properties[self][2]
+
+    @property
+    def struct(self) -> Struct:
+        """Returns a Python struct that can be used to encode or decode
+        parameter values of this type.
+        """
+        return _type_properties[self][1]
+
+    def encode_value(self, value) -> bytes:
+        """Encodes a single value of this parameter type into its raw byte-level
+        representation.
+        """
+        return self.struct.pack(value)
+
+
+#: Type specification for objects that can be converted into a parameter type
+ParameterTypeLike = Union[str, int, ParameterType]
+
+#: Dictionary mapping string type aliases to types
+_type_names = dict((alias, type) for type in ParameterType for alias in type.aliases)
 
 
 class ParameterSpecification(_ParameterSpecification):
@@ -43,19 +127,6 @@ class ParameterSpecification(_ParameterSpecification):
     Crazyflie."""
 
     _struct = Struct("<BIQ")
-
-    _types = {
-        0x08: ("uint8_t", Struct("<B")),
-        0x09: ("uint16_t", Struct("<H")),
-        0x0A: ("uint32_t", Struct("<L")),
-        0x0B: ("uint64_t", Struct("<Q")),
-        0x00: ("int8_t", Struct("<b")),
-        0x01: ("int16_t", Struct("<h")),
-        0x02: ("int32_t", Struct("<i")),
-        0x03: ("int64_t", Struct("<q")),
-        0x06: ("float", Struct("<f")),
-        0x07: ("double", Struct("<d")),
-    }
 
     @classmethod
     def from_bytes(cls, data: bytes, id: int):
@@ -77,7 +148,7 @@ class ParameterSpecification(_ParameterSpecification):
         """Encodes a single value of this parameter into its raw byte-level
         representation.
         """
-        return self._types[self.type][1].pack(value)
+        return _type_properties[self.type][1].pack(value)
 
     @property
     def full_name(self) -> str:
@@ -92,7 +163,7 @@ class ParameterSpecification(_ParameterSpecification):
         parameter, as received from the Crazyflie, and returns the corresponding
         Python value.
         """
-        return self._types[self.type][1].unpack(data)[0]
+        return _type_properties[self.type][1].unpack(data)[0]
 
 
 class Parameters:
@@ -130,6 +201,77 @@ class Parameters:
             value = self._values[name] = await self._fetch(name)
         return value
 
+    async def set(self, name: str, value) -> None:
+        """Sets the value of a parameter, given its fully-qualified name.
+
+        Parameters:
+            name: the fully-qualified name of the parameter
+            value: the new value of the parameter
+        """
+        # TODO(ntamas): make it possible to set by name if we have no TOC
+        await self.validate()
+
+        parameter = self._parameters_by_name[name]
+        if parameter.read_only:
+            raise AttributeError("{} is read only".format(name))
+
+        index = parameter.id
+
+        response = await self._crazyflie.run_command(
+            port=CRTPPort.PARAMETERS,
+            channel=(ParameterChannel.WRITE, index & 0xFF, index >> 8),
+            data=parameter.encode_value(value),
+        )
+
+        if not response:
+            raise IndexError("parameter index out of range")
+        if len(response) < 2:
+            raise ValueError("invalid response for parameter setting")
+
+        self._values[name] = parameter.parse_value(response[2:])
+
+    async def set_fast(self, name: str, type: ParameterTypeLike, value) -> None:
+        """Sets the value of a parameter without fetching the full parameter
+        TOC first, given its fully-qualified name and its type.
+
+        This function is useful if you don't want to spend time with fetching
+        the parameter TOC from the drone and you only need to set the values
+        of some parameters. Triggering a parameter read anywhere will download
+        the TOC from the drone anyway if needed.
+        """
+        type = ParameterType.to_type(type)
+        group, _, name = name.encode("ascii").rpartition(b".")
+        command = [ParameterCommand.SET_BY_NAME, group, 0, name, 0]
+        data = bytes((type,)) + type.encode_value(value)
+        response = await self._crazyflie.run_command(
+            port=CRTPPort.PARAMETERS,
+            channel=ParameterChannel.COMMAND,
+            command=command,
+            data=data,
+        )
+
+        if not response:
+            raise ValueError("Crazyflie returned an empty response")
+
+        code = response[0]
+        if code:
+            raise ValueError(
+                "Crazyflie returned error code {0} ({1})".format(
+                    code, error_to_string(code)
+                )
+            )
+
+    async def trigger(self, name: str) -> None:
+        """Triggers some function on the drone by setting the value of the
+        corresponding parameter to 1.
+
+        Some parameters on the Crazyflie are used to trigger some functionality;
+        for instance, the ``kalman.resetEstimation`` parameter is used to reset
+        the state of the Kalman filter. This function is a convenience wrapper
+        for setting the value of this parameter to 1.
+        """
+        return await self.set(name, 1)
+
     async def validate(self):
         """Ensures that the basic information about the parameters of the
         Crazyflie are downloaded.
@@ -158,7 +300,7 @@ class Parameters:
         response = await self._crazyflie.run_command(
             port=CRTPPort.PARAMETERS,
             channel=ParameterChannel.READ,
-            data=bytes((index & 0xFF, index >> 8)),
+            command=(index & 0xFF, index >> 8),
         )
 
         if not response:
@@ -173,8 +315,11 @@ class Parameters:
         response = await self._crazyflie.run_command(
             port=CRTPPort.PARAMETERS,
             channel=ParameterChannel.TABLE_OF_CONTENTS,
-            command=ParameterTOCCommand.READ_PARAMETER_DETAILS_V2,
-            data=bytes((index & 0xFF, index >> 8)),
+            command=(
+                ParameterTOCCommand.READ_PARAMETER_DETAILS_V2,
+                index & 0xFF,
+                index >> 8,
+            ),
         )
         if not response:
             raise IndexError("parameter index out of range")

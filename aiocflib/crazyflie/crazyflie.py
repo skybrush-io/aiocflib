@@ -3,7 +3,7 @@ from __future__ import annotations
 from anyio import create_event, Event
 from async_generator import async_generator, yield_from_
 from sys import exc_info
-from typing import Optional
+from typing import Iterable, Optional, Union
 
 from aiocflib.crtp import (
     CRTPDataLike,
@@ -175,7 +175,7 @@ class Crazyflie:
         self,
         port: CRTPPortLike,
         channel: int = 0,
-        command: Optional[int] = None,
+        command: Optional[Union[int, bytes, Iterable[Union[int, bytes]]]] = None,
         data: CRTPDataLike = None,
     ):
         """Sends a command packet to the Crazyflie and waits for the next
@@ -184,34 +184,45 @@ class Crazyflie:
 
         The response packet is expected to have the same CRTP port and channel
         as the packet that was sent as a request. Additionally, if a command
-        byte is present, the data section of the response packet is expected to
-        start with the same command byte _and_ the data bytes used in the
-        request, and _only_ the rest of the data section is returned as the
-        response. If there is no command byte specified, the response must
-        match the port and the channel only, and the entire data section of the
-        response packet will be returned.
+        is present, the data section of the response packet is expected to
+        start with the same command byte(s), and _only_ the rest of the data
+        section is returned as the response. If there is no command specified,
+        the response must match the port and the channel only, and the entire
+        data section of the response packet will be returned.
 
         Parameters:
             port: the CRTP port to send the packet to
             channel: the CRTP channel to send the packet to
-            command: the command byte to insert as the first byte of the packet
-                data section. When this is not `None`, the matching response
-                packet is expected to have the same byte as the first byte of
-                the packet.
-            data: the data section of the request packet. When a command byte
-                is present, the command byte is inserted before the data
-                section.
+            command: the command byte(s) to insert before the data bytes in
+                the data section of the packet. When this is not `None`, the
+                matching response packet is expected to have the same prefix as
+                the command itself.
+            data: the data of the request packet. When a command is present, the
+                command is inserted before the data in the body of the CRTP
+                packet.
 
         Returns:
             the data section of the response packet
         """
         if command is not None:
+            if isinstance(command, int):
+                command = bytes((command,))
+            elif isinstance(command, bytes):
+                pass
+            else:
+                parts = []
+                for part in command:
+                    if isinstance(part, int):
+                        part = bytes((part,))
+                    parts.append(part)
+                command = b"".join(parts)
+
             packet = CRTPPacket(port=port, channel=channel)
-            request = bytes((command,)) + (bytes(data) if data else b"")
+            request = command + (bytes(data) if data else b"")
             packet.data = request
 
             def matching_response(packet: CRTPPacket) -> bool:
-                return packet.channel == channel and packet.data.startswith(request)
+                return packet.channel == channel and packet.data.startswith(command)
 
         else:
             packet = CRTPPacket(port=port, channel=channel, data=data)
@@ -226,7 +237,7 @@ class Crazyflie:
             response = await value.wait()
 
         response = response.data
-        return response[len(request) :] if command is not None else response
+        return response[len(command) :] if command else response
 
     @async_generator
     async def packets(
@@ -250,7 +261,7 @@ class Crazyflie:
 
 
 async def test():
-    from time import time
+    from aiocflib.utils import timing
 
     def print_packets(packet):
         print(repr(packet))
@@ -260,11 +271,11 @@ async def test():
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
-        start = time()
-        await cf.parameters.validate()
-        print("Fetching parameters TOC took", time() - start, "seconds")
-        print(await cf.parameters.get("posCtlPid.velFFGainX"))
-        # await cf.memory.validate()
+        await cf.parameters.set_fast("kalman.resetEstimation", "u8", 1)
+        with timing("Fetching memory TOC"):
+            await cf.memory.validate()
+        with timing("Fetching parameters TOC"):
+            await cf.parameters.validate()
 
 
 if __name__ == "__main__":
