@@ -3,10 +3,15 @@ and log table-of-contents entries from a Crazyflie.
 """
 
 from abc import abstractmethod, ABCMeta
+from anyio import aopen
+from binascii import hexlify
 from collections import defaultdict
+from functools import partial
 from pathlib import Path
 from typing import Callable, Iterable, Optional, Union
 from aiocflib.utils.registry import Registry
+
+__all__ = ("TOCCache",)
 
 
 #: Type alias for items stored in a TOC cache
@@ -16,7 +21,7 @@ TOCItem = bytes
 Namespace = str
 
 #: Type alias for objects from which we can create a TOC cache instance
-TOCCacheLike = Union[str, Path, "TOCCache"]
+TOCCacheLike = Union[None, str, Path, "TOCCache"]
 
 
 class TOCCache(metaclass=ABCMeta):
@@ -30,27 +35,30 @@ class TOCCache(metaclass=ABCMeta):
         Parameters:
             spec: a Python Path_ object pointing to a folder in the
                 filesystem, a URI-style cache specification, or a string
-                pointing to a folder in the filesystem
+                pointing to a folder in the filesystem. `None` means to
+                create a null cache that does nothing.
         """
+        if spec is None:
+            spec = "null://"
+
         if isinstance(spec, TOCCache):
             return spec
         elif isinstance(spec, Path):
-            raise NotImplementedError("filesystem TOC cache not implemented yet")
+            return cls.create(str(spec))
         else:
             scheme, sep, rest = spec.partition("://")
             if not sep:
-                # No URI separator so this is simply a filesystem path
-                raise NotImplementedError("filesystem TOC cache not implemented yet")
-            else:
-                try:
-                    factory = TOCCacheRegistry.find(scheme)
-                except KeyError:
-                    raise KeyError("no such TOC cache type: {0!r}".format(scheme))
+                scheme, rest = "file", scheme
 
-                cache = factory()
-                cache._configure(rest)
+            try:
+                factory = TOCCacheRegistry.find(scheme)
+            except KeyError:
+                raise KeyError("no such TOC cache type: {0!r}".format(scheme))
 
-            return cache
+            cache = factory()
+            cache._configure(rest)
+
+        return cache
 
     def _configure(self, uri: str) -> None:
         """Configures the cache instance from the given URI specification.
@@ -121,6 +129,27 @@ TOCCacheFactory = Callable[[], TOCCache]
 TOCCacheRegistry = Registry()  # type: Registry[TOCCacheFactory]
 
 
+@TOCCacheRegistry.register("null")
+class NullTOCCache(TOCCache):
+    """Null TOC cache that does nothing."""
+
+    async def find(
+        self, hash: bytes, namespace: Optional[Namespace] = None
+    ) -> Iterable[TOCItem]:
+        raise KeyError("no such hash: {0!r}".format(hash))
+
+    async def has(self, hash: bytes, namespace: Optional[Namespace] = None) -> bool:
+        return False
+
+    async def store(
+        self,
+        hash: bytes,
+        items: Iterable[TOCItem],
+        namespace: Optional[Namespace] = None,
+    ) -> None:
+        pass
+
+
 @TOCCacheRegistry.register("memory")
 class InMemoryTOCCache(TOCCache):
     """TOC cache specialization that stores the table-of-contents entries
@@ -157,6 +186,140 @@ class InMemoryTOCCache(TOCCache):
         namespace: Optional[Namespace] = None,
     ) -> None:
         self._namespaces[namespace][hash] = tuple(items)
+
+
+@TOCCacheRegistry.register("file")
+class FilesystemBasedTOCCache(TOCCache):
+    """TOC cache specialization that stores the table-of-contents entries on
+    a filesystem in a given folder.
+    """
+
+    def __init__(self, read_only: bool = False):
+        """Constructor.
+
+        Parameters:
+            read_only: whether the cache is read only
+        """
+        self._path = None
+        self._read_only = bool(read_only)
+
+    def _configure(self, uri):
+        self.path = uri
+
+    @property
+    def path(self) -> Path:
+        if self._path is None:
+            raise ValueError("TOC cache is not configured yet")
+        return self._path
+
+    @path.setter
+    def path(self, value: Path) -> None:
+        if self._path is not None:
+            raise ValueError("TOC cache is already configured")
+
+        self._path = Path(value)
+
+    def _path_for_hash(
+        self, hash: bytes, namespace: Optional[Namespace] = None
+    ) -> Path:
+        """Sanitizes the given hash so it can be used in a filesystem path."""
+        path = self._path_for_namespace(namespace)
+        return path / "{0}.bin".format(hexlify(hash).decode("ascii").lower())
+
+    def _path_for_namespace(self, namespace: Optional[Namespace] = None) -> Path:
+        """Returns the path corresponding to the given namespace on the filesystem."""
+        if self._path is None:
+            raise ValueError("TOC cache is not configured yet")
+
+        result = self._path
+        if namespace is not None:
+            namespace = self._sanitize_namespace(namespace)
+
+        return result / namespace if namespace else result
+
+    @staticmethod
+    def _sanitize_namespace(namespace: Namespace) -> str:
+        """Sanitizes the given namespace so it can be used in a filesystem
+        path.
+        """
+        if namespace is None:
+            return ""
+        return (
+            namespace.encode("ascii", errors="backslashreplace")
+            .replace(b"\\", b"=")
+            .decode("ascii")
+        )
+
+    async def find(
+        self, hash: bytes, namespace: Optional[Namespace] = None
+    ) -> Iterable[TOCItem]:
+        path = self._path_for_hash(hash, namespace)
+        if not path.exists() or not path.is_file():
+            raise KeyError(
+                "no such namespace or hash: {0!r} / {1!r}".format(namespace, hash)
+            )
+
+        result = []
+
+        async with await aopen(str(path), "rb") as fp:
+            data = await fp.read(1)
+            if not data:
+                raise IOError("unexpected end of file")
+
+            version = data[0]
+            if version != 1:
+                raise IOError("only version 1 TOC files are supported")
+
+            while True:
+                length = await fp.read(2)
+                if length is None or len(length) < 2:
+                    break
+
+                length = length[0] + (length[1] << 8)
+                data = await fp.read(length)
+                if len(data) < length:
+                    raise IOError("unexpected end of file")
+
+                result.append(data)
+
+        return result
+
+    async def has(self, hash: bytes, namespace: Optional[Namespace] = None) -> bool:
+        path = self._path_for_hash(hash, namespace)
+        return path.exists() and path.is_file()
+
+    async def store(
+        self,
+        hash: bytes,
+        items: Iterable[TOCItem],
+        namespace: Optional[Namespace] = None,
+    ) -> None:
+        if self._read_only:
+            return
+
+        path = self._path_for_hash(hash, namespace)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        success = False
+
+        try:
+            async with await aopen(str(path), "wb") as fp:
+                await fp.write(b"\x01")
+                for item in items:
+                    length = len(item)
+                    if length > 65535:
+                        raise IOError("exceeded maximum item length")
+
+                    await fp.write(bytes((length & 0xFF, length >> 8)))
+                    await fp.write(item)
+
+            success = True
+        finally:
+            if not success:
+                path.unlink()
+
+
+TOCCacheRegistry.register("file+ro", partial(FilesystemBasedTOCCache, read_only=True))
 
 
 class NamespacedTOCCacheWrapper(TOCCache):

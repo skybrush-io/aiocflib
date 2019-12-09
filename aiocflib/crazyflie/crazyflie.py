@@ -38,7 +38,7 @@ class Crazyflie:
         # Connection to the Crazyflie closes when the context is exited
     """
 
-    def __init__(self, uri: str, cache: TOCCacheLike):
+    def __init__(self, uri: str, cache: Optional[TOCCacheLike] = None):
         """Constructor.
 
         Creates a Crazyflie_ instance from a URI specification.
@@ -270,9 +270,7 @@ async def test():
         print(repr(packet))
 
     uri = "radio+log://0/80/2M/E7E7E7E704"
-    cache = TOCCache.create("memory://")
-
-    async with Crazyflie(uri, cache=cache) as cf:
+    async with Crazyflie(uri) as cf:
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
@@ -280,10 +278,6 @@ async def test():
         with timing("Fetching memory TOC"):
             await cf.memory.validate()
         with timing("Fetching parameters TOC"):
-            await cf.parameters.validate()
-
-    async with Crazyflie(uri, cache=cache) as cf:
-        with timing("Fetching memory TOC again - should be faster"):
             await cf.parameters.validate()
 
 

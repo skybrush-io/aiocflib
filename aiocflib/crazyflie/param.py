@@ -362,20 +362,33 @@ class Parameters:
         # TODO(ntamas): when connecting to multiple drones with the same TOC,
         # fetch the parameters only from one of them
         num_parameters, hash = await self._get_table_of_contents_info()
+        hash = Struct("<I").pack(hash)
 
-        if await self._cache.has(hash):
+        try:
+            # Try to fetch the parameters from the cache based on the hash
             parameters = [
                 ParameterSpecification.from_bytes(data, id=id)
                 for id, data in enumerate(await self._cache.find(hash))
             ]
-        else:
+        except Exception as ex:
+            # Retrieving the cached entries failed; let's try to fetch on
+            # our own
+            print(repr(ex))
             parameters = [
                 await self._get_parameter_spec_by_index(i)
                 for i in range(num_parameters)
             ]
-            await self._cache.store(
-                hash, [parameter.to_bytes() for parameter in parameters]
-            )
+
+            # Store the fetched entries in the cache
+            try:
+                await self._cache.store(
+                    hash, [parameter.to_bytes() for parameter in parameters]
+                )
+            except Exception as ex:
+                # Storing items in the cache failed, but let's not freak out
+                raise
+                print(repr(ex))
+                pass
 
         by_name = {parameter.full_name: parameter for parameter in parameters}
         return parameters, by_name
