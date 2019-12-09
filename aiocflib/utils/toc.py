@@ -8,7 +8,8 @@ from binascii import hexlify
 from collections import defaultdict
 from functools import partial
 from pathlib import Path
-from typing import Callable, Iterable, Optional, Union
+from struct import Struct
+from typing import Awaitable, Callable, Iterable, Optional, Union, Tuple, TypeVar
 from aiocflib.utils.registry import Registry
 
 __all__ = ("TOCCache",)
@@ -246,7 +247,9 @@ class FilesystemBasedTOCCache(TOCCache):
             return ""
         return (
             namespace.encode("ascii", errors="backslashreplace")
+            .replace(b"/", b"\\2f")
             .replace(b"\\", b"=")
+            .replace(b".", b"/")
             .decode("ascii")
         )
 
@@ -354,3 +357,41 @@ class NamespacedTOCCacheWrapper(TOCCache):
             return self._namespace
         else:
             return self._separator.join(self._namespace, namespace)
+
+
+T = TypeVar("T")
+
+
+async def fetch_table_of_contents_gracefully(
+    cache: Optional[TOCCache],
+    info_func: Callable[[], Awaitable[Tuple[int, int]]],
+    single_item_fetcher_func: Callable[[int], Awaitable[T]],
+    from_bytes: Callable[[bytes, int], T],
+    to_bytes: Callable[[T], bytes],
+):
+    num_items, hash = await info_func()
+    hash = Struct("<I").pack(hash)
+    result = None
+
+    try:
+        # Try to fetch the parameters from the cache based on the hash
+        if cache:
+            items = await cache.find(hash)
+            result = [from_bytes(data, id=id) for id, data in enumerate(items)]
+    except Exception:
+        pass
+
+    if result is None:
+        # Retrieving the cached entries failed; let's try to fetch on
+        # our own
+        result = [await single_item_fetcher_func(i) for i in range(num_items)]
+
+        # Store the fetched entries in the cache
+        if cache:
+            try:
+                await cache.store(hash, [to_bytes(item) for item in result])
+            except Exception:
+                # Storing items in the cache failed, but let's not freak out
+                pass
+
+    return result

@@ -7,6 +7,7 @@ from typing import Tuple, Union
 
 from aiocflib.crtp import CRTPPort
 from aiocflib.utils import error_to_string
+from aiocflib.utils.toc import fetch_table_of_contents_gracefully
 
 from .crazyflie import Crazyflie
 
@@ -28,7 +29,7 @@ class ParameterTOCCommand(IntEnum):
     """Enum representing the names of the table-of-contents commands in the
     parameter service of the CRTP protocol.
 
-    These commadns are valid for ParameterChannel.TABLE_OF_CONTENTS (i.e.
+    These commands are valid for ParameterChannel.TABLE_OF_CONTENTS (i.e.
     channel 0).
     """
 
@@ -55,16 +56,17 @@ _ParameterSpecification = namedtuple(
 #: aliases
 _type_properties = {
     # C type, Python struct, aliases
-    0x08: ("uint8_t", Struct("<B"), ("uint8", "u8")),
-    0x09: ("uint16_t", Struct("<H"), ("uint16", "u16")),
-    0x0A: ("uint32_t", Struct("<L"), ("uint32", "u32")),
-    0x0B: ("uint64_t", Struct("<Q"), ("uint64", "u64")),
     0x00: ("int8_t", Struct("<b"), ("int8", "i8")),
     0x01: ("int16_t", Struct("<h"), ("int16", "i16")),
     0x02: ("int32_t", Struct("<i"), ("int32", "i32")),
     0x03: ("int64_t", Struct("<q"), ("int64", "i64")),
+    0x05: ("fp16", Struct("<h"), ()),
     0x06: ("float", Struct("<f"), ()),
     0x07: ("double", Struct("<d"), ()),
+    0x08: ("uint8_t", Struct("<B"), ("uint8", "u8")),
+    0x09: ("uint16_t", Struct("<H"), ("uint16", "u16")),
+    0x0A: ("uint32_t", Struct("<L"), ("uint32", "u32")),
+    0x0B: ("uint64_t", Struct("<Q"), ("uint64", "u64")),
 }
 
 
@@ -188,11 +190,11 @@ class Parameters:
             crazyflie: the Crazyflie for which we need to handle the parameter
                 subsystem related messages
         """
-        self._cache = crazyflie._cache.namespace("param_toc")
+        self._cache = crazyflie._get_cache_for("param_toc")
         self._crazyflie = crazyflie
 
-        self._parameters = None
-        self._parameters_by_name = None
+        self._variables = None
+        self._variables_by_name = None
         self._values = None
 
     async def get(self, name: str, fetch: bool = False):
@@ -222,7 +224,7 @@ class Parameters:
         # TODO(ntamas): make it possible to set by name if we have no TOC
         await self.validate()
 
-        parameter = self._parameters_by_name[name]
+        parameter = self._variables_by_name[name]
         if parameter.read_only:
             raise AttributeError("{} is read only".format(name))
 
@@ -287,10 +289,10 @@ class Parameters:
         """Ensures that the basic information about the parameters of the
         Crazyflie are downloaded.
         """
-        if self._parameters is not None:
+        if self._variables is not None:
             return
 
-        self._parameters, self._parameters_by_name = await self._validate()
+        self._variables, self._variables_by_name = await self._validate()
         self._values = {}
 
     async def _fetch(self, name: str):
@@ -305,7 +307,7 @@ class Parameters:
         """
         await self.validate()
 
-        parameter = self._parameters_by_name[name]
+        parameter = self._variables_by_name[name]
         index = parameter.id
 
         response = await self._crazyflie.run_command(
@@ -322,7 +324,14 @@ class Parameters:
         return parameter.parse_value(response[3:])
 
     async def _get_parameter_spec_by_index(self, index: int) -> ParameterSpecification:
-        """Returns the specification of the parameter with the given index."""
+        """Returns the specification of the parameter with the given index.
+
+        Parameters:
+            index: the index of the parameter to retrieve
+
+        Returns:
+            the specification of the parameter with the given index
+        """
         response = await self._crazyflie.run_command(
             port=CRTPPort.PARAMETERS,
             channel=ParameterChannel.TABLE_OF_CONTENTS,
@@ -358,37 +367,14 @@ class Parameters:
         """Downloads the basic information about the parameters of the
         Crazyflie.
         """
-        # TODO(ntamas): check if we already have the parameters by CRC
         # TODO(ntamas): when connecting to multiple drones with the same TOC,
         # fetch the parameters only from one of them
-        num_parameters, hash = await self._get_table_of_contents_info()
-        hash = Struct("<I").pack(hash)
-
-        try:
-            # Try to fetch the parameters from the cache based on the hash
-            parameters = [
-                ParameterSpecification.from_bytes(data, id=id)
-                for id, data in enumerate(await self._cache.find(hash))
-            ]
-        except Exception as ex:
-            # Retrieving the cached entries failed; let's try to fetch on
-            # our own
-            print(repr(ex))
-            parameters = [
-                await self._get_parameter_spec_by_index(i)
-                for i in range(num_parameters)
-            ]
-
-            # Store the fetched entries in the cache
-            try:
-                await self._cache.store(
-                    hash, [parameter.to_bytes() for parameter in parameters]
-                )
-            except Exception as ex:
-                # Storing items in the cache failed, but let's not freak out
-                raise
-                print(repr(ex))
-                pass
-
+        parameters = await fetch_table_of_contents_gracefully(
+            self._cache,
+            self._get_table_of_contents_info,
+            self._get_parameter_spec_by_index,
+            ParameterSpecification.from_bytes,
+            ParameterSpecification.to_bytes,
+        )
         by_name = {parameter.full_name: parameter for parameter in parameters}
         return parameters, by_name

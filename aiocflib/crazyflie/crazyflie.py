@@ -20,6 +20,7 @@ __all__ = ("Crazyflie",)
 MYPY = False
 if MYPY:
     from .console import Console
+    from .log import Log
     from .mem import Memory
     from .param import Parameters
     from .platform import Platform
@@ -46,7 +47,7 @@ class Crazyflie:
         Parameters:
             uri: the URI where the Crazyflie can be reached
         """
-        self._cache = TOCCache.create(cache)
+        self._cache = TOCCache.create(cache) if cache else None
 
         self._uri = uri
         self._dispatcher = CRTPDispatcher()
@@ -56,11 +57,13 @@ class Crazyflie:
 
         # Initialize sub-modules; avoid circular import
         from .console import Console
+        from .log import Log
         from .mem import Memory
         from .param import Parameters
         from .platform import Platform
 
         self._console = Console(self)
+        self._log = Log(self)
         self._memory = Memory(self)
         self._parameters = Parameters(self)
         self._platform = Platform(self)
@@ -81,6 +84,13 @@ class Crazyflie:
 
     async def __aexit__(self, exc_type, exc_value, tb):
         return await self._task_group.__aexit__(exc_type, exc_value, tb)
+
+    def _get_cache_for(self, namespace: str) -> Optional[TOCCache]:
+        """Returns a namespaced TOC cache instance to be used by submodules
+        for caching data, or `None` if the Crazyflie instance was constructed
+        without a cache.
+        """
+        return self._cache.namespace(namespace) if self._cache else None
 
     async def _message_handler(self, driver):
         """Worker task that receives incoming messages from the Crazyflie and
@@ -137,6 +147,11 @@ class Crazyflie:
         return (
             self._driver.link_quality if self._driver else ObservableValue.constant(0.0)
         )
+
+    @property
+    def log(self) -> Log:
+        """The logging subsystem of the Crazyflie."""
+        return self._log
 
     @property
     def mem(self) -> Memory:
@@ -266,19 +281,20 @@ class Crazyflie:
 async def test():
     from aiocflib.utils import timing
 
-    def print_packets(packet):
-        print(repr(packet))
-
     uri = "radio+log://0/80/2M/E7E7E7E704"
-    async with Crazyflie(uri) as cf:
+    async with Crazyflie(uri, cache="/tmp/cfcache") as cf:
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
         await cf.parameters.set_fast("kalman.resetEstimation", "u8", 1)
         with timing("Fetching memory TOC"):
             await cf.memory.validate()
+        with timing("Fetching log TOC"):
+            await cf.log.validate()
+        """
         with timing("Fetching parameters TOC"):
             await cf.parameters.validate()
+        """
 
 
 if __name__ == "__main__":
