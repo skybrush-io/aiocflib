@@ -126,8 +126,6 @@ class ParameterSpecification(_ParameterSpecification):
     """Class representing the specification of a single parameter of the
     Crazyflie."""
 
-    _struct = Struct("<BIQ")
-
     @classmethod
     def from_bytes(cls, data: bytes, id: int):
         try:
@@ -165,6 +163,18 @@ class ParameterSpecification(_ParameterSpecification):
         """
         return _type_properties[self.type][1].unpack(data)[0]
 
+    def to_bytes(self) -> bytes:
+        header = (int(self.type) & 0x0F) + (0x40 if self.read_only else 0)
+
+        parts = []
+        parts.append(bytes((header,)))
+        parts.append(self.group.encode("ascii"))
+        parts.append(b"\x00")
+        parts.append(self.name.encode("ascii"))
+        parts.append(b"\x00")
+
+        return b"".join(parts)
+
 
 class Parameters:
     """Class representing the handler of messages releated to the parameter
@@ -178,6 +188,7 @@ class Parameters:
             crazyflie: the Crazyflie for which we need to handle the parameter
                 subsystem related messages
         """
+        self._cache = crazyflie._cache.namespace("param_toc")
         self._crazyflie = crazyflie
 
         self._parameters = None
@@ -350,10 +361,21 @@ class Parameters:
         # TODO(ntamas): check if we already have the parameters by CRC
         # TODO(ntamas): when connecting to multiple drones with the same TOC,
         # fetch the parameters only from one of them
-        num_parameters, param_toc_crc32 = await self._get_table_of_contents_info()
+        num_parameters, hash = await self._get_table_of_contents_info()
 
-        parameters = [
-            await self._get_parameter_spec_by_index(i) for i in range(num_parameters)
-        ]
+        if await self._cache.has(hash):
+            parameters = [
+                ParameterSpecification.from_bytes(data, id=id)
+                for id, data in enumerate(await self._cache.find(hash))
+            ]
+        else:
+            parameters = [
+                await self._get_parameter_spec_by_index(i)
+                for i in range(num_parameters)
+            ]
+            await self._cache.store(
+                hash, [parameter.to_bytes() for parameter in parameters]
+            )
+
         by_name = {parameter.full_name: parameter for parameter in parameters}
         return parameters, by_name

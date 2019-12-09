@@ -22,7 +22,7 @@ class CRTPDriver(metaclass=ABCMeta):
     @staticmethod
     @asynccontextmanager
     @async_generator
-    async def connected_to(uri, *args, **kwds):
+    async def connected_to(uri: str, *args, **kwds):
         """Creates a CRTPDriver_ instance from a URI specification and connects
         to the Crazyflie located at the given URI. Closes the connection when the
         execution exits the context.

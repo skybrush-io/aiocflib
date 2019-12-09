@@ -13,6 +13,7 @@ from aiocflib.crtp import (
     CRTPPortLike,
 )
 from aiocflib.utils.concurrency import create_daemon_task_group, ObservableValue
+from aiocflib.utils.toc import TOCCache, TOCCacheLike
 
 __all__ = ("Crazyflie",)
 
@@ -37,7 +38,7 @@ class Crazyflie:
         # Connection to the Crazyflie closes when the context is exited
     """
 
-    def __init__(self, uri: str):
+    def __init__(self, uri: str, cache: TOCCacheLike):
         """Constructor.
 
         Creates a Crazyflie_ instance from a URI specification.
@@ -45,6 +46,8 @@ class Crazyflie:
         Parameters:
             uri: the URI where the Crazyflie can be reached
         """
+        self._cache = TOCCache.create(cache)
+
         self._uri = uri
         self._dispatcher = CRTPDispatcher()
 
@@ -267,7 +270,9 @@ async def test():
         print(repr(packet))
 
     uri = "radio+log://0/80/2M/E7E7E7E704"
-    async with Crazyflie(uri) as cf:
+    cache = TOCCache.create("memory://")
+
+    async with Crazyflie(uri, cache=cache) as cf:
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
@@ -275,6 +280,10 @@ async def test():
         with timing("Fetching memory TOC"):
             await cf.memory.validate()
         with timing("Fetching parameters TOC"):
+            await cf.parameters.validate()
+
+    async with Crazyflie(uri, cache=cache) as cf:
+        with timing("Fetching memory TOC again - should be faster"):
             await cf.parameters.validate()
 
 

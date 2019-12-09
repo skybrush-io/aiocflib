@@ -1,49 +1,36 @@
-from typing import Callable, Dict
+from typing import Callable
 
 from aiocflib.crtp.drivers.base import CRTPDriver
+from aiocflib.utils.registry import Registry
 
-__all__ = ("register",)
+__all__ = ("MiddlewareRegistry", "find", "register")
 
-
+#: Type specification for CRTP driver middleware
 Middleware = Callable[[CRTPDriver], CRTPDriver]
 
 #: Mapping that maps names to the corresponding middleware classes
-_registry = {}  # type: Dict[str, Middleware]
+MiddlewareRegistry = Registry()  # type: Registry[Middleware]
 
+find = MiddlewareRegistry.find
+"""Returns the registered middleware corresponding to the given name.
 
-def find(name: str) -> Middleware:
-    """Returns the registered middleware corresponding to the given name.
+Parameters:
+    name: the name to which the middleware is registered
 
-    Parameters:
-        name: the name to which the middleware is registered
+Raises:
+    KeyError: if there is no registered middleware for the given name
 
-    Raises:
-        KeyError: if there is no registered middleware for the given name
+Returns:
+    the middleware corresponding to the name
+"""
 
-    Returns:
-        the middleware corresponding to the name
-    """
-    return _registry[name]
+register = MiddlewareRegistry.register
+"""Class decorator factory that returns a decorator that registers a class
+as a middleware with the given name.
 
+Parameters:
+    name: the name for which the driver will be registered
 
-def register(name: str) -> Callable[[Middleware], Middleware]:
-    """Class decorator factory that returns a decorator that registers a class
-    as a middleware with the given name.
-
-    Parameters:
-        name: the name for which the driver will be registered
-
-    Returns:
-        an appropriate decorator that can then be applied to a middleware class
-    """
-
-    def decorator(cls):
-        existing_cls = _registry.get(name)
-        if existing_cls:
-            raise ValueError(
-                "Name {0!r} is already registered for {1!r}".format(name, existing_cls)
-            )
-        _registry[name] = cls
-        return cls
-
-    return decorator
+Returns:
+    an appropriate decorator that can then be applied to a middleware class
+"""

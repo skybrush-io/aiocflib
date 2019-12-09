@@ -1,53 +1,41 @@
-from typing import Callable, Dict, Type
+from typing import Callable
+
+from aiocflib.utils.registry import Registry
 
 from .base import CRTPDriver
 
-__all__ = ("register",)
+__all__ = ("DriverRegistry", "find", "register")
 
 
-#: Mapping that maps names to the corresponding CRTPDriver classes
-_registry = {}  # type: Dict[str, Type[CRTPDriver]]
-
-
+#: Type specification for CRTP driver factories
 CRTPDriverFactory = Callable[[], CRTPDriver]
 
+#: Mapping that maps names to the corresponding CRTPDriver classes
+DriverRegistry = Registry()  # type: Registry[CRTPDriverFactory]
 
-def find(name: str) -> CRTPDriverFactory:
-    """Returns the registered CRTP driver factory corresponding to the given
-    name.
+find = DriverRegistry.find
+"""Returns the registered CRTP driver factory corresponding to the given
+name.
 
-    Parameters:
-        name: the name to which the driver factory is registered
+Parameters:
+    name: the name to which the driver factory is registered
 
-    Raises:
-        KeyError: if there is no registered CRTP driver factory for the given
-            name
+Raises:
+    KeyError: if there is no registered CRTP driver factory for the given
+        name
 
-    Returns:
-        the driver factory corresponding to the name
-    """
-    return _registry[name]
+Returns:
+    the driver factory corresponding to the name
+"""
 
+register = DriverRegistry.register
+"""Class decorator factory that returns a decorator that registers a class
+as a CRTP driver with the given name.
 
-def register(name: str) -> Callable[[CRTPDriverFactory], CRTPDriverFactory]:
-    """Class decorator factory that returns a decorator that registers a class
-    as a CRTP driver with the given name.
+Parameters:
+    name: the name to which the driver factory is registered
 
-    Parameters:
-        name: the name to which the driver factory is registered
-
-    Returns:
-        an appropriate decorator that can then be applied to a CRTPDriver
-        subclass
-    """
-
-    def decorator(cls):
-        existing_cls = _registry.get(name)
-        if existing_cls:
-            raise ValueError(
-                "Name {0!r} is already registered for {1!r}".format(name, existing_cls)
-            )
-        _registry[name] = cls
-        return cls
-
-    return decorator
+Returns:
+    an appropriate decorator that can then be applied to a CRTPDriver
+    subclass
+"""
