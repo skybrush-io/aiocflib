@@ -11,6 +11,7 @@ from anyio import (
     run_in_thread,
     TaskGroup,
 )
+from async_generator import async_generator, yield_
 from functools import partial
 from inspect import iscoroutinefunction
 from outcome import capture
@@ -200,10 +201,32 @@ class ObservableValue(Generic[T]):
             await self._condition.wait()
             return self._value
 
-    def __aiter__(self):
-        return self
+    async def wait_for(self, expected: T) -> T:
+        """Blocks until the value becomes equal to an expected value."""
+        async with self._condition:
+            while True:
+                if self._value == expected:
+                    return self._value
 
-    __anext__ = wait
+                await self._condition.wait()
+
+    async def wait_until(self, predicate: Callable[[T], bool]) -> T:
+        """Blocks until the value satisfies a predicate."""
+        async with self._condition:
+            while True:
+                if predicate(self._value):
+                    return self._value
+
+                await self._condition.wait()
+
+    def __aiter__(self):
+        return self._observe()
+
+    @async_generator
+    async def _observe(self):
+        await yield_(self._value)
+        while True:
+            await yield_(await self.wait())
 
 
 class ThreadContext(Generic[T]):

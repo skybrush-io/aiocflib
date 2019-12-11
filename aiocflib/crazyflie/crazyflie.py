@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from anyio import create_event, Event
+from anyio import create_event, Event, sleep
 from async_generator import async_generator, yield_from_
 from sys import exc_info
 from typing import Iterable, Optional, Union
 
+from aiocflib.bootloader.types import BootloaderCommand, BootloaderTargetType
 from aiocflib.crtp import (
     CRTPDataLike,
     CRTPDispatcher,
     CRTPDriver,
     CRTPPacket,
+    CRTPPort,
     CRTPPortLike,
 )
 from aiocflib.utils.concurrency import create_daemon_task_group, ObservableValue
@@ -189,6 +191,98 @@ class Crazyflie:
         """The URI where the Crazyflie resides."""
         return self._uri
 
+    async def reboot(self, to_bootloader: bool = False) -> None:
+        """Sends a packet to the Crazyflie that reboots its main processor."""
+        # Initiate the reset and wait for the acknowledgment
+        # TODO(ntamas): resend if needed!
+        await self.run_command(
+            port=CRTPPort.LINK_CONTROL,
+            channel=3,
+            command=(BootloaderTargetType.NRF51, BootloaderCommand.RESET_INIT),
+        )
+
+        # Acknowledgment received, now we can send the reset command
+        packet = CRTPPacket(
+            port=CRTPPort.LINK_CONTROL,
+            channel=3,
+            data=(BootloaderTargetType.NRF51, BootloaderCommand.RESET, 1),
+        )
+        await self._driver.send_packet(packet)
+
+        # Notify the driver that the Crazyflie was rebooted
+        await self._driver.notify_rebooted()
+
+        # Give some time for the outbound thread to send the packet
+        await sleep(0.1)
+
+    async def reboot_to_bootloader(self) -> None:
+        """Sends a packet to the Crazyflie that reboots its main processor
+        into its bootloader.
+
+        It is advised that you close the connection context to the Crazyflie
+        after this operation.
+        """
+        # Initiate the reset and wait for the acknowledgment
+        # TODO(ntamas): resend if needed!
+        await self.run_command(
+            port=CRTPPort.LINK_CONTROL,
+            channel=3,
+            command=(BootloaderTargetType.NRF51, BootloaderCommand.RESET_INIT),
+        )
+
+        # Acknowledgment received, now we can send the reset command
+        packet = CRTPPacket(
+            port=CRTPPort.LINK_CONTROL,
+            channel=3,
+            data=(BootloaderTargetType.NRF51, BootloaderCommand.RESET, 0),
+        )
+        await self._driver.send_packet(packet)
+
+        # Give some time for the outbound thread to send the packet
+        await sleep(0.1)
+
+    async def resume(self) -> None:
+        """Sends a packet to the Crazyflie that wakes up its main processor
+        from a suspended state.
+        """
+        packet = CRTPPacket(
+            header=0xFF, data=(BootloaderTargetType.NRF51, BootloaderCommand.RESUME)
+        )
+        await self._driver.send_packet(packet)
+
+        # Give some time for the outbound thread to send the packet
+        await sleep(0.1)
+
+        # Notify the driver that the Crazyflie was rebooted
+        await self._driver.notify_rebooted()
+
+    async def suspend(self) -> None:
+        """Sends a packet to the Crazyflie that suspends its main processor.
+        You can wake up the Crazyflie later with ``self.resume()`` or with the
+        power button.
+
+        You are advised to close the Crazyflie context after executing this
+        method and re-establish it later. This is to ensure that the safe-link
+        mode is restored properly after the Crazyflie wakes up.
+        """
+        packet = CRTPPacket(
+            header=0xFF, data=(BootloaderTargetType.NRF51, BootloaderCommand.SUSPEND)
+        )
+        await self._driver.send_packet(packet)
+
+        # Give some time for the outbound thread to send the packet
+        await sleep(0.1)
+
+    async def shutdown(self) -> None:
+        """Sends a packet to the Crazyflie that turns it off completely."""
+        packet = CRTPPacket(
+            header=0xFF, data=(BootloaderTargetType.NRF51, BootloaderCommand.SHUTDOWN)
+        )
+        await self._driver.send_packet(packet)
+
+        # Give some time for the outbound thread to send the packet
+        await sleep(0.1)
+
     async def run_command(
         self,
         port: CRTPPortLike,
@@ -286,15 +380,17 @@ async def test():
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
-        await cf.parameters.set_fast("kalman.resetEstimation", "u8", 1)
         with timing("Fetching memory TOC"):
             await cf.memory.validate()
         with timing("Fetching log TOC"):
             await cf.log.validate()
-        """
+
+        await cf.suspend()
+        await sleep(3)
+        await cf.resume()
+
         with timing("Fetching parameters TOC"):
             await cf.parameters.validate()
-        """
 
 
 if __name__ == "__main__":

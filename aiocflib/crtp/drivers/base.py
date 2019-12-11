@@ -111,6 +111,14 @@ class CRTPDriver(metaclass=ABCMeta):
         """Returns a human-readable name of the interface."""
         raise NotImplementedError
 
+    async def notify_rebooted(self) -> None:
+        """Notifies the driver that the underlying Crazyflie device has been
+        rebooted. The drivers may respond to this request by scheduling some
+        setup operations to perform on the link again in an attempt to restore
+        the link to the state before the reboot.
+        """
+        pass
+
     @abstractmethod
     async def receive_packet(self) -> CRTPPacket:
         """Receives a single CRTP packet.

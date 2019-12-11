@@ -35,6 +35,8 @@ class LoggingMiddleware(MiddlewareBase):
 
     _in = Fore.CYAN + Style.BRIGHT + "\u25c0" + Style.RESET_ALL
     _out = Fore.CYAN + "\u25b6" + Style.RESET_ALL
+    _unsafe_in = Fore.RED + Style.BRIGHT + "\u25c0" + Style.RESET_ALL
+    _unsafe_out = Fore.RED + "\u25b6" + Style.RESET_ALL
 
     def _format_type(self, packet: CRTPPacket) -> str:
         port, channel = packet.port, packet.channel
@@ -50,7 +52,7 @@ class LoggingMiddleware(MiddlewareBase):
         for line in hexdump(data, result="generator"):
             _, _, line = line.partition(" ")
             result.append(line)
-        return "\n             ".join(result)
+        return "\n               ".join(result)
 
     def _init(self) -> None:
         from aiocflib.crtp.drivers.radio import RadioDriver
@@ -71,18 +73,24 @@ class LoggingMiddleware(MiddlewareBase):
     def _report_null_packets(self) -> None:
         """Reports on the console that a certain number of null packets have
         been received.
+
+        Parameters:
+            bool: whether the link is currently safe
         """
         if self._num_null_packets == 1:
             print(
                 "{0} {1} {2}Null packet{3}".format(
-                    self._abbreviation, self._in, Style.DIM, Style.RESET_ALL
+                    self._abbreviation,
+                    self._in if self.is_safe else self._unsafe_in,
+                    Style.DIM,
+                    Style.RESET_ALL,
                 )
             )
         elif self._num_null_packets > 1:
             print(
                 "{0} {1} {2}{3} null packets{4}".format(
                     self._abbreviation,
-                    self._in,
+                    self._in if self.is_safe else self._unsafe_in,
                     Style.DIM,
                     self._num_null_packets,
                     Style.RESET_ALL,
@@ -100,12 +108,26 @@ class LoggingMiddleware(MiddlewareBase):
                 self._report_null_packets()
             data = self._hexdump(packet.data)
             type = Fore.GREEN + self._format_type(packet) + Style.RESET_ALL
-            print("{0} {1} {2} {3}".format(self._abbreviation, self._in, type, data))
+            print(
+                "{0} {1} {2} {3}".format(
+                    self._abbreviation,
+                    self._in if self.is_safe else self._unsafe_in,
+                    type,
+                    data,
+                )
+            )
 
         return packet
 
     async def send_packet(self, packet: CRTPPacket):
         type = Fore.GREEN + self._format_type(packet) + Style.RESET_ALL
         data = self._hexdump(packet.data)
-        print("{0} {1} {2} {3}".format(self._abbreviation, self._out, type, data))
+        print(
+            "{0} {1} {2} {3}".format(
+                self._abbreviation,
+                self._out if self.is_safe else self._unsafe_out,
+                type,
+                data,
+            )
+        )
         return await super().send_packet(packet)

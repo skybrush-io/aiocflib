@@ -39,7 +39,7 @@ class MiddlewareBase(CRTPDriver):
 
     @property
     def is_safe(self) -> bool:
-        return self._wrapped.is_safe()
+        return self._wrapped.is_safe
 
     @property
     def link_quality(self) -> ObservableValue[float]:
@@ -52,6 +52,9 @@ class MiddlewareBase(CRTPDriver):
     @property
     def uri(self) -> str:
         return self._wrapped.uri
+
+    async def notify_rebooted(self) -> None:
+        return await self._wrapped.notify_rebooted()
 
     async def receive_packet(self) -> CRTPPacket:
         return await self._wrapped.receive_packet()
