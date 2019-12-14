@@ -3,6 +3,7 @@
 from abc import abstractmethod, abstractproperty, ABCMeta
 from collections import namedtuple
 from enum import IntEnum
+from errno import ENODATA
 from struct import Struct, error as StructError
 from typing import Callable, Generator, List, Tuple
 
@@ -126,7 +127,7 @@ class MemoryHandler(metaclass=ABCMeta):
 class MemoryHandlerBase(MemoryHandler):
     """Base implementation of a memory handler."""
 
-    _read_struct = Struct("<BI")
+    _addressing_struct = Struct("<BI")
 
     def __init__(self, element: MemoryElement, owner: Crazyflie):
         """Constructor.
@@ -168,9 +169,8 @@ class MemoryHandlerBase(MemoryHandler):
             if status == 0:
                 chunks.append(chunk)
             else:
-                # TODO(ntamas): resend command
-                raise ValueError(
-                    "status = {0} ({1}) after read request, implement this".format(
+                raise IOError(
+                    "Read request returned error code {0} ({1})".format(
                         status, error_to_string(status)
                     )
                 )
@@ -185,10 +185,19 @@ class MemoryHandlerBase(MemoryHandler):
         return self._element.type
 
     async def write(self, addr: int, data: bytes) -> None:
-        pass
+        for start, size in self._chunkify(
+            0, len(data), step=MemoryHandler.MAX_WRITE_REQUEST_LENGTH
+        ):
+            status = await self._write_chunk(addr + start, data[start : (start + size)])
+            if status:
+                raise IOError(
+                    "Write request returned error code {0} ({1})".format(
+                        status, error_to_string(status)
+                    )
+                )
 
     async def _read_chunk(self, addr: int, length: int) -> Tuple[bytes, int]:
-        """Reads a single chunk of data that fits into a single packet, starting
+        """Reads a chunk of data that fits into a single packet, starting
         from the given address.
 
         Parameters:
@@ -198,15 +207,37 @@ class MemoryHandlerBase(MemoryHandler):
 
         Returns:
             the data that was read and the status code sent by the Crazyflie,
-            in a tuple
+            in a tuple. A zero status code means that the read operation was
+            successful.
         """
         response = await self._crazyflie.run_command(
             port=CRTPPort.MEMORY,
             channel=MemoryChannel.READ,
-            command=self._read_struct.pack(self._element.index, addr),
+            command=self._addressing_struct.pack(self._element.index, addr),
             data=(length,),
         )
-        return response[1:], response[0]
+        return (response[1:], response[0]) if response else (b"", ENODATA)
+
+    async def _write_chunk(self, addr: int, data: bytes) -> int:
+        """Writes a chunk of data that fits into a single packet, starting
+        from the given address.
+
+        Parameters:
+            addr: the address to write the data to
+            data: the data to write; must be shorter than
+                `MemoryHandler.MAX_WRITE_REQUEST_LENGTH`.
+
+        Returns:
+            the status code sent by the Crazyflie; zero means that the write
+            was successful
+        """
+        response = await self._crazyflie.run_command(
+            port=CRTPPort.MEMORY,
+            channel=MemoryChannel.WRITE,
+            command=self._addressing_struct.pack(self._element.index, addr),
+            data=data,
+        )
+        return response[0] if response else ENODATA
 
 
 class Memory:

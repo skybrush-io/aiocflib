@@ -382,16 +382,16 @@ async def test():
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
 
-        with timing("Fetching memory TOC"):
-            await cf.memory.validate()
         with timing("Fetching log TOC"):
             await cf.log.validate()
         with timing("Fetching parameters TOC"):
             await cf.parameters.validate()
 
         with timing("Reading from memory"):
-            memory = await cf.memory.find_eeprom()
-            print(len(await memory.read(0, 64)))
+            memory = await cf.memory.find(MemoryType.LED)
+            data = b"\xfc\x00" * 8
+            await memory.write(0, data)
+            await memory.read(0, len(data))
 
         """
         await cf.parameters.set("motorPowerSet.enable", 1)
