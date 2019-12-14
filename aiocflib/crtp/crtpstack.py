@@ -68,6 +68,38 @@ CRTPDataLike = Union[array, bytearray, bytes, str, List[int], Tuple[int]]
 CRTPPortLike = Union[int, CRTPPort]
 
 
+class MemoryType(IntEnum):
+    """Enum representing the types of memories supported by a Crazyflie."""
+
+    I2C = 0
+    ONE_WIRE = 1
+    LED = 0x10
+    LOCO = 0x11
+    TRAJECTORY = 0x12
+    LOCO2 = 0x13
+    LIGHTHOUSE = 0x14
+    MEMORY_TESTER = 0x15
+    SD_CARD = 0x16
+
+    @property
+    def description(self):
+        """Human-readable description of the memory type."""
+        return _memory_type_descriptions.get(int(self), "Unknown")
+
+
+_memory_type_descriptions = {
+    MemoryType.I2C: "I2C",
+    MemoryType.ONE_WIRE: "1-wire",
+    MemoryType.LED: "LED driver",
+    MemoryType.LOCO: "Loco positioning",
+    MemoryType.TRAJECTORY: "Trajectory",
+    MemoryType.LOCO2: "Loco positioning 2",
+    MemoryType.LIGHTHOUSE: "Lighthouse positioning",
+    MemoryType.MEMORY_TESTER: "Memory tester",
+    MemoryType.SD_CARD: "SD card",
+}
+
+
 class CRTPPacket:
     """A single packet that can be sent or received via a CRTP connection."""
 

@@ -1,4 +1,11 @@
-from .crtpstack import CRTPDataLike, CRTPDispatcher, CRTPPacket, CRTPPort, CRTPPortLike
+from .crtpstack import (
+    CRTPDataLike,
+    CRTPDispatcher,
+    CRTPPacket,
+    CRTPPort,
+    CRTPPortLike,
+    MemoryType,
+)
 from .drivers import CRTPDriver, init_drivers
 
 __all__ = (
@@ -8,5 +15,6 @@ __all__ = (
     "CRTPPacket",
     "CRTPPort",
     "CRTPPortLike",
+    "MemoryType",
     "init_drivers",
 )

@@ -232,16 +232,17 @@ class Parameters:
 
         response = await self._crazyflie.run_command(
             port=CRTPPort.PARAMETERS,
-            channel=(ParameterChannel.WRITE, index & 0xFF, index >> 8),
+            channel=ParameterChannel.WRITE,
+            command=(index & 0xFF, index >> 8),
             data=parameter.encode_value(value),
         )
 
         if not response:
             raise IndexError("parameter index out of range")
-        if len(response) < 2:
+        if len(response) < 1:
             raise ValueError("invalid response for parameter setting")
 
-        self._values[name] = parameter.parse_value(response[2:])
+        self._values[name] = parameter.parse_value(response)
 
     async def set_fast(self, name: str, type: ParameterTypeLike, value) -> None:
         """Sets the value of a parameter without fetching the full parameter

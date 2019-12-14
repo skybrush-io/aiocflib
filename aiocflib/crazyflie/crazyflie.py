@@ -373,6 +373,7 @@ class Crazyflie:
 
 
 async def test():
+    from aiocflib.crtp import MemoryType
     from aiocflib.utils import timing
 
     uri = "radio+log://0/80/2M/E7E7E7E704"
@@ -380,17 +381,27 @@ async def test():
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
+
         with timing("Fetching memory TOC"):
             await cf.memory.validate()
         with timing("Fetching log TOC"):
             await cf.log.validate()
-
-        await cf.suspend()
-        await sleep(3)
-        await cf.resume()
-
         with timing("Fetching parameters TOC"):
             await cf.parameters.validate()
+
+        with timing("Reading from memory"):
+            memory = await cf.memory.find(MemoryType.I2C)
+            print(len(await memory.read(0, 64)))
+
+        """
+        await cf.parameters.set("motorPowerSet.enable", 1)
+        for var in "m1 m2 m3 m4".split():
+            await cf.parameters.set("motorPowerSet." + var, 20000)
+            await sleep(1.5)
+            await cf.parameters.set("motorPowerSet." + var, 0)
+            await sleep(2.5)
+        await cf.parameters.set("motorPowerSet.enable", 0)
+        """
 
 
 if __name__ == "__main__":

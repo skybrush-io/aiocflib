@@ -1,15 +1,18 @@
 """Classes related to accessing the memory subsystem of a Crazyflie."""
 
-from abc import abstractmethod, ABCMeta
+from abc import abstractmethod, abstractproperty, ABCMeta
 from collections import namedtuple
 from enum import IntEnum
 from struct import Struct, error as StructError
+from typing import Callable, Generator, List, Tuple
 
-from aiocflib.crtp import CRTPPort
+from aiocflib.crtp import CRTPPort, MemoryType
+from aiocflib.utils.errors import error_to_string
+from aiocflib.utils.registry import Registry
 
 from .crazyflie import Crazyflie
 
-__all__ = ("Memory",)
+__all__ = ("Memory", "MemoryType")
 
 
 class MemoryChannel(IntEnum):
@@ -31,42 +34,63 @@ class MemoryInfoCommand(IntEnum):
     GET_DETAILS = 2
 
 
-class MemoryType(IntEnum):
-    """Enum representing the types of memories supported by a Crazyflie."""
-
-    I2C = 0
-    ONE_WIRE = 1
-    LED = 0x10
-    LOCO = 0x11
-    TRAJECTORY = 0x12
-    LOCO2 = 0x13
-    LIGHTHOUSE = 0x14
-    MEMORY_TESTER = 0x15
-    SD_CARD = 0x16
-
-    @property
-    def description(self):
-        """Human-readable description of the memory type."""
-        return _memory_type_descriptions.get(int(self), "Unknown")
+_MemoryElement = namedtuple("_MemoryElement", "index, type size address")
 
 
-_memory_type_descriptions = {
-    MemoryType.I2C: "I2C",
-    MemoryType.ONE_WIRE: "1-wire",
-    MemoryType.LED: "LED driver",
-    MemoryType.LOCO: "Loco positioning",
-    MemoryType.TRAJECTORY: "Trajectory",
-    MemoryType.LOCO2: "Loco positioning 2",
-    MemoryType.LIGHTHOUSE: "Lighthouse positioning",
-    MemoryType.MEMORY_TESTER: "Memory tester",
-    MemoryType.SD_CARD: "SD card",
-}
+class MemoryElement(_MemoryElement):
+    """Class containing information about a single memory element on a
+    Crazyflie.
+    """
+
+    _struct = Struct("<BIQ")
+
+    @classmethod
+    def from_bytes(cls, index: int, data: bytes):
+        """Constructs a MemoryElement_ instance from its representation in
+        the CRTP memory details packet.
+
+        Parameters:
+            index: the index of the memory element that is being constructed
+            data: the data section of the CRTP packet, without the command byte
+                and the ID of the memory element
+
+        Raises:
+            ValueError: if the data section cannot be parsed
+        """
+        try:
+            return cls(index, *cls._struct.unpack(data))
+        except StructError:
+            raise ValueError("invalid memory description") from None
+
+
+_memory_handler_registry = (
+    Registry()
+)  # type: Registry[Callable[[MemoryElement, Crazyflie], MemoryHandler]]
 
 
 class MemoryHandler(metaclass=ABCMeta):
     """Interface specification for memory handlers that know how to read and
     write a certain type of memory.
     """
+
+    #: Maximum number of bytes that can be read in a single request
+    MAX_READ_REQUEST_LENGTH = 20
+
+    #: Maximum number of bytes that can be written in a single request
+    MAX_WRITE_REQUEST_LENGTH = 25
+
+    @staticmethod
+    def for_element(element: MemoryElement, owner: Crazyflie) -> "MemoryHandler":
+        """Constructs an appropriate memory handler for the given memory
+        element, depending on its type.
+
+        Parameters:
+            element: the memory element
+            owner: the Crazyflie that owns the memory element
+        """
+        key = str(element.type)
+        cls = _memory_handler_registry.find(key, default=MemoryHandlerBase)
+        return cls(element, owner=owner)
 
     @abstractmethod
     async def read(self, addr: int, length: int) -> bytes:
@@ -76,6 +100,16 @@ class MemoryHandler(metaclass=ABCMeta):
             addr: the address to read from
             length: the number of bytes to read
         """
+        raise NotImplementedError
+
+    @abstractproperty
+    def size(self) -> int:
+        """Returns the size of the memory that this handler handles."""
+        raise NotImplementedError
+
+    @abstractproperty
+    def type(self) -> int:
+        """Returns the type of the memory that this handler handles."""
         raise NotImplementedError
 
     @abstractmethod
@@ -89,42 +123,90 @@ class MemoryHandler(metaclass=ABCMeta):
         raise NotImplementedError
 
 
-_MemoryElement = namedtuple("_MemoryElement", "type size address")
+class MemoryHandlerBase(MemoryHandler):
+    """Base implementation of a memory handler."""
 
+    _read_struct = Struct("<BI")
 
-class MemoryElement(_MemoryElement):
-    """Class containing information about a single memory element on a
-    Crazyflie.
-    """
-
-    _struct = Struct("<BIQ")
-
-    @classmethod
-    def from_bytes(cls, data: bytes):
-        """Constructs a MemoryElement_ instance from its representation in
-        the CRTP memory details packet.
-
-        Parameters:
-            data: the data section of the CRTP packet, without the command byte
-                and the ID of the memory element
-
-        Raises:
-            ValueError: if the data section cannot be parsed
-        """
-        try:
-            return cls(*cls._struct.unpack(data))
-        except StructError:
-            raise ValueError("invalid memory description") from None
-
-    def __new__(cls, type: int, size: int = 0, address: int = 0):
+    def __init__(self, element: MemoryElement, owner: Crazyflie):
         """Constructor.
 
         Parameters:
-            type: the numeric type ID of the memory
-            size: the size of the memory, in bytes
-            address: the address of the memory - only for one-wire memories
+            element: the memory element object that contains the type, size,
+                address and index of the memory managed by this handler
+            owner: the Crazyflie that owns this handler
         """
-        return super(MemoryElement, cls).__new__(cls, type, size, address)
+        self._crazyflie = owner
+        self._element = element
+
+    def _chunkify(
+        self, addr: int, length: int, step: int
+    ) -> Generator[Tuple[int, int], None, None]:
+        """Calculates the start addresses and the sizes of individual chunks
+        when trying to read some data from the given address with the given
+        total length.
+
+        Parameters:
+            addr: the address to start reading fom
+            length: the total number of bytes to read
+            step: the number of bytes that we can read in a single read request
+
+        Returns:
+            a generator yielding address-length combinations for the individual
+            read requests that we need to execute
+        """
+        end = addr + length
+        for start in range(addr, end, step):
+            yield start, min(step, end - start)
+
+    async def read(self, addr: int, length: int) -> bytes:
+        chunks = []
+        for start, size in self._chunkify(
+            addr, length, step=MemoryHandler.MAX_READ_REQUEST_LENGTH
+        ):
+            chunk, status = await self._read_chunk(start, size)
+            if status == 0:
+                chunks.append(chunk)
+            else:
+                # TODO(ntamas): resend command
+                raise ValueError(
+                    "status = {0} ({1}) after read request, implement this".format(
+                        status, error_to_string(status)
+                    )
+                )
+        return b"".join(chunks)
+
+    @property
+    def size(self) -> int:
+        return self._element.size
+
+    @property
+    def type(self) -> int:
+        return self._element.type
+
+    async def write(self, addr: int, data: bytes) -> None:
+        pass
+
+    async def _read_chunk(self, addr: int, length: int) -> Tuple[bytes, int]:
+        """Reads a single chunk of data that fits into a single packet, starting
+        from the given address.
+
+        Parameters:
+            addr: the address to start the read operation from
+            length: the number of bytes to read; must be less than
+                `MemoryHandler.MAX_READ_REQUEST_LENGTH`.
+
+        Returns:
+            the data that was read and the status code sent by the Crazyflie,
+            in a tuple
+        """
+        response = await self._crazyflie.run_command(
+            port=CRTPPort.MEMORY,
+            channel=MemoryChannel.READ,
+            command=self._read_struct.pack(self._element.index, addr),
+            data=(length,),
+        )
+        return response[1:], response[0]
 
 
 class Memory:
@@ -140,16 +222,49 @@ class Memory:
                 subsystem related messages
         """
         self._crazyflie = crazyflie
-        self._memories = None
+        self._handlers = None
+
+    async def find(self, type: MemoryType) -> MemoryHandler:
+        """Finds the first memory element with the given type.
+
+        Parameters:
+            type: the type of the memory element to look for
+
+        Returns:
+            a handler object that can be used to read from and write to the
+            given memory
+
+        Raises:
+            ValueError: if there is no such memory element
+        """
+        await self.validate()
+        for handler in self._handlers:
+            if handler.type == type:
+                return handler
+        raise ValueError("no memory matching type {0!r}".format(type))
+
+    async def find_all(self, type: MemoryType) -> List[MemoryElement]:
+        """Finds all memory elements with the given type.
+
+        Parameters:
+            type: the type of the memory element to look for
+
+        Yields:
+            handler objects for all memory elements that have the given type.
+            The handler objects can be used to read from and write to the
+            corresponding memory element.
+        """
+        await self.validate()
+        return [handler for handler in self._handlers if handler.type == type]
 
     async def validate(self):
         """Ensures that the basic information about the memories on the Crazyflie
         are downloaded.
         """
-        if self._memories is not None:
+        if self._handlers is not None:
             return
 
-        self._memories = await self._validate()
+        self._handlers = await self._validate()
 
     async def _get_memory_details(self, index: int) -> MemoryElement:
         """Retrieves detailed information about a single memory with the given
@@ -172,7 +287,7 @@ class Memory:
             command=(MemoryInfoCommand.GET_DETAILS, index),
         )
         if response:
-            return MemoryElement.from_bytes(response)
+            return MemoryElement.from_bytes(index, response)
         else:
             raise IndexError("memory index out of range")
 
@@ -185,8 +300,11 @@ class Memory:
         )
         return response[0]
 
-    async def _validate(self):
+    async def _validate(self) -> List[MemoryHandler]:
         """Downloads the basic information about the memories on the Crazyflie."""
         num_memories = await self._get_number_of_memories()
         memories = [await self._get_memory_details(i) for i in range(num_memories)]
-        return memories
+        return [
+            MemoryHandler.for_element(memory, owner=self._crazyflie)
+            for memory in memories
+        ]

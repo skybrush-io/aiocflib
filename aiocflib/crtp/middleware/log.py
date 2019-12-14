@@ -52,7 +52,7 @@ class LoggingMiddleware(MiddlewareBase):
         for line in hexdump(data, result="generator"):
             _, _, line = line.partition(" ")
             result.append(line)
-        return "\n               ".join(result)
+        return "\n             ".join(result)
 
     def _init(self) -> None:
         from aiocflib.crtp.drivers.radio import RadioDriver

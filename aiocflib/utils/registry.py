@@ -13,19 +13,31 @@ class Registry(Generic[T]):
         """Constructor."""
         self._items = {}
 
-    def find(self, key: str) -> T:
+    def find(self, key: str, **kwds) -> T:
         """Finds an item in the registry with the given key.
 
         Parameters:
             key: the key to look up
 
+        Keyword arguments:
+            default: the default value to return if there is no value
+                associated to the key
+
         Returns:
-            the value associated to the key
+            the value associated to the key, or the default value if there is
+            no such key and a default value is provided
 
         Raises:
-            KeyError: if there is no such item for the given key
+            KeyError: if there is no such item for the given key, and no default
+                value was provided
         """
-        return self._items[key]
+        try:
+            return self._items[key]
+        except KeyError:
+            if "default" in kwds:
+                return kwds["default"]
+            else:
+                raise
 
     def register(
         self, key: str, value: Optional[T] = None
