@@ -390,7 +390,7 @@ async def test():
             await cf.parameters.validate()
 
         with timing("Reading from memory"):
-            memory = await cf.memory.find(MemoryType.I2C)
+            memory = await cf.memory.find_eeprom()
             print(len(await memory.read(0, 64)))
 
         """

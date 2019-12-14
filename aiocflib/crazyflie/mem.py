@@ -257,6 +257,12 @@ class Memory:
         await self.validate()
         return [handler for handler in self._handlers if handler.type == type]
 
+    async def find_eeprom(self) -> MemoryHandler:
+        """Shortcut to find the memory handler for the internal EEPROM of the
+        Crazyflie where the basic configuration settings are stored.
+        """
+        return await self.find(MemoryType.I2C)
+
     async def validate(self):
         """Ensures that the basic information about the memories on the Crazyflie
         are downloaded.
