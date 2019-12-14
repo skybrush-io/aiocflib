@@ -6,7 +6,7 @@ from struct import Struct, error as StructError
 from typing import Tuple, Union
 
 from aiocflib.crtp import CRTPPort
-from aiocflib.utils import error_to_string
+from aiocflib.errors import error_to_string
 from aiocflib.utils.toc import fetch_table_of_contents_gracefully
 
 from .crazyflie import Crazyflie

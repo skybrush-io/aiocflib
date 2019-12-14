@@ -19,6 +19,7 @@ class LinkControlChannel(IntEnum):
     ECHO = 0
     SOURCE = 1
     SINK = 2
+    BOOTLOADER = 3
 
 
 class PlatformChannel(IntEnum):

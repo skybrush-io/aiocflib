@@ -19,6 +19,7 @@ from queue import Full, Queue
 from sys import exc_info
 from typing import (
     Any,
+    Awaitable,
     Callable,
     Generic,
     Iterable,
@@ -38,6 +39,8 @@ __all__ = (
 )
 
 T = TypeVar("T")
+
+TaskStartedNotifier = Callable[[], Awaitable[None]]
 
 
 class AwaitableValue(Generic[T]):
@@ -99,6 +102,11 @@ class DaemonTaskGroup(TaskGroup):
         except Exception:
             self._cancel_scopes.remove(scope)
             raise
+
+    async def spawn_and_wait_until_started(self, func, *args, **kwds):
+        on_opened = create_event()
+        await self.spawn(partial(func, notify_started=on_opened.set), *args, **kwds)
+        await on_opened.wait()
 
     async def _run(self, scope, func, *args, **kwds):
         try:

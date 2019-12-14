@@ -8,7 +8,7 @@ from struct import Struct, error as StructError
 from typing import Callable, Generator, List, Tuple
 
 from aiocflib.crtp import CRTPPort, MemoryType
-from aiocflib.utils.errors import error_to_string
+from aiocflib.errors import error_to_string
 from aiocflib.utils.registry import Registry
 
 from .crazyflie import Crazyflie

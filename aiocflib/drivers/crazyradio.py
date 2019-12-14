@@ -5,6 +5,7 @@ from aiocflib.utils.usb import (
     find_devices,
     get_vendor_setup,
     is_pyusb1,
+    release_device,
     send_vendor_setup,
     USBDevice,
     USBError,
@@ -13,12 +14,13 @@ from anyio import create_lock, run_in_thread
 from array import array
 from async_exit_stack import AsyncExitStack
 from async_generator import asynccontextmanager, async_generator, yield_
-from binascii import unhexlify
+from binascii import hexlify, unhexlify
 from enum import IntEnum
 from functools import total_ordering, wraps
 from typing import Iterable, List, Optional, Union
 
 from aiocflib.utils.concurrency import Full, ThreadContext
+from aiocflib.errors import DetectionFailed
 
 __author__ = "CollMot Robotics Ltd"
 __all__ = ("Crazyradio",)
@@ -74,6 +76,14 @@ class CrazyradioDataRate(IntEnum):
             return cls.DR_2MPS
         else:
             return cls(value)
+
+    def __str__(self):
+        if self is CrazyradioDataRate.DR_2MPS:
+            return "2M"
+        elif self is CrazyradioDataRate.DR_1MPS:
+            return "1M"
+        else:
+            return "250K"
 
 
 class CrazyradioPower(IntEnum):
@@ -167,6 +177,47 @@ class RadioConfiguration:
     This class is also used to specify a single configuration of a radio scan
     for reachable devices.
     """
+
+    @classmethod
+    def ensure(cls, value: "RadioConfigurationLike"):
+        """When the input is a string, converts it into a RadioConfiguration_
+        object, assuming that it contains a ``radio://`` URI. When the input
+        is a RadioConfiguration_, it returns the object intact.
+
+        Raises:
+            TypeError: if the input is neither a string nor a RadioConfiguration
+        """
+        if isinstance(value, str):
+            return cls.from_uri(value)
+        elif isinstance(value, cls):
+            return value
+        else:
+            raise TypeError("expected string or {0}, got {1!r}", cls.__name__, value)
+
+    @classmethod
+    def from_uri(cls, uri: str):
+        """Creates a RadioConfiguration_ object from a ``radio://`` URI.
+
+        The scheme of the supplied URI is ignored; it is assumed that the rest
+        of the URI follows the format used for ``radio://`` URIs, and that the
+        first path component is the radio index (which will be ignored).
+        """
+        scheme, sep, path = uri.partition("://")
+        if not sep:
+            raise ValueError("URI must have a scheme")
+
+        if not path:
+            raise ValueError("path must not be empty")
+
+        if path[0] == "/":
+            path = path[1:]
+
+        try:
+            index = path.index("/", 1) + 1
+        except ValueError:
+            index = len(path)
+
+        return cls.from_uri_path(path[index:])
 
     @classmethod
     def from_uri_path(cls, path: str):
@@ -288,6 +339,19 @@ class RadioConfiguration:
             channel=channel if channel is not None else self._channel,
         )
 
+    def to_uri(self, index: int = 0) -> str:
+        """Converts the radio configuration to a string URI that can be
+        passed to a CRTPDevice_ constructor.
+        """
+        parts = ["radio://{0}".format(index)]
+        if self.channel is not None:
+            parts.append(str(self.channel))
+            if self.data_rate is not None:
+                parts.append(str(self.data_rate))
+                if self.address is not None:
+                    parts.append(hexlify(self.address).upper().decode("ascii"))
+        return "/".join(parts)
+
     def __eq__(self, other):
         return (self._data_rate, self._channel, self._address) == (
             other._data_rate,
@@ -314,6 +378,10 @@ class RadioConfiguration:
         ).format(self)
 
 
+#: Type specification for objects that can be converted into a RadioConfiguration
+RadioConfigurationLike = Union[RadioConfiguration, str]
+
+
 class Crazyradio:
     """Low-level driver object that is used for communication with the
     Crazyflie via a Crazyradio.
@@ -321,7 +389,7 @@ class Crazyradio:
     This object is intended to be used as an asynchronous context manager as
     follows::
 
-        device = await CfUsb.detect_one()
+        device = await Crazyradio.detect_one()
         async with device as radio:
             response = await radio.send_and_receive_bytes(b"1234")
             if response and response.ack:
@@ -359,10 +427,14 @@ class Crazyradio:
                 are connected
 
         Raises:
-            IndexError: if there is no such device with the given index
+            DetectionFailed: if there is no such device with the given index
         """
         devices = await run_in_thread(_find_devices)
-        return cls(devices[index])
+        try:
+            device = devices[index]
+        except IndexError:
+            raise DetectionFailed()
+        return cls(device)
 
     @staticmethod
     def to_address(address: CrazyradioAddressLike) -> CrazyradioAddress:
@@ -515,10 +587,7 @@ class Crazyradio:
             pass
 
         try:
-            if hasattr(self._handle, "releaseInterface"):
-                # for pyusb 0.x
-                self._handle.releaseInterface()
-            self._handle.reset()
+            release_device(self._handle)
         finally:
             self._handle = None
             self._version = None
@@ -668,7 +737,7 @@ class Crazyradio:
 
     def _scan(
         self,
-        targets: Optional[List[RadioConfiguration]] = None,
+        targets: Optional[List[RadioConfigurationLike]] = None,
         address: Optional[
             Union[CrazyradioAddressLike, Iterable[CrazyradioAddressLike]]
         ] = None,
@@ -680,9 +749,10 @@ class Crazyradio:
         The data rate of the radio is left untouched during the scan.
 
         Parameters:
-            targets: items specifying the data rates and channels to scan.
-                When omitted, it defaults to all combinations of channels and
-                data rates.
+            targets: items specifying the data rates and channels to scan, or
+                strings that contain ``radio://`` URIs that can be converted
+                into data rates and channels. When omitted, it defaults to all
+                combinations of channels and data rates.
             address: Crazyradio address to use when sending packets. `None`
                 means to use the current address. A single address means to use
                 the given address. An iterable of addresses means to scan all
@@ -702,6 +772,8 @@ class Crazyradio:
                 RadioConfiguration(data_rate=data_rate)
                 for data_rate in CrazyradioDataRate
             ]
+        else:
+            targets = [RadioConfiguration.ensure(target) for target in targets]
 
         # If an address is given, replace all address-less targets with the
         # given address. If multiple addresses are given, replace all address-less

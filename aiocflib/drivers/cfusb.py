@@ -9,10 +9,12 @@ from typing import List, Optional
 import usb
 
 from aiocflib.utils.concurrency import Full, ThreadContext
+from aiocflib.errors import DetectionFailed
 from aiocflib.utils.usb import (
     claim_device,
     find_devices,
     is_pyusb1,
+    release_device,
     send_vendor_setup,
     USBDevice,
     USBError,
@@ -83,7 +85,11 @@ class CfUsb:
             IndexError: if there is no such device with the given index
         """
         devices = await cls.detect_all()
-        return cls(devices[index])
+        try:
+            device = devices[index]
+        except IndexError:
+            raise DetectionFailed()
+        return cls(device)
 
     def __init__(self, device: USBDevice, crtp_to_usb: bool = False):
         """Constructor.
@@ -257,10 +263,7 @@ class CfUsb:
             pass
 
         try:
-            if hasattr(self._handle, "releaseInterface"):
-                # for pyusb 0.x
-                self._handle.releaseInterface()
-            self._handle.reset()
+            release_device(self._handle)
         finally:
             self._handle = None
             self._version = None

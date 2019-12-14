@@ -141,7 +141,7 @@ class CRTPDriver(metaclass=ABCMeta):
         return []
 
     @abstractmethod
-    async def send_packet(self, packet: CRTPPacket):
+    async def send_packet(self, packet: CRTPPacket) -> None:
         """Sends a CRTP packet.
 
         Parameters:
@@ -157,3 +157,12 @@ class CRTPDriver(metaclass=ABCMeta):
     @uri.setter
     def uri(self, value: str) -> None:
         self._uri = value
+
+    async def use_safe_link(self) -> None:
+        """Notifies the driver that the caller wishes to use a safe link where
+        it does not have to worry about packet loss.
+
+        When the driver supports safe link mode, it should switch into a mode
+        where this can be ensured.
+        """
+        pass

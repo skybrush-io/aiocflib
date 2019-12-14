@@ -75,7 +75,7 @@ class _SafeLinkState:
 
     def __init__(self):
         """Constructor."""
-        self._up, self._down = 0, 4
+        self._up, self._down = 8, 4
         self._enabled_acquired = ObservableValue(_EnabledAcquired(False, False))
 
     @property
@@ -147,12 +147,15 @@ class _SafeLinkState:
 
     def update(self, response: Acknowledgment) -> None:
         """Processes an acknowledgment received from the peer."""
+        if not self.acquired:
+            return
+
         if not response.ack:
             return
-        if response.ack:
-            self._up = 8 - self._up
-            if response.data and response.data[0] & 0x04 == self._down:
-                self._down = 4 - self._down
+
+        self._up = 8 - self._up
+        if response.data and response.data[0] & 0x04 == self._down:
+            self._down = 4 - self._down
 
     async def wait_until_acquired(self) -> None:
         """Waits until the safe-link mode is acquired."""
@@ -280,13 +283,13 @@ class RadioDriver(CRTPDriver):
         """
         return await self._in_queue.get()
 
-    async def send_packet(self, packet: CRTPPacket):
+    async def send_packet(self, packet: CRTPPacket) -> None:
         """Sends a CRTP packet.
 
         Parameters:
             packet: the packet to send
         """
-        return await self._out_queue.put(packet)
+        await self._out_queue.put(packet)
 
     @classmethod
     async def scan_interfaces(
@@ -310,12 +313,18 @@ class RadioDriver(CRTPDriver):
         )
         return sum(results, [])
 
-    async def _enable_safe_link_mode(self, radio: Crazyradio) -> bool:
-        """Attempts to enable safe link mode on the Crazyflie found at the
+    async def use_safe_link(self) -> None:
+        """Instructs the driver to start using safe-link mode to ensure
+        guaranteed packet delivery to the remote peer.
+        """
+        await self._safe_link_state.enable()
+
+    async def _acquire_safe_link_mode(self, radio: Crazyradio) -> bool:
+        """Attempts to acquire safe link mode on the Crazyflie found at the
         address, channel and data rate that the radio is currently configured to.
 
         Returns:
-            whether safe link mode was successfully enabled
+            whether safe link mode was successfully acquired
         """
         safe_link_packet = CRTPPacket.safe_link().to_bytes()
 
@@ -362,7 +371,7 @@ class RadioDriver(CRTPDriver):
             if enabled and not acquired:
                 await self._safe_link_state.enable()
                 async with radio.configure(self._configuration):
-                    await self._enable_safe_link_mode(radio)
+                    await self._acquire_safe_link_mode(radio)
 
     async def _worker(self, radio: Crazyradio) -> None:
         """Worker task that runs continuously and handles the sending and
@@ -371,8 +380,8 @@ class RadioDriver(CRTPDriver):
         Parameters:
             radio: the Crazyradio instance to use
         """
-        await self._safe_link_state.enable()
-        await self._safe_link_state.wait_until_acquired()
+        if self._safe_link_state.enabled:
+            await self._safe_link_state.wait_until_acquired()
 
         null_packet = outbound_packet = CRTPPacket.null()
         delay_before_next_null_packet = 0.01

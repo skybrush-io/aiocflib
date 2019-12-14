@@ -4,6 +4,20 @@ from typing import Union
 __all__ = ("error_to_string",)
 
 
+class DetectionFailed(RuntimeError):
+    """Error thrown when a detection / scanning routine failed."""
+
+    pass
+
+
+class TimeoutError(RuntimeError):
+    """Error thrown when a command sent to a CRTP-based device (for instance,
+    a Crazyflie) has timed out.
+    """
+
+    pass
+
+
 def error_to_string(value: Union[int, bytes]) -> str:
     """Converts a Crazyflie error code returned in some CRTP packets to its
     human-readable description.

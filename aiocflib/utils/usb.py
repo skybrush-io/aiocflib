@@ -8,9 +8,11 @@ from weakref import WeakValueDictionary
 import os
 
 __all__ = (
+    "claim_device",
     "find_devices",
     "get_vendor_setup",
     "is_pyusb1",
+    "release_device",
     "send_vendor_setup",
     "USBDevice",
     "USBError",
@@ -103,6 +105,12 @@ def get_device_uid(device: USBDevice) -> str:
     unplugged and then plugged in again at a different port.
     """
     return "{0.bus}:{0.address}".format(device)
+
+
+def release_device(device: USBDevice):
+    from usb.util import dispose_resources
+
+    dispose_resources(device)
 
 
 def send_vendor_setup(handle, request, value, index=0, data=(), timeout=1000):
