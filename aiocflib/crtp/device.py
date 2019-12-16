@@ -123,7 +123,7 @@ class CRTPDevice:
         command: Optional[Union[int, bytes, Iterable[Union[int, bytes]]]] = None,
         data: CRTPDataLike = None,
         timeout: float = 0.2,
-        retries: int = 0
+        attempts: int = 1,
     ):
         """Sends a command packet to the device and waits for the next
         matching response packet. Returns the data section of the response
@@ -148,26 +148,16 @@ class CRTPDevice:
                 command is inserted before the data in the body of the CRTP
                 packet.
             timeout: maximum number of seconds to wait for a response
-            retries: number of retries in case of a timeout
+            attempts: maximum number of attempts to send the command and wait
+                for the response
 
         Returns:
             the data section of the response packet
         """
         if command is not None:
-            if isinstance(command, int):
-                command = bytes((command,))
-            elif isinstance(command, bytes):
-                pass
-            else:
-                parts = []
-                for part in command:
-                    if isinstance(part, int):
-                        part = bytes((part,))
-                    parts.append(part)
-                command = b"".join(parts)
-
+            command = _handle_command_argument(command)
             packet = CRTPPacket(port=port, channel=channel)
-            request = command + (bytes(data) if data else b"")
+            request = (command + bytes(data)) if data else command
             packet.data = request
 
             def matching_response(packet: CRTPPacket) -> bool:
@@ -185,7 +175,7 @@ class CRTPDevice:
         with self.dispatcher.wait_for_next_packet(
             matching_response, port=port
         ) as value:
-            while retries >= 0:
+            while attempts > 0:
                 await self._driver.send_packet(packet)
                 if timeout > 0:
                     async with move_on_after(timeout):
@@ -199,10 +189,48 @@ class CRTPDevice:
                     break
 
                 # Otherwise, try again.
-                retries -= 1
+                attempts -= 1
 
         if response is None:
             raise TimeoutError()
 
         response = response.data
         return response[len(command) :] if command else response
+
+    async def send_packet(
+        self,
+        *,
+        port: CRTPPortLike,
+        channel: int = 0,
+        data: Optional[Union[int, bytes, Iterable[Union[int, bytes]]]] = None,
+    ):
+        """Sends a packet to the device with the given CRTP port, channel and
+        the given body.
+
+        Parameters:
+            port: the CRTP port to send the packet to
+            channel: the CRTP channel to send the packet to
+            data: the body of the request packet
+        """
+        packet = CRTPPacket(port=port, channel=channel)
+        packet.data = _handle_command_argument(data)
+        await self._driver.send_packet(packet)
+
+
+def _handle_command_argument(
+    command: Optional[Union[int, bytes, Iterable[Union[int, bytes]]]] = None
+) -> bytes:
+    """Helper function to handle the conversion of the `command` argument in
+    `CRTPDevice.run_command()` to a `bytes` object.
+    """
+    if isinstance(command, int):
+        return bytes((command,))
+    elif isinstance(command, bytes):
+        return command
+    else:
+        parts = []
+        for part in command:
+            if isinstance(part, int):
+                part = bytes((part,))
+            parts.append(part)
+        return b"".join(parts)

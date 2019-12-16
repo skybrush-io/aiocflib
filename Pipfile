@@ -10,6 +10,7 @@ mypy = "*"
 pytest = "*"
 pytest-cov = "*"
 profiling = "*"
+tqdm = "*"
 
 [packages]
 anyio = "*"

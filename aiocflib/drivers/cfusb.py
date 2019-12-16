@@ -9,7 +9,7 @@ from typing import List, Optional
 import usb
 
 from aiocflib.utils.concurrency import Full, ThreadContext
-from aiocflib.errors import DetectionFailed
+from aiocflib.errors import NotFoundError
 from aiocflib.utils.usb import (
     claim_device,
     find_devices,
@@ -88,7 +88,7 @@ class CfUsb:
         try:
             device = devices[index]
         except IndexError:
-            raise DetectionFailed()
+            raise NotFoundError()
         return cls(device)
 
     def __init__(self, device: USBDevice, crtp_to_usb: bool = False):

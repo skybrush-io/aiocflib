@@ -4,7 +4,7 @@ from typing import Union
 __all__ = ("error_to_string",)
 
 
-class DetectionFailed(RuntimeError):
+class NotFoundError(RuntimeError):
     """Error thrown when a detection / scanning routine failed."""
 
     pass

@@ -16,6 +16,6 @@ def timing(description: str = "", timer: Callable[[], float] = time):
             reading of the clock we are using for measurements
     """
     start = timer()
-    format_str = "{0}: {1:.3}s" if description else "{1:.3}s"
+    format_str = "{0}: {1:.3f}s" if description else "{1:.3f}s"
     yield
     print(format_str.format(description, timer() - start))

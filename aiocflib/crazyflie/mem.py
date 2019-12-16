@@ -5,10 +5,11 @@ from collections import namedtuple
 from enum import IntEnum
 from errno import ENODATA
 from struct import Struct, error as StructError
-from typing import Callable, Generator, List, Tuple
+from typing import Callable, List, Tuple
 
 from aiocflib.crtp import CRTPPort, MemoryType
 from aiocflib.errors import error_to_string
+from aiocflib.utils import chunkify
 from aiocflib.utils.registry import Registry
 
 from .crazyflie import Crazyflie
@@ -140,29 +141,9 @@ class MemoryHandlerBase(MemoryHandler):
         self._crazyflie = owner
         self._element = element
 
-    def _chunkify(
-        self, addr: int, length: int, step: int
-    ) -> Generator[Tuple[int, int], None, None]:
-        """Calculates the start addresses and the sizes of individual chunks
-        when trying to read some data from the given address with the given
-        total length.
-
-        Parameters:
-            addr: the address to start reading fom
-            length: the total number of bytes to read
-            step: the number of bytes that we can read in a single read request
-
-        Returns:
-            a generator yielding address-length combinations for the individual
-            read requests that we need to execute
-        """
-        end = addr + length
-        for start in range(addr, end, step):
-            yield start, min(step, end - start)
-
     async def read(self, addr: int, length: int) -> bytes:
         chunks = []
-        for start, size in self._chunkify(
+        for start, size in chunkify(
             addr, length, step=MemoryHandler.MAX_READ_REQUEST_LENGTH
         ):
             chunk, status = await self._read_chunk(start, size)

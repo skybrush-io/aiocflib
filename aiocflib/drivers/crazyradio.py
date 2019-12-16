@@ -20,7 +20,7 @@ from functools import total_ordering, wraps
 from typing import Iterable, List, Optional, Union
 
 from aiocflib.utils.concurrency import Full, ThreadContext
-from aiocflib.errors import DetectionFailed
+from aiocflib.errors import NotFoundError
 
 __author__ = "CollMot Robotics Ltd"
 __all__ = ("Crazyradio",)
@@ -427,13 +427,13 @@ class Crazyradio:
                 are connected
 
         Raises:
-            DetectionFailed: if there is no such device with the given index
+            NotFoundError: if there is no such device with the given index
         """
         devices = await run_in_thread(_find_devices)
         try:
             device = devices[index]
         except IndexError:
-            raise DetectionFailed()
+            raise NotFoundError()
         return cls(device)
 
     @staticmethod
