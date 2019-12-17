@@ -351,7 +351,7 @@ class BootloaderTarget:
                 self.id, BootloaderCommand.WRITE_FLASH
             ),
             data=self._write_command_params_struct.pack(0, start, num_pages),
-            timeout=2,
+            timeout=2.5,
             attempts=1,
         )
 
