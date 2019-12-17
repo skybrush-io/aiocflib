@@ -53,6 +53,11 @@ class MiddlewareBase(CRTPDriver):
     def uri(self) -> str:
         return self._wrapped.uri
 
+    @property
+    def wrapped(self) -> CRTPDriver:
+        """Returns the CRTP driver wrapped by the middleware."""
+        return self._wrapped
+
     async def notify_rebooted(self) -> None:
         return await self._wrapped.notify_rebooted()
 

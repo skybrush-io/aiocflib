@@ -23,6 +23,7 @@ from ..strategies import (
     BackoffPollingStrategy,
     DefaultPollingStrategy,
     DefaultResendingStrategy,
+    NoPollingStrategy,
     PatientResendingStrategy,
     PollingStrategy,
     ResendingStrategy,
@@ -178,6 +179,7 @@ class RadioDriver(CRTPDriver):
     PRESETS = {
         "default": (DefaultPollingStrategy, DefaultResendingStrategy),
         "patient": (BackoffPollingStrategy, PatientResendingStrategy),
+        "noPolling": (NoPollingStrategy, DefaultResendingStrategy),
     }
 
     @asynccontextmanager
@@ -213,11 +215,10 @@ class RadioDriver(CRTPDriver):
         self._link_quality = ObservableValue(0.0)
         self._safe_link_state = _SafeLinkState()
 
-        preset = self.PRESETS.get(preset)
-        if not preset:
-            preset = self.PRESETS["default"]
-
-        self.polling_strategy, self.resending_strategy = preset[0](), preset[1]()
+        try:
+            self.apply_preset(preset)
+        except KeyError:
+            self.apply_preset("default")
 
         # TODO(ntamas): what if the in_queue is full?
         self._in_queue = create_queue(256)
@@ -241,6 +242,21 @@ class RadioDriver(CRTPDriver):
             return None
 
         return config.address if config else None
+
+    def apply_preset(self, name: str) -> None:
+        """Applies a preset strategy to the given connection to control how
+        often should the driver pull the downlink with null packets and how it
+        should handle acknowledgment failures.
+
+        This method can be called with an active connection; the new preset
+        will take effect as soon as possible.
+        """
+        try:
+            preset = self.PRESETS[name]
+        except KeyError:
+            raise KeyError("no such preset: {0}".format(name)) from None
+
+        self.polling_strategy, self.resending_strategy = preset[0](), preset[1]()
 
     @property
     def configuration(self) -> Optional[RadioConfiguration]:
@@ -439,11 +455,17 @@ class RadioDriver(CRTPDriver):
 
             # Figure out how much to wait before the next null packet is sent
             delay_before_next_null_packet = self.polling_strategy(response.data)
-            if delay_before_next_null_packet:
+            if delay_before_next_null_packet > 0:
+                # Wait for a given number of seconds
                 outbound_packet = null_packet
                 async with move_on_after(delay_before_next_null_packet):
                     outbound_packet = await self._out_queue.get()
+            elif delay_before_next_null_packet < 0:
+                # Wait indefinitely
+                outbound_packet = await self._out_queue.get()
             else:
+                # Poll the outbound queue; send a null packet if the queue is
+                # empty
                 outbound_packet = (
                     null_packet
                     if self._out_queue.empty()

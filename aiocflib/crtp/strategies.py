@@ -4,6 +4,7 @@ __all__ = (
     "BackoffPollingStrategy",
     "DefaultPollingStrategy",
     "DefaultResendingStrategy",
+    "NoPollingStrategy",
     "PatientResendingStrategy",
     "PollingStrategy",
     "ResendingStrategy",
@@ -57,7 +58,7 @@ class DefaultPollingStrategy:
 
         Returns:
             the proposed time to wait before sending the next null packet,
-            in seconds
+            in seconds; negative numbers mean to wait indefinitely
         """
         # The packet starts with the header so its length is always at least
         # 1. The packet is effectively empty if its length is less than 2.
@@ -71,7 +72,24 @@ class DefaultPollingStrategy:
         return self._interval if self._is_idle else 0
 
 
-class BackoffPollingStrategy(object):
+class NoPollingStrategy:
+    """Dummy polling strategy that never sends null packets to pull the
+    downlink; it is assumed that we expect responses to our own packets only.
+    """
+
+    def __call__(self, data: bytes) -> float:
+        """Returns the time to wait before we send the next null packet.
+
+        Parameters:
+            data: the last packet that we have received from the drone
+
+        Returns:
+            -1 because it means "wait indefinitely" for the caller.
+        """
+        return -1
+
+
+class BackoffPollingStrategy:
     """Lenient polling strategy for Crazyflie connections that gradually
     increases the time spent between consecutive null packets if there is no
     traffic to avoid saturating the link if there are many drones to communicate
@@ -107,7 +125,7 @@ class BackoffPollingStrategy(object):
 
         Returns:
             the proposed time to wait before sending the next null packet, in
-            seconds
+            seconds; negative numbers mean to wait indefinitely
         """
         # The packet starts with the header so its length is always at least
         # 1. The packet is effectively empty if its length is less than 2.

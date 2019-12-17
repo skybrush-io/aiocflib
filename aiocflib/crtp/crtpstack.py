@@ -240,7 +240,7 @@ class CRTPPacket:
 
     def __str__(self):
         """Returns a human-readable string representation of the packet."""
-        return "{0}:{1} {2}".format(self._port, self.channel, tuple(self.data))
+        return "{0}:{1} {2}".format(self.port, self.channel, tuple(self.data))
 
 
 #: Type alias for functions that can handle CRTP packets

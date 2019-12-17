@@ -111,9 +111,7 @@ class Bootloader(CRTPDevice):
         """
         # Initiate the reset and wait for the acknowledgment
         await self.run_bootloader_command(
-            command=(BootloaderTargetType.NRF51, BootloaderCommand.RESET_INIT),
-            timeout=1,
-            attempts=5,
+            command=(BootloaderTargetType.NRF51, BootloaderCommand.RESET_INIT)
         )
 
         # Acknowledgment received, now we can send the reset command.
@@ -152,7 +150,9 @@ class Bootloader(CRTPDevice):
         The bootloader responds only to packets sent on the CRTP link control
         port, channel 3.
         """
-        return await self.run_command(port=CRTPPort.LINK_CONTROL, channel=3, **kwds)
+        new_kwds = dict(timeout=1, attempts=5)
+        new_kwds.update(kwds)
+        return await self.run_command(port=CRTPPort.LINK_CONTROL, channel=3, **new_kwds)
 
     async def send_bootloader_packet(self, data, **kwds) -> None:
         """Shortcut to ``self.send_packet()`` with the CRTP port and channel
@@ -197,7 +197,9 @@ class Bootloader(CRTPDevice):
 async def test():
     from tqdm import tqdm
 
-    uri = (await Bootloader.detect_one()).replace("://", "+log://")
+    uri = await Bootloader.detect_one()
+    # uri = uri.replace("://", "+log://")
+
     async with Bootloader(uri) as bl:
         target = await bl.find_target("stm32")
         firmware = open("cf2.bin", "rb").read()
@@ -205,11 +207,19 @@ async def test():
         progress = tqdm(desc="Flashing", total=len(firmware), unit=" bytes")
         await target.write_firmware(firmware, on_progress=progress.update)
         await bl.reboot_to_firmware()
+        return
+
+        progress = tqdm(desc="Reading", unit=" bytes", total=2 ** 18)
+        with open("flash.bin", "wb") as fp:
+            data = await target.read_firmware(
+                length=2 ** 18, on_progress=progress.update
+            )
+            fp.write(data)
 
 
 if __name__ == "__main__":
     from aiocflib.crtp import init_drivers
-    import trio
+    from anyio import run
 
     init_drivers()
-    trio.run(test)
+    run(test)

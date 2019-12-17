@@ -196,8 +196,7 @@ class BootloaderTarget:
             data = await self._bootloader.run_bootloader_command(
                 command=self._read_command_struct.pack(
                     self.id, BootloaderCommand.READ_FLASH, page, offset
-                ),
-                attempts=5,
+                )
             )
             result.append(data)
 
@@ -213,6 +212,25 @@ class BootloaderTarget:
                 break
 
         return b"".join(result)
+
+    async def read_firmware(
+        self, length: int = -1, *, on_progress: Optional[ProgressHandler] = None
+    ) -> None:
+        """Reads the given number of bytes from the firmware area of the flash
+        memory of the target.
+
+        Parameters:
+            length: the maximum number of bytes to read. Negative numbers mean
+                to read everything until the end of the flash memory.
+            on_progress: function to call periodically with the number of bytes
+                read in each iteration
+
+        Returns:
+            the contents of the flash memory, starting from the given address.
+        """
+        return await self.read_flash(
+            self.firmware_address, length, on_progress=on_progress
+        )
 
     async def write_flash(
         self,
@@ -238,9 +256,6 @@ class BootloaderTarget:
             await self._fill_buffer_with(
                 data[start : (start + size)], on_progress=on_progress
             )
-            # TODO(ntamas): in the last chunk, the end of the buffer will
-            # contain data from the penultimate chunk because we don't clear
-            # the buffer. Is this a problem?
             await self._flush_buffer_to_flash(address, size)
 
             address += size
@@ -253,6 +268,8 @@ class BootloaderTarget:
 
         Parameters:
             firmware: the firmware to write
+            on_progress: function to call periodically with the number of bytes
+                written during the operation
         """
         await self.write_flash(self.firmware_address, firmware, on_progress=on_progress)
 
@@ -269,6 +286,11 @@ class BootloaderTarget:
             data: the data to write into the buffer
         """
         assert len(data) <= self.buffer_size
+
+        # First we fill the entire buffer, then, if we need to validate the
+        # result, we validate in one batch after uploading. This is to ensure
+        # that the Crazyflie has time to process the inbound packets before we
+        # start reading the buffer back.
         for start, size in chunkify(0, len(data), step=self._LOAD_BUFFER_CHUNK_SIZE):
             page, offset = divmod(start, self.page_size)
             to_write = data[start : (start + size)]
@@ -279,19 +301,40 @@ class BootloaderTarget:
                 + to_write
             )
 
-            if validate:
-                response = await self._bootloader.run_bootloader_command(
+            if on_progress:
+                on_progress(size)
+
+        # Now we validate if needed
+        if validate:
+            errors = []
+            for index, (start, size) in enumerate(
+                chunkify(0, len(data), step=self._LOAD_BUFFER_CHUNK_SIZE)
+            ):
+                page, offset = divmod(start, self.page_size)
+                expected = data[start : (start + size)]
+
+                observed = await self._bootloader.run_bootloader_command(
                     command=self._read_buffer_command_struct.pack(
                         self.id, BootloaderCommand.READ_BUFFER, page, offset
                     ),
-                    attempts=5,
+                    timeout=0.1,
                 )
 
-                if response[:size] != to_write:
-                    raise IOError("failed to update buffer")
+                if observed[:size] != expected:
+                    from hexdump import hexdump
 
-            if on_progress:
-                on_progress(size)
+                    print("Tried to upload:")
+                    hexdump(expected)
+                    print()
+                    print("Currently in buffer:")
+                    hexdump(observed[:size])
+                    print()
+
+                    errors.append(index)
+
+            if errors:
+                print(repr(errors))
+                raise IOError("failed to update buffer")
 
     async def _flush_buffer_to_flash(self, start: int, size: int) -> None:
         start, remainder = divmod(start, self.page_size)
@@ -299,13 +342,17 @@ class BootloaderTarget:
 
         num_pages = int(ceil(size / self.page_size))
 
+        # Note that we use a timeout of two seconds here and we don't re-send
+        # this packet. This is intentional; sometimes the flash request takes
+        # more than one second, and the STM32 bootloader has a problem with
+        # re-sent flash requests.
         result = await self._bootloader.run_bootloader_command(
             command=self._write_command_struct.pack(
                 self.id, BootloaderCommand.WRITE_FLASH
             ),
             data=self._write_command_params_struct.pack(0, start, num_pages),
-            timeout=1,
-            attempts=5,
+            timeout=2,
+            attempts=1,
         )
 
         if len(result) < 2:
