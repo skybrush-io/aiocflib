@@ -195,26 +195,21 @@ class Bootloader(CRTPDevice):
 
 
 async def test():
+    from aiocflib.crazyflie import Crazyflie
     from tqdm import tqdm
 
-    uri = await Bootloader.detect_one()
-    # uri = uri.replace("://", "+log://")
+    uri = "radio://0/80/2M/E7E7E7E704"
+    async with Crazyflie(uri) as cf:
+        uri = await cf.reboot_to_bootloader()
 
     async with Bootloader(uri) as bl:
         target = await bl.find_target("stm32")
         firmware = open("cf2.bin", "rb").read()
 
-        progress = tqdm(desc="Flashing", total=len(firmware), unit=" bytes")
-        await target.write_firmware(firmware, on_progress=progress.update)
-        await bl.reboot_to_firmware()
-        return
+        with tqdm(desc="Flashing", total=len(firmware), unit=" bytes") as progress:
+            await target.write_firmware("cf2.bin", on_progress=progress)
 
-        progress = tqdm(desc="Reading", unit=" bytes", total=2 ** 18)
-        with open("flash.bin", "wb") as fp:
-            data = await target.read_firmware(
-                length=2 ** 18, on_progress=progress.update
-            )
-            fp.write(data)
+        await bl.reboot_to_firmware()
 
 
 if __name__ == "__main__":

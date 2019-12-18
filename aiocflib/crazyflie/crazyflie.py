@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from anyio import sleep
+from binascii import hexlify
 from typing import Optional
 
-from aiocflib.bootloader.types import BootloaderCommand, BootloaderTargetType
+from aiocflib.bootloader.types import BootloaderCommand
+from aiocflib.bootloader.target import BootloaderTargetType
 from aiocflib.crtp import CRTPDispatcher, CRTPDevice, CRTPDriver, CRTPPort
 from aiocflib.utils.concurrency import ObservableValue
 from aiocflib.utils.toc import TOCCache, TOCCacheLike
@@ -137,13 +139,17 @@ class Crazyflie(CRTPDevice):
         ``reboot_to_bootloader()``.
         """
         # Initiate the reset and wait for the acknowledgment
-        await self.run_command(
+        response = await self.run_command(
             port=CRTPPort.LINK_CONTROL,
             channel=3,
             command=(BootloaderTargetType.NRF51, BootloaderCommand.RESET_INIT),
             timeout=1,
             attempts=5,
         )
+
+        # Store the new address from the response -- this will be used if we
+        # are rebooting to bootloader mode
+        address = b"\xb1" + response[3::-1]
 
         # Acknowledgment received, now we can send the reset command.
         await self.send_packet(
@@ -156,6 +162,8 @@ class Crazyflie(CRTPDevice):
             ),
         )
 
+        return address
+
     async def reboot(self, to_bootloader: bool = False) -> None:
         """Sends a packet to the Crazyflie that reboots its main processor."""
         await self._reboot()
@@ -164,17 +172,33 @@ class Crazyflie(CRTPDevice):
         # Give some time for the outbound thread to send the packet
         await sleep(0.1)
 
-    async def reboot_to_bootloader(self) -> None:
+    async def reboot_to_bootloader(self) -> str:
         """Sends a packet to the Crazyflie that reboots its main processor
         into its bootloader.
 
         It is advised that you close the connection context to the Crazyflie
         after this operation.
+
+        Note that when warm-booting to the bootloader, the Crazyflie will use
+        a different address (constructed from the first four bytes of its CPU
+        ID and a fixed prefix) than the one that was used while in firmware
+        mode. This function will return a new radio-based connection URI that
+        can be used to re-connect to the bootloader.
+
+        Returns:
+            a new connection URI that can be used to re-connect to the bootloader
         """
-        await self._reboot(to_bootloader=True)
+        new_address = await self._reboot(to_bootloader=True)
 
         # Give some time for the outbound thread to send the packet
         await sleep(0.1)
+
+        # Construct the new URI
+        new_address = hexlify(new_address).decode("ascii").upper()
+        scheme, _, _ = self.uri.partition("://")
+        if not scheme.startswith("radio"):
+            scheme = "radio"
+        return "{0}://0/0/2M/{1}".format(scheme, new_address)
 
     async def resume(self) -> None:
         """Sends a packet to the Crazyflie that wakes up its main processor

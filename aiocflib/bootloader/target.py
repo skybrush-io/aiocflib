@@ -1,7 +1,8 @@
+from anyio import aopen
 from enum import IntEnum
 from math import ceil
 from struct import Struct
-from typing import Optional
+from typing import Optional, Union
 
 from aiocflib.utils import chunkify
 
@@ -191,6 +192,11 @@ class BootloaderTarget:
         result = []
         to_read = length if length >= 0 else (self.flash_size - address)
 
+        # Special support for tqdm progress bars
+        if hasattr(on_progress, "reset") and hasattr(on_progress, "update"):
+            on_progress.reset(to_read)
+            on_progress = on_progress.update
+
         while to_read > 0:
             page, offset = divmod(address, self.page_size)
             data = await self._bootloader.run_bootloader_command(
@@ -252,6 +258,11 @@ class BootloaderTarget:
         if address % self.page_size:
             raise ValueError("write_flash() address must point to the start of a page")
 
+        # Special support for tqdm progress bars
+        if hasattr(on_progress, "reset") and hasattr(on_progress, "update"):
+            on_progress.reset(len(data))
+            on_progress = on_progress.update
+
         for start, size in chunkify(0, len(data), step=self.buffer_size):
             await self._fill_buffer_with(
                 data[start : (start + size)], on_progress=on_progress
@@ -261,16 +272,22 @@ class BootloaderTarget:
             address += size
 
     async def write_firmware(
-        self, firmware: bytes, *, on_progress: ProgressHandler
+        self, firmware: Union[bytes, str], *, on_progress: ProgressHandler
     ) -> None:
         """Writes the given data to the firmware area of the flash memory of
         the target.
 
         Parameters:
-            firmware: the firmware to write
+            firmware: the firmware to write. When it is a string, it is treated
+                as the name of a file containing the firmware. When it is a
+                bytes object, it is treated as the firmware itself.
             on_progress: function to call periodically with the number of bytes
                 written during the operation
         """
+        if isinstance(firmware, str):
+            async with await aopen(firmware, "rb") as fp:
+                firmware = await fp.read()
+
         await self.write_flash(self.firmware_address, firmware, on_progress=on_progress)
 
     async def _fill_buffer_with(
