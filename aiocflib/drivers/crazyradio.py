@@ -67,15 +67,20 @@ class CrazyradioDataRate(IntEnum):
 
     @classmethod
     def from_string(cls, value):
-        value = value.upper()
-        if value in ("250K", "250KPS", "250KBPS"):
-            return cls.DR_250KPS
-        elif value in ("1M", "1MPS", "1MBPS"):
-            return cls.DR_1MPS
-        elif value in ("2M", "2MPS", "2MBPS"):
-            return cls.DR_2MPS
-        else:
+        if isinstance(value, cls):
+            return value
+        elif isinstance(value, int):
             return cls(value)
+        else:
+            value = value.upper()
+            if value in ("250K", "250KPS", "250KBPS"):
+                return cls.DR_250KPS
+            elif value in ("1M", "1MPS", "1MBPS"):
+                return cls.DR_1MPS
+            elif value in ("2M", "2MPS", "2MBPS"):
+                return cls.DR_2MPS
+            else:
+                return cls(value)
 
     def __str__(self):
         if self is CrazyradioDataRate.DR_2MPS:
@@ -437,7 +442,7 @@ class Crazyradio:
         return cls(device)
 
     @staticmethod
-    def to_address(address: CrazyradioAddressLike) -> CrazyradioAddress:
+    def to_address(address: CrazyradioAddressLike, allow_prefix: bool = False) -> CrazyradioAddress:
         """Converts a Crazyradio address-like object to a valid address.
 
         When the input is a bytes object of length 5, it is returned intact.
@@ -448,14 +453,30 @@ class Crazyradio:
 
         When the input is a hexadecimal string of length 10, it is unhexlified
         and returned as a bytes object.
+
+        Parameters:
+            address: the object to convert into a Crazyradio address
+            allow_prefix: whether to allow address prefixes (i.e. addresses that
+                have less than five bytes). In such cases, the remaining bytes
+                of the address are assumed to be zero.
         """
         if isinstance(address, int) and address >= 0 and address <= 255:
-            return bytes((0xE7, 0xE7, 0xE7, 0xE7, address))
-        if isinstance(address, bytes) and len(address) == 5:
-            return address
-        if isinstance(address, str) and len(address) == 10:
+            from aiocflib.utils.addressing import RadioAddressSpace
+            return RadioAddressSpace.DEFAULT.get_address_for(address)
+        if isinstance(address, bytes):
+            if len(address) == 5:
+                return address
+            elif len(address) < 5 and allow_prefix:
+                address += bytes((0x00, )) * (5 - len(address))
+                return address
+        if isinstance(address, str) and len(address) % 2 == 0:
             try:
-                return unhexlify(address)
+                address = unhexlify(address)
+                if len(address) == 5:
+                    return address
+                elif len(address) < 5 and allow_prefix:
+                    address += bytes((0x00, )) * (5 - len(address))
+                    return address
             except Exception:
                 pass
         if isinstance(address, str):
