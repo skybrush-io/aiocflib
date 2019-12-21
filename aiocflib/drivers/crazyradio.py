@@ -902,7 +902,7 @@ class Crazyradio:
                     result.append(i)
             return result
 
-    def _send_and_receive_bytes(self, data: array) -> Optional[Acknowledgment]:
+    def _send_and_receive_bytes(self, data: bytes) -> Optional[Acknowledgment]:
         """Sends some data via the radio connection in a synchronous manner.
 
         This function is executed in the worker thread.
@@ -926,7 +926,7 @@ class Crazyradio:
             return None
 
     def _configure_send_and_receive_bytes(
-        self, configuration: RadioConfiguration, data: array
+        self, configuration: RadioConfiguration, data: bytes
     ) -> Optional[Acknowledgment]:
         """Shortcut for a common use-case that arises frequently: configure the
         radio link, then send a single packet and wait for the acknowledgment.

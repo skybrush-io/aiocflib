@@ -56,6 +56,7 @@ class LoggingMiddleware(MiddlewareBase):
 
     def _init(self) -> None:
         from aiocflib.crtp.drivers.radio import RadioDriver
+        from aiocflib.crtp.drivers.sitl import SITLDriver
         from aiocflib.crtp.drivers.usb import USBDriver
 
         self._num_null_packets = 0
@@ -66,6 +67,10 @@ class LoggingMiddleware(MiddlewareBase):
         elif isinstance(driver, RadioDriver):
             address = driver.address
             abbreviation = dump(address[-2:], sep="") if address else "rdio"
+        elif isinstance(driver, SITLDriver):
+            abbreviation = "sitl"
+        else:
+            abbreviation = "????"
 
         abbreviation = Fore.MAGENTA + abbreviation + Style.RESET_ALL
         self._abbreviation = "{0:4}".format(abbreviation)

@@ -13,6 +13,7 @@ def init_drivers():
     constructing a driver object.
     """
     from .radio import RadioDriver  # noqa
+    from .sitl import SITLDriver  # noqa
     from .usb import USBDriver  # noqa
 
     from ..middleware.log import LoggingMiddleware  # noqa

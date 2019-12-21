@@ -1,7 +1,6 @@
 """Asynchronous USB driver for the Crazyflie."""
 
 from anyio import create_queue, run_in_thread
-from array import array
 from async_exit_stack import AsyncExitStack
 from functools import partial
 from typing import List, Optional
@@ -200,7 +199,7 @@ class CfUsb:
         except (USBError, ValueError):
             return usb.util.get_string(self._device, self._device.iSerialNumber)
 
-    def _receive_bytes(self) -> Optional[array]:
+    def _receive_bytes(self) -> Optional[bytes]:
         """Receives some data from the USB connection in a synchronous manner.
 
         Returns:
@@ -233,7 +232,7 @@ class CfUsb:
 
         return None
 
-    def _send_bytes(self, data: array) -> None:
+    def _send_bytes(self, data: bytes) -> None:
         """Sends some data via the USB connection in a synchronous manner.
 
         This function is executed in the worker thread.
@@ -291,7 +290,7 @@ class _CfUsbCommunicator:
         self._sender = sender
         self._receiver = receiver
 
-    async def send_bytes(self, data: array) -> None:
+    async def send_bytes(self, data: bytes) -> None:
         """Sends some bytes to the connected Crazyflie via the USB port.
 
         Parameters:
@@ -306,7 +305,7 @@ class _CfUsbCommunicator:
         except Full:
             raise IOError("Request queue to USB outbound thread is full")
 
-    async def receive_bytes(self) -> array:
+    async def receive_bytes(self) -> bytes:
         """Receives some bytes from the connected Crazyflie via the USB port.
 
         Returns:

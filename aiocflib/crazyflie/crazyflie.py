@@ -250,7 +250,8 @@ async def test():
     from aiocflib.crtp import MemoryType
     from aiocflib.utils import timing
 
-    uri = "radio+log://0/80/2M/E7E7E7E704"
+    # uri = "radio+log://0/80/2M/E7E7E7E704"
+    uri = "sitl+log://"
     async with Crazyflie(uri, cache="/tmp/cfcache") as cf:
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
@@ -261,13 +262,14 @@ async def test():
         with timing("Fetching parameters TOC"):
             await cf.parameters.validate()
 
+        """
         with timing("Reading from memory"):
             memory = await cf.memory.find(MemoryType.LED)
             data = b"\xfc\x00" * 8
             await memory.write(0, data)
             await memory.read(0, len(data))
-
         """
+
         await cf.parameters.set("motorPowerSet.enable", 1)
         for var in "m1 m2 m3 m4".split():
             await cf.parameters.set("motorPowerSet." + var, 20000)
@@ -275,7 +277,6 @@ async def test():
             await cf.parameters.set("motorPowerSet." + var, 0)
             await sleep(2.5)
         await cf.parameters.set("motorPowerSet.enable", 0)
-        """
 
 
 if __name__ == "__main__":
