@@ -63,7 +63,8 @@ class LoggingMiddleware(MiddlewareBase):
         driver = self._wrapped
 
         if isinstance(driver, USBDriver):
-            abbreviation = "usb{0}".format(driver.index or "?")
+            index = driver.index
+            abbreviation = "usb{0}".format(index if index is not None else "?")
         elif isinstance(driver, RadioDriver):
             address = driver.address
             abbreviation = dump(address[-2:], sep="") if address else "rdio"

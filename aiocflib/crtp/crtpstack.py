@@ -264,7 +264,7 @@ class CRTPDispatcher:
         self._by_port_async = defaultdict(list)
 
     @contextmanager
-    async def create_packet_queue(
+    def create_packet_queue(
         self, port: Optional[CRTPPortLike] = None, *, queue_size: int = 0
     ) -> Queue:
         """Context manager that creates a queue that will yield incoming
@@ -280,7 +280,7 @@ class CRTPDispatcher:
             the given port (or all ports if no port is specified)
         """
         queue = create_queue(queue_size)
-        with self.dispatcher.registered(queue.put, port=0):
+        with self.registered(queue.put, port=port):
             yield queue
 
     async def dispatch(self, packet: CRTPPacket) -> None:

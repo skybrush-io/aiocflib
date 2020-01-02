@@ -36,7 +36,7 @@ class MemoryInfoCommand(IntEnum):
     GET_DETAILS = 2
 
 
-_MemoryElement = namedtuple("_MemoryElement", "index, type size address")
+_MemoryElement = namedtuple("_MemoryElement", "index type size address")
 
 
 class MemoryElement(_MemoryElement):

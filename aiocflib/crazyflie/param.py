@@ -104,6 +104,13 @@ class ParameterType(IntEnum):
         return (_type_properties[self][0],) + _type_properties[self][2]
 
     @property
+    def length(self) -> int:
+        """Returns the number of bytes that a single value of this log
+        variable would occupy.
+        """
+        return self.struct.size
+
+    @property
     def struct(self) -> Struct:
         """Returns a Python struct that can be used to encode or decode
         parameter values of this type.

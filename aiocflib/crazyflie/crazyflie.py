@@ -251,7 +251,9 @@ async def test():
     from aiocflib.utils import timing
 
     # uri = "radio+log://0/80/2M/E7E7E7E704"
-    uri = "sitl+log://"
+    # uri = "sitl+log://"
+    uri = "usb+log://0"
+
     async with Crazyflie(uri, cache="/tmp/cfcache") as cf:
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
@@ -270,18 +272,35 @@ async def test():
             await memory.read(0, len(data))
         """
 
+        """
         await cf.parameters.set("motorPowerSet.enable", 1)
         for var in "m1 m2 m3 m4".split():
             await cf.parameters.set("motorPowerSet." + var, 20000)
             await sleep(1.5)
             await cf.parameters.set("motorPowerSet." + var, 0)
             await sleep(2.5)
+        for var in "m1 m2 m3 m4".split():
+            await cf.parameters.set("motorPowerSet." + var, 40000)
+        await sleep(10)
         await cf.parameters.set("motorPowerSet.enable", 0)
+        """
+
+        block = cf.log.create_block()
+        block.add_variable("pm.vbat")
+        block.add_variable("kalman.stateX")
+        block.add_variable("kalman.stateY")
+        block.add_variable("kalman.stateZ")
+
+        async for entry in block.receive(frequency=20):
+            pass
 
 
 if __name__ == "__main__":
     from aiocflib.crtp import init_drivers
-    import anyio
+    import trio
 
     init_drivers()
-    anyio.run(test)
+    try:
+        trio.run(test)
+    except KeyboardInterrupt:
+        pass
