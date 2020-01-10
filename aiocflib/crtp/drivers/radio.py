@@ -6,7 +6,6 @@ from collections import namedtuple
 from functools import partial
 from operator import attrgetter
 from typing import Callable, Optional, Tuple, List
-from urllib.parse import urlparse
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.drivers.crazyradio import (
@@ -15,6 +14,7 @@ from aiocflib.drivers.crazyradio import (
     CrazyradioAddress,
     RadioConfiguration,
 )
+from aiocflib.utils.addressing import parse_radio_uri
 from aiocflib.utils.concurrency import create_daemon_task_group, gather, ObservableValue
 from aiocflib.utils.statistics import SlidingWindowMean
 
@@ -185,17 +185,14 @@ class RadioDriver(CRTPDriver):
     @asynccontextmanager
     @async_generator
     async def _connected_to(self, uri: str):
-        parts = urlparse(uri)
-
         try:
-            index = int(parts.netloc)
+            parts = parse_radio_uri(uri)
         except ValueError:
-            raise WrongURIType("Invalid radio URI: {0!r}".format(uri))
+            raise WrongURIType from None
 
-        if index < 0:
-            raise WrongURIType("Radio port index must be non-negative")
+        index = parts.pop("index")
 
-        self._configuration = RadioConfiguration.from_uri_path(parts.path)
+        self._configuration = RadioConfiguration(**parts)
 
         async with SharedCrazyradio(index) as radio:
             async with create_daemon_task_group() as task_group:
@@ -236,12 +233,11 @@ class RadioDriver(CRTPDriver):
             return None
 
         try:
-            parts = urlparse(self._uri)
-            config = RadioConfiguration.from_uri_path(parts.path)
+            config = parse_radio_uri(self._uri)
         except Exception:
             return None
 
-        return config.address if config else None
+        return config["address"] if config else None
 
     def apply_preset(self, name: str) -> None:
         """Applies a preset strategy to the given connection to control how

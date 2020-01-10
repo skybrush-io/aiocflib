@@ -14,30 +14,28 @@ from anyio import create_lock, run_in_thread
 from array import array
 from async_exit_stack import AsyncExitStack
 from async_generator import asynccontextmanager, async_generator, yield_
-from binascii import hexlify, unhexlify
+from binascii import hexlify
 from enum import IntEnum
 from functools import total_ordering, wraps
-from typing import Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
+from aiocflib.utils.addressing import (
+    CrazyradioAddress,
+    CrazyradioAddressLike,
+    CrazyradioDataRate,
+    DEFAULT_RADIO_ADDRESS as DEFAULT_ADDRESS,
+    parse_radio_uri,
+    to_radio_address,
+)
 from aiocflib.utils.concurrency import Full, ThreadContext
 from aiocflib.errors import NotFoundError
 
 __author__ = "CollMot Robotics Ltd"
-__all__ = ("Crazyradio",)
+__all__ = ("Crazyradio", "DEFAULT_ADDRESS")
 
 
 CRADIO_VID = 0x1915
 CRADIO_PID = 0x7777
-
-
-#: Type alias for Crazyradio addresses
-CrazyradioAddress = bytes
-
-#: Type alias for objects that can be converted into Crazyradio addresses
-CrazyradioAddressLike = Union[int, bytes, str]
-
-#: The default Crazyradio address
-DEFAULT_ADDRESS = b"\xe7\xe7\xe7\xe7\xe7"  # type: CrazyradioAddress
 
 
 class CrazyradioConfigurationRequest(IntEnum):
@@ -56,39 +54,6 @@ class CrazyradioConfigurationRequest(IntEnum):
     SET_CONT_CARRIER = 0x20
     SCAN_CHANNELS = 0x21
     LAUNCH_BOOTLOADER = 0xFF
-
-
-class CrazyradioDataRate(IntEnum):
-    """Enum representing the data rates supported by the radio."""
-
-    DR_250KPS = 0
-    DR_1MPS = 1
-    DR_2MPS = 2
-
-    @classmethod
-    def from_string(cls, value):
-        if isinstance(value, cls):
-            return value
-        elif isinstance(value, int):
-            return cls(value)
-        else:
-            value = value.upper()
-            if value in ("250K", "250KPS", "250KBPS"):
-                return cls.DR_250KPS
-            elif value in ("1M", "1MPS", "1MBPS"):
-                return cls.DR_1MPS
-            elif value in ("2M", "2MPS", "2MBPS"):
-                return cls.DR_2MPS
-            else:
-                return cls(value)
-
-    def __str__(self):
-        if self is CrazyradioDataRate.DR_2MPS:
-            return "2M"
-        elif self is CrazyradioDataRate.DR_1MPS:
-            return "1M"
-        else:
-            return "250K"
 
 
 class CrazyradioPower(IntEnum):
@@ -207,82 +172,9 @@ class RadioConfiguration:
         of the URI follows the format used for ``radio://`` URIs, and that the
         first path component is the radio index (which will be ignored).
         """
-        scheme, sep, path = uri.partition("://")
-        if not sep:
-            raise ValueError("URI must have a scheme")
-
-        if not path:
-            raise ValueError("path must not be empty")
-
-        if path[0] == "/":
-            path = path[1:]
-
-        try:
-            index = path.index("/", 1) + 1
-        except ValueError:
-            index = len(path)
-
-        return cls.from_uri_path(path[index:])
-
-    @classmethod
-    def from_uri_path(cls, path: str):
-        """Creates a RadioConfiguration_ object from the format typically found
-        in ``radio://`` URIs.
-
-        The path must look like this: ``/channel/rate/address``, where
-        ``channel`` is the numeric index of the radio channel in decimal
-        format, ``rate`` is the data rate (one of ``250K``, ``1M`` or ``2M``),
-        and ``address`` is the address in hexadecimal format. The address may
-        also be a single decimal number between 0 and 255, in which case it is
-        assumed to be prepended by four ``0xE7`` bytes.
-
-        The channel defaults to 2, the rate defaults to 2M, and the address
-        defaults to E7E7E7E7E7.
-        """
-        if not path or path == "/":
-            path = []
-        else:
-            path = path.split("/")
-            if path[0] == "":
-                path.pop(0)
-
-        # Parse channel
-        if path:
-            channel = path.pop(0)
-            try:
-                channel = int(channel)
-            except ValueError:
-                raise ValueError("Invalid channel index: {0!r}".format(channel))
-            if channel < 0 or channel > 125:
-                raise ValueError("Invalid channel index: {0!r}".format(channel))
-        else:
-            channel = 2
-
-        # Parse data rate
-        if path:
-            data_rate = path.pop(0)
-            try:
-                data_rate = CrazyradioDataRate.from_string(data_rate)
-            except ValueError:
-                raise ValueError("Invalid data rate: {0!r}".format(data_rate))
-        else:
-            data_rate = CrazyradioDataRate.DR_2MPS
-
-        # Parse address
-        if path:
-            address = path.pop(0)
-            try:
-                address = Crazyradio.to_address(address)
-            except Exception as ex:
-                raise ValueError("Invalid address: {0!r}".format(address)) from ex
-        else:
-            address = DEFAULT_ADDRESS
-
-        # Extra parts at the end
-        if path:
-            raise ValueError("Excess parts at the end of the path")
-
-        return cls(address=address, channel=channel, data_rate=data_rate)
+        parts = parse_radio_uri(uri)
+        del parts["index"]
+        return cls(**parts)
 
     def __init__(
         self,
@@ -442,53 +334,15 @@ class Crazyradio:
         return cls(device)
 
     @staticmethod
-    def to_address(address: CrazyradioAddressLike, allow_prefix: bool = False) -> CrazyradioAddress:
-        """Converts a Crazyradio address-like object to a valid address.
+    def parse_radio_uri(uri: str) -> Dict[str, Any]:
+        """Parses a Crazyradio URI and returns its parts as a dictionary.
 
-        When the input is a bytes object of length 5, it is returned intact.
-
-        When the input is an integer between 0 and 255, inclusive, it is
-        appended in hexadecimal form to E7E7E7E7 and the extended byte sequence
-        is returned.
-
-        When the input is a hexadecimal string of length 10, it is unhexlified
-        and returned as a bytes object.
-
-        Parameters:
-            address: the object to convert into a Crazyradio address
-            allow_prefix: whether to allow address prefixes (i.e. addresses that
-                have less than five bytes). In such cases, the remaining bytes
-                of the address are assumed to be zero.
+        The returned dictionary will contain the following keys: ``channel``
+        (mapping to the channel index), ``data_rate`` (mapping to the data
+        rate) and ``address`` (mapping to the radio address).
         """
-        if isinstance(address, int) and address >= 0 and address <= 255:
-            from aiocflib.utils.addressing import RadioAddressSpace
-            return RadioAddressSpace.DEFAULT.get_address_for(address)
-        if isinstance(address, bytes):
-            if len(address) == 5:
-                return address
-            elif len(address) < 5 and allow_prefix:
-                address += bytes((0x00, )) * (5 - len(address))
-                return address
-        if isinstance(address, str) and len(address) % 2 == 0:
-            try:
-                address = unhexlify(address)
-                if len(address) == 5:
-                    return address
-                elif len(address) < 5 and allow_prefix:
-                    address += bytes((0x00, )) * (5 - len(address))
-                    return address
-            except Exception:
-                pass
-        if isinstance(address, str):
-            try:
-                return bytes((0xE7, 0xE7, 0xE7, 0xE7, int(address)))
-            except ValueError:
-                pass
-        raise TypeError(
-            "expected a bytes object of length 5, a hexadecimal string of "
-            "length 10 or an integer between 0 and 255, inclusive, "
-            "got {0!r}".format(address)
-        )
+
+    to_address = to_radio_address
 
     def __init__(self, device: USBDevice):
         """Constructor.
