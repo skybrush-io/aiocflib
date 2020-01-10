@@ -257,8 +257,11 @@ class RadioAddressSpace(AddressSpace):
         This function returns the address only; if you need the full URI, use
         the address space as if it was a Python list.
         """
-        address = self._base_address + index
-        return address.to_bytes(5, byteorder="big")
+        if index >= 0 and index < self._length:
+            address = self._base_address + index
+            return address.to_bytes(5, byteorder="big")
+        else:
+            raise IndexError
 
     def __getitem__(self, index: int) -> str:
         address = self.get_address_for(index)
@@ -296,7 +299,10 @@ class USBAddressSpace(AddressSpace):
         self._length = max(0, int(length))
 
     def __getitem__(self, index: int) -> str:
-        return "usb://{0}".format(index)
+        if index >= 0 and index < self._length:
+            return "usb://{0}".format(index)
+        else:
+            raise IndexError
 
     def __len__(self) -> int:
         return self._length
@@ -311,7 +317,3 @@ class USBAddressSpace(AddressSpace):
 #: Default radio address space that is a sensible choice for drone swarms with
 #: less than 256 drones
 RadioAddressSpace.DEFAULT = RadioAddressSpace()
-
-#: Default radio address space that is a sensible choice for at most 32
-#: Crazyflie USB dongles.
-USBAddressSpace.DEFAULT = USBAddressSpace()
