@@ -1,6 +1,7 @@
 from aiocflib.crtp import CRTPDevice, CRTPPort
 from aiocflib.errors import NotFoundError
 from aiocflib.drivers.crazyradio import Crazyradio
+from aiocflib.utils.addressing import BootloaderAddressSpace
 from anyio import sleep
 from typing import List, Union
 
@@ -37,38 +38,60 @@ class Bootloader(CRTPDevice):
             the list of connection URIs where a bootloader was detected
         """
         devices = await Crazyradio.detect_all()
+
         results = []
         for index, device in enumerate(devices):
-            # TODO(ntamas): faster, parallel scan for multiple radios?
+            address_space = BootloaderAddressSpace(index=index)
             async with device as radio:
-                items = await radio.scan(["radio://0/0", "radio://0/110"])
+                items = await radio.scan(address_space)
                 results.extend(item.to_uri(index) for item in items)
+
         return results
 
     @classmethod
-    async def detect_one(cls) -> str:
+    async def detect_one(cls, *, tries: int = 1) -> str:
         """Uses all connected Crazyradio dongles to scan for available Crazyflie
         quadcopters that are in bootloader mode, finds the first one and returns
         the URI that can be used to connect to it.
 
-        TODO(ntamas): can this be used to find Crazyflies that are in bootloader
-        mode after a warm (not cold) reboot?
+        Parameters:
+            tries: specifies how many times we should try to connect to a single
+                radio URI
 
         Returns:
             the URI of a single Crazyflie in bootloader mode
-
-        Raises:
         """
         devices = await Crazyradio.detect_all()
 
         for index, device in enumerate(devices):
-            # TODO(ntamas): faster, parallel scan for multiple radios?
-            async with device as radio:
-                result = await radio.scan(["radio://0/0", "radio://0/110"])
-                if result:
-                    return result[0].to_uri(index)
+            address_space = BootloaderAddressSpace(index=index)
+            for uri in address_space:
+                found = await cls.is_responding_at(uri, tries=tries)
+                if found:
+                    return uri
 
         raise NotFoundError()
+
+    @classmethod
+    async def is_responding_at(cls, uri: str, *, tries: int = 1) -> bool:
+        """Returns whether the bootloader is responding at the given radio URI.
+
+        Parameters:
+            uri: the radio URI, typically ``radio://X/0`` or ``radio://X/110``,
+                where X is the index of the Crazyradio device
+            tries: specifies how many times we should try to connect to the
+                radio URI
+        """
+        device = await Crazyradio.from_uri(uri)
+
+        async with device as radio:
+            while tries > 0:
+                result = await radio.scan([uri])
+                if result:
+                    return True
+                tries -= 1
+
+        return False
 
     def __init__(self, uri: str):
         """Constructor.

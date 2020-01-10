@@ -87,7 +87,7 @@ class CfUsb:
         try:
             device = devices[index]
         except IndexError:
-            raise NotFoundError()
+            raise NotFoundError() from None
         return cls(device)
 
     def __init__(self, device: USBDevice, crtp_to_usb: bool = False):

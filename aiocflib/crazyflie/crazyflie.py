@@ -34,6 +34,18 @@ class Crazyflie(CRTPDevice):
         # Connection to the Crazyflie closes when the context is exited
     """
 
+    @classmethod
+    async def is_responding_at(cls, uri: str, *, tries: int = 1) -> bool:
+        """Returns whether a Crazyflie drone is responding at the given URI.
+
+        Parameters:
+            uri: the URI to try to connect to
+            tries: specifies how many times we should try to connect to the
+                radio URI
+        """
+        # TODO(ntamas)
+        return False
+
     def __init__(self, uri: str, cache: Optional[TOCCacheLike] = None):
         """Constructor.
 

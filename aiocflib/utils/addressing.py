@@ -5,6 +5,7 @@ from typing import Dict, Union
 
 __all__ = (
     "AddressSpace",
+    "BootloaderAddressSpace",
     "CrazyradioAddress",
     "CrazyradioAddressLike",
     "RadioAddressSpace",
@@ -55,7 +56,7 @@ class CrazyradioDataRate(IntEnum):
             return "250K"
 
 
-def parse_radio_uri(uri: str) -> Dict:
+def parse_radio_uri(uri: str, allow_prefix: bool = False) -> Dict:
     """Parses a Crazyflie radio URI and returns a dictionary containing the
     parsed parts.
 
@@ -70,6 +71,12 @@ def parse_radio_uri(uri: str) -> Dict:
     * ``address`` (the parsed address)
 
     The scheme of the supplied URI is ignored (but its existence is validated).
+
+    Parameters:
+        uri: the URI to parse
+        allow_prefix: whether to allow the user to specify only a prefix of the
+            Crazyradio address (where we will assume that the remaining bytes
+            are all zeros).
     """
     scheme, sep, path = uri.partition("://")
     if not sep:
@@ -124,7 +131,7 @@ def parse_radio_uri(uri: str) -> Dict:
     if path:
         address = path.pop(0)
         try:
-            address = to_radio_address(address)
+            address = to_radio_address(address, allow_prefix=allow_prefix)
         except Exception as ex:
             raise ValueError("Invalid address: {0!r}".format(address)) from ex
     else:
@@ -138,7 +145,7 @@ def parse_radio_uri(uri: str) -> Dict:
 
 
 def to_radio_address(
-    address: CrazyradioAddressLike, allow_prefix: bool = False
+    address: CrazyradioAddressLike, *, allow_prefix: bool = False
 ) -> CrazyradioAddress:
     """Converts a Crazyradio address-like object to a valid address.
 
@@ -196,6 +203,28 @@ class AddressSpace(Sequence):
     pass
 
 
+class BootloaderAddressSpace(AddressSpace):
+    """Crazyflie address space that returns URIs where the Crazyflie bootloader
+    could be listening.
+    """
+
+    def __init__(self, index: int = 0):
+        """Constructor.
+
+        Parameters:
+            index: the index of the Crazyradio to return in the URIs of the
+                address space
+        """
+        self._index = int(index)
+        self._items = ["radio://{0}/{1}".format(index, channel) for channel in (0, 110)]
+
+    def __getitem__(self, index):
+        return self._items[index]
+
+    def __len__(self):
+        return len(self._items)
+
+
 class RadioAddressSpace(AddressSpace):
     """Crazyflie radio address space that returns radio addresses using a
     specified radio index, channel, data rate and address prefix.
@@ -215,6 +244,19 @@ class RadioAddressSpace(AddressSpace):
 
         addresses = RadioAddressSpace.from_uri("radio://0/80/2M/E7E7E7E7")
     """
+
+    @classmethod
+    def from_uri(cls, uri: str, length: int = 256):
+        """Constructs a RadioAddressSpace from its URI representation.
+
+        Parameters:
+            uri: the URI representation of the radio address space
+            length: the number of addresses in the constructed address space
+        """
+        parts = parse_radio_uri(uri, allow_prefix=True)
+        parts["prefix"] = parts.pop("address", "E7E7E7E7")
+        parts["length"] = int(length)
+        return cls(**parts)
 
     def __init__(
         self,
@@ -312,6 +354,10 @@ class USBAddressSpace(AddressSpace):
         from aiocflib.drivers.cfusb import CfUsb
 
         self._length = len(await CfUsb.detect_all())
+
+
+#: Default bootloader address space for the first connected Crazyradio
+BootloaderAddressSpace.DEFAULT = BootloaderAddressSpace()
 
 
 #: Default radio address space that is a sensible choice for drone swarms with

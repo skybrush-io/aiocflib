@@ -17,7 +17,7 @@ from async_generator import asynccontextmanager, async_generator, yield_
 from binascii import hexlify
 from enum import IntEnum
 from functools import total_ordering, wraps
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Iterable, List, Optional, Union
 
 from aiocflib.utils.addressing import (
     CrazyradioAddress,
@@ -330,17 +330,18 @@ class Crazyradio:
         try:
             device = devices[index]
         except IndexError:
-            raise NotFoundError()
+            raise NotFoundError() from None
         return cls(device)
 
-    @staticmethod
-    def parse_radio_uri(uri: str) -> Dict[str, Any]:
-        """Parses a Crazyradio URI and returns its parts as a dictionary.
+    @classmethod
+    async def from_uri(cls, uri: str):
+        """Creates a low-level driver object from its URI representation.
 
-        The returned dictionary will contain the following keys: ``channel``
-        (mapping to the channel index), ``data_rate`` (mapping to the data
-        rate) and ``address`` (mapping to the radio address).
+        Only the device index is used from the URI; the remaining parts are
+        ignored.
         """
+        parts = parse_radio_uri(uri)
+        return await cls.detect_one(index=parts["index"])
 
     to_address = to_radio_address
 

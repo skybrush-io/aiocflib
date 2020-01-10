@@ -62,7 +62,7 @@ class CRTPDriver(metaclass=ABCMeta):
         """Connects the driver instance to a specified URI.
 
         This method is not public; use the `connected_to()` async context manager
-        instead., which ensures that the link is closed when the execution leaves
+        instead, which ensures that the link is closed when the execution leaves
         the context.
 
         Since the method is not meant for public use, it does _not_ check whether
