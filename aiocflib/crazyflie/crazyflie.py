@@ -43,7 +43,16 @@ class Crazyflie(CRTPDevice):
             tries: specifies how many times we should try to connect to the
                 radio URI
         """
-        # TODO(ntamas)
+        instance = cls(uri)
+
+        for i in range(tries):
+            try:
+                async with instance:
+                    name = await instance.platform.get_device_type_name()
+                    return name and name.startswith("Crazyflie")
+            except Exception:
+                pass
+
         return False
 
     def __init__(self, uri: str, cache: Optional[TOCCacheLike] = None):
