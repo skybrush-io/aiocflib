@@ -56,8 +56,13 @@ async def SharedCrazyradio(index: int):
     finally:
         radio, instance, count = _instances[index]
         if count == 1:
-            await radio.__aexit__(*sys.exc_info())
-            _instances.pop(index)
+            try:
+                # It is totally normal to have exceptions here; for instance,
+                # if some tasks were cancelled in the context, the cancellation
+                # exception propagates here
+                await radio.__aexit__(*sys.exc_info())
+            finally:
+                _instances.pop(index)
         else:
             _instances[index] = radio, instance, count - 1
 

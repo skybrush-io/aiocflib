@@ -272,7 +272,10 @@ class BootloaderTarget:
             address += size
 
     async def write_firmware(
-        self, firmware: Union[bytes, str], *, on_progress: ProgressHandler
+        self,
+        firmware: Union[bytes, str],
+        *,
+        on_progress: Optional[ProgressHandler] = None
     ) -> None:
         """Writes the given data to the firmware area of the flash memory of
         the target.

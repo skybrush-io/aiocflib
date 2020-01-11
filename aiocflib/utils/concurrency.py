@@ -327,11 +327,21 @@ class ThreadContext(Generic[T]):
                 setup()
 
             sender = queue.put_nowait
+            closed = False
 
             async def call_in_worker(func, *args, **kwargs):
                 """Helper function that calls the given function in the worker
                 thread with the given positional and keyword arguments.
                 """
+                if closed:
+                    # This may happen if the main event loop has already sent
+                    # us a request to terminate, but other tasks in the main
+                    # event loop managed to sneak in some more requests into
+                    # the queue. This should be handled better; for instance,
+                    # these tasks should not be allowed to send requests once
+                    # the queue is closed.
+                    raise RuntimeError("Worker thread already closed")
+
                 value = AwaitableValue()
                 sender((func, args, kwargs, partial(respond_from_worker, value)))
                 outcome = await value.wait()
@@ -343,6 +353,7 @@ class ThreadContext(Generic[T]):
                 while True:
                     item = queue.get()
                     if item is None:
+                        closed = True
                         break
 
                     func, args, kwargs, responder = item
@@ -353,6 +364,8 @@ class ThreadContext(Generic[T]):
             finally:
                 if teardown:
                     teardown(*exc_info())
+
+            print("Exited worker")
 
         return cls(target=worker_thread, **kwds)
 
@@ -384,6 +397,7 @@ class ThreadContext(Generic[T]):
             run_async_from_thread(self._value.set, value)
 
     async def __aenter__(self) -> T:
+        print("Entering ThreadContext")
         if self._task_group is not None:
             raise RuntimeError("thread is already running")
 
@@ -409,6 +423,7 @@ class ThreadContext(Generic[T]):
 
     async def __aexit__(self, exc_type, exc_value, tb):
         if self._queue:
+            print("Sent signal to exit worker")
             self._queue.put(None)
             self._queue = None
 

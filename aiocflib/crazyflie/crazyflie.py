@@ -7,6 +7,7 @@ from typing import Optional
 from aiocflib.bootloader.types import BootloaderCommand
 from aiocflib.bootloader.target import BootloaderTargetType
 from aiocflib.crtp import CRTPDispatcher, CRTPDevice, CRTPDriver, CRTPPort
+from aiocflib.errors import TimeoutError
 from aiocflib.utils.concurrency import ObservableValue
 from aiocflib.utils.toc import TOCCache, TOCCacheLike
 
@@ -45,13 +46,17 @@ class Crazyflie(CRTPDevice):
         """
         instance = cls(uri)
 
-        for i in range(tries):
+        while tries > 0:
             try:
                 async with instance:
-                    name = await instance.platform.get_device_type_name()
-                    return name and name.startswith("Crazyflie")
+                    while tries > 0:
+                        try:
+                            name = await instance.platform.get_device_type_name()
+                            return name and name.startswith("Crazyflie")
+                        except TimeoutError:
+                            tries -= 1
             except Exception:
-                pass
+                tries -= 1
 
         return False
 
