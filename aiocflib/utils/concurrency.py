@@ -365,8 +365,6 @@ class ThreadContext(Generic[T]):
                 if teardown:
                     teardown(*exc_info())
 
-            print("Exited worker")
-
         return cls(target=worker_thread, **kwds)
 
     def __init__(self, target: Target, *, queue_factory: Callable[[], Queue] = Queue):
@@ -397,7 +395,6 @@ class ThreadContext(Generic[T]):
             run_async_from_thread(self._value.set, value)
 
     async def __aenter__(self) -> T:
-        print("Entering ThreadContext")
         if self._task_group is not None:
             raise RuntimeError("thread is already running")
 
@@ -423,7 +420,6 @@ class ThreadContext(Generic[T]):
 
     async def __aexit__(self, exc_type, exc_value, tb):
         if self._queue:
-            print("Sent signal to exit worker")
             self._queue.put(None)
             self._queue = None
 
