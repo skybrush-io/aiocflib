@@ -222,7 +222,7 @@ class MemoryHandlerBase(MemoryHandler):
 
 
 class Memory:
-    """Class representing the handler of messages releated to the memory
+    """Class representing the handler of messages related to the memory
     subsystem of a Crazyflie instance.
     """
 

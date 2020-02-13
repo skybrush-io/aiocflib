@@ -74,12 +74,14 @@ class Crazyflie(CRTPDevice):
 
         # Initialize sub-modules; avoid circular import
         from .console import Console
+        from .localization import Localization
         from .log import Log
         from .mem import Memory
         from .param import Parameters
         from .platform import Platform
 
         self._console = Console(self)
+        self._localization = Localization(self)
         self._log = Log(self)
         self._memory = Memory(self)
         self._parameters = Parameters(self)

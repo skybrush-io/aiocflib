@@ -465,7 +465,7 @@ class LogBlock:
 
 
 class Log:
-    """Class representing the handler of messages releated to the logging
+    """Class representing the handler of messages related to the logging
     subsystem of a Crazyflie instance.
     """
 

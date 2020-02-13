@@ -186,7 +186,7 @@ class ParameterSpecification(_ParameterSpecification):
 
 
 class Parameters:
-    """Class representing the handler of messages releated to the parameter
+    """Class representing the handler of messages related to the parameter
     subsystem of a Crazyflie instance.
     """
 
