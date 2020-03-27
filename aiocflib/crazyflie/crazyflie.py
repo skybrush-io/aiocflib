@@ -73,6 +73,7 @@ class Crazyflie(CRTPDevice):
         self._cache = TOCCache.create(cache) if cache else None
 
         # Initialize sub-modules; avoid circular import
+        from .commander import Commander
         from .console import Console
         from .localization import Localization
         from .log import Log
@@ -80,6 +81,7 @@ class Crazyflie(CRTPDevice):
         from .param import Parameters
         from .platform import Platform
 
+        self._commander = Commander(self)
         self._console = Console(self)
         self._localization = Localization(self)
         self._log = Log(self)
@@ -96,6 +98,13 @@ class Crazyflie(CRTPDevice):
 
     async def _prepare_link(self, driver: CRTPDriver) -> None:
         await driver.use_safe_link()
+
+    @property
+    def commander(self) -> Console:
+        """The low-level (roll-pitch-yaw-thrust) commander module of the
+        Crazyflie.
+        """
+        return self._commander
 
     @property
     def console(self) -> Console:
@@ -278,14 +287,20 @@ async def test():
     from aiocflib.crtp import MemoryType
     from aiocflib.utils import timing
 
-    # uri = "radio+log://0/80/2M/E7E7E7E704"
+    uri = "radio+log://0/80/2M/E7E7E7E704"
     # uri = "sitl+log://"
-    uri = "usb+log://0"
+    # uri = "usb+log://0"
 
     async with Crazyflie(uri, cache="/tmp/cfcache") as cf:
+        await cf.commander.send_setpoint(0, 0, 0, 20000)
+        await sleep(3)
+        await cf.commander.stop()
+
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
+
+        return
 
         with timing("Fetching log TOC"):
             await cf.log.validate()

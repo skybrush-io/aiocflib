@@ -24,9 +24,15 @@ class GenericLocalizationCommand(IntEnum):
     localization service of the CRTP protocol.
     """
 
+    RANGE_STREAM_REPORT = 0
+    RANGE_STREAM_REPORT_FP16 = 1
     LPP_SHORT_PACKET = 2
     ENABLE_EMERGENCY_STOP = 3
     RESET_EMERGENCY_STOP_TIMEOUT = 4
+    COMM_GNSS_NMEA = 6
+    COMM_GNSS_PROPRIETARY = 7
+    EXT_POSE = 8
+    EXT_POSE_PACKED = 9
 
 
 class Localization:
