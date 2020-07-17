@@ -13,7 +13,7 @@ requires = [
 ]
 
 __version__ = None
-exec(open("aiocflib/version.py").read())
+exec(open("src/aiocflib/version.py").read())
 
 setup(
     name="aiocflib",

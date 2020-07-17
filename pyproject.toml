@@ -1,0 +1,48 @@
+[tool.poetry]
+name = "aiocflib"
+version = "0.2.0"
+description = "asyncio-based API for Crazyflie drones"
+authors = ["Tamas Nepusz <tamas@collmot.com>"]
+packages = [
+    { include = "aiocflib", from = "src" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+anyio = "^1.4.0"
+async-exit-stack = "^1.0.1"
+async-generator = "^1.10"
+outcome = "^1.0.1"
+pyusb = "^1.0.2"
+colorama = "^0.4.3"
+hexdump = "^3.3"
+tqdm = "^4.48.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.4.3"
+coverage = {extras = ["toml"], version = "^5.2"}
+pytest-cov = "^2.10.0"
+tox = "^3.17.1"
+trio = "^0.16.0"
+mypy = "^0.782"
+profiling = "^0.1.3"
+
+[tool.poetry.extras]
+
+[[tool.poetry.source]]
+name = "collmot"
+url = "https://pypi.collmot.com/simple/"
+
+[tool.coverage.paths]
+source = ["src"]
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+
+[tool.coverage.report]
+show_missing = true
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
