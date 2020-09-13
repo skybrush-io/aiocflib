@@ -622,8 +622,6 @@ class Crazyradio:
         """Scans a selected combination of channels and data rates to detect
         devices listening on these channels.
 
-        The data rate of the radio is left untouched during the scan.
-
         Parameters:
             targets: items specifying the data rates and channels to scan, or
                 strings that contain ``radio://`` URIs that can be converted
