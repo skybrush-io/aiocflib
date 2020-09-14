@@ -66,3 +66,7 @@ class MiddlewareBase(CRTPDriver):
 
     async def send_packet(self, packet: CRTPPacket):
         return await self._wrapped.send_packet(packet)
+
+    async def use_safe_link(self):
+        return await self._wrapped.use_safe_link()
+
