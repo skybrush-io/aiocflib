@@ -42,6 +42,8 @@ async def run_test():
             print(f"{size}\t{row}")
             print(" done.", file=sys.stderr)
 
+
 if __name__ == "__main__":
     import anyio
+
     anyio.run(run_test)

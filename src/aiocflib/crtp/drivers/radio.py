@@ -118,8 +118,7 @@ class _SafeLinkState:
         await self._set_acquired(False)
 
     async def enable(self) -> None:
-        """Enables the safe link mode on the Crazyflie.
-        """
+        """Enables the safe link mode on the Crazyflie."""
         if not self.enabled:
             value = self._enabled_acquired.value
             await self._enabled_acquired.set(value._replace(enabled=True))

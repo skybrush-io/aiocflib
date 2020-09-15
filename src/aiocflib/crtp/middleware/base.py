@@ -69,4 +69,3 @@ class MiddlewareBase(CRTPDriver):
 
     async def use_safe_link(self):
         return await self._wrapped.use_safe_link()
-

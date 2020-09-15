@@ -87,9 +87,13 @@ class BootloaderTarget:
         """
         result = cls(owner, id)
 
-        page_size, buffer_pages, flash_pages, start_page, cpu_id = cls._target_struct.unpack(
-            data[: cls._target_struct.size]
-        )
+        (
+            page_size,
+            buffer_pages,
+            flash_pages,
+            start_page,
+            cpu_id,
+        ) = cls._target_struct.unpack(data[: cls._target_struct.size])
 
         if len(data) > cls._target_struct.size:
             protocol_version = BootloaderProtocolVersion(data[cls._target_struct.size])

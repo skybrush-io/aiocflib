@@ -32,9 +32,9 @@ class SITLDriver(CRTPDriver):
     """
 
     PRESETS = {
-        "default": (DefaultPollingStrategy, ),
-        "patient": (BackoffPollingStrategy, ),
-        "noPolling": (NoPollingStrategy, ),
+        "default": (DefaultPollingStrategy,),
+        "patient": (BackoffPollingStrategy,),
+        "noPolling": (NoPollingStrategy,),
     }
 
     @asynccontextmanager

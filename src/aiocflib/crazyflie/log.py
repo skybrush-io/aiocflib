@@ -489,7 +489,9 @@ class Log:
 
         self._operation_lock = create_lock()
 
-    def create_block(self,) -> LogBlock:
+    def create_block(
+        self,
+    ) -> LogBlock:
         """Creates a new, empty log block specification object that can be
         used to start logging variables from the Crazyflie.
         """

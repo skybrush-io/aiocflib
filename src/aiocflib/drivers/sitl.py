@@ -50,8 +50,7 @@ class SITL:
         client = await self._exit_stack.enter_async_context(tcp_context)
 
         return _SITLCommunicator(
-            partial(self._send_bytes, client),
-            partial(self._receive_bytes, client)
+            partial(self._send_bytes, client), partial(self._receive_bytes, client)
         )
 
     async def __aexit__(self, exc_type, exc_value, tb):
@@ -87,7 +86,7 @@ class SITL:
         """
         length = len(data)
         assert length <= 64
-        await client.send_all(bytes((length, )) + data)
+        await client.send_all(bytes((length,)) + data)
 
 
 class _SITLCommunicator:
