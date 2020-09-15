@@ -1,6 +1,6 @@
 import sys
 
-from anyio import create_queue, move_on_after, sleep
+from anyio import create_lock, create_queue, move_on_after, sleep
 from async_generator import asynccontextmanager, async_generator, yield_
 from collections import namedtuple
 from functools import partial
@@ -36,6 +36,7 @@ __all__ = ("RadioDriver",)
 
 
 _instances = {}
+_instances_lock = create_lock()
 
 
 @asynccontextmanager
@@ -43,28 +44,30 @@ _instances = {}
 async def SharedCrazyradio(index: int):
     global _instances
 
-    radio, instance, count = _instances.get(index, (None, None, None))
-    if radio is None:
-        radio = await Crazyradio.detect_one(index=index)
-        instance = await radio.__aenter__()
-        _instances[index] = (radio, instance, 1)
-    else:
-        _instances[index] = (radio, instance, count + 1)
+    async with _instances_lock:
+        radio, instance, count = _instances.get(index, (None, None, None))
+        if radio is None:
+            radio = await Crazyradio.detect_one(index=index)
+            instance = await radio.__aenter__()
+            _instances[index] = (radio, instance, 1)
+        else:
+            _instances[index] = (radio, instance, count + 1)
 
     try:
         await yield_(instance)
     finally:
-        radio, instance, count = _instances[index]
-        if count == 1:
-            try:
-                # It is totally normal to have exceptions here; for instance,
-                # if some tasks were cancelled in the context, the cancellation
-                # exception propagates here
-                await radio.__aexit__(*sys.exc_info())
-            finally:
-                _instances.pop(index)
-        else:
-            _instances[index] = radio, instance, count - 1
+        async with _instances_lock:
+            radio, instance, count = _instances[index]
+            if count == 1:
+                try:
+                    # It is totally normal to have exceptions here; for instance,
+                    # if some tasks were cancelled in the context, the cancellation
+                    # exception propagates here
+                    await radio.__aexit__(*sys.exc_info())
+                finally:
+                    _instances.pop(index)
+            else:
+                _instances[index] = radio, instance, count - 1
 
 
 #: Type specification for radio driver presets
