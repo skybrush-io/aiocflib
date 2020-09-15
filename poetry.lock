@@ -102,17 +102,6 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 version = "7.1.2"
 
 [[package]]
-category = "dev"
-description = "Extends click.Group to invoke a command without explicit subcommand name"
-name = "click-default-group"
-optional = false
-python-versions = "*"
-version = "1.2.2"
-
-[package.dependencies]
-click = "*"
-
-[[package]]
 category = "main"
 description = "Cross-platform colored terminal text."
 name = "colorama"
@@ -262,21 +251,6 @@ version = ">=0.12"
 
 [package.extras]
 dev = ["pre-commit", "tox"]
-
-[[package]]
-category = "dev"
-description = "An interactive continuous Python profiler."
-name = "profiling"
-optional = false
-python-versions = "*"
-version = "0.1.3"
-
-[package.dependencies]
-click = ">=4.1"
-click-default-group = ">=1.2"
-six = ">=1.8.0"
-urwid = ">=1.2.1"
-valuedispatch = ">=0.0.1"
 
 [[package]]
 category = "dev"
@@ -464,22 +438,6 @@ version = "3.7.4.3"
 
 [[package]]
 category = "dev"
-description = "A full-featured console (xterm et al.) user interface library"
-name = "urwid"
-optional = false
-python-versions = "*"
-version = "2.1.1"
-
-[[package]]
-category = "dev"
-description = "Dispatches value by singledispatch-like API"
-name = "valuedispatch"
-optional = false
-python-versions = "*"
-version = "0.0.1"
-
-[[package]]
-category = "dev"
 description = "Virtual Python Environment builder"
 name = "virtualenv"
 optional = false
@@ -522,7 +480,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["jaraco.itertools", "func-timeout"]
 
 [metadata]
-content-hash = "8c075d70820a0bfdef7c61cfa9f021540c86453a0e9887534e18799cabcd7f1c"
+content-hash = "e3404227dcaeb12ebf237f7dbb8ef3dcad1e8a39aabaedc5cbb37d25793ff95f"
 python-versions = "^3.7"
 
 [metadata.files]
@@ -591,9 +549,6 @@ cffi = [
 click = [
     {file = "click-7.1.2-py2.py3-none-any.whl", hash = "sha256:dacca89f4bfadd5de3d7489b7c8a566eee0d3676333fbb50030263894c38c0dc"},
     {file = "click-7.1.2.tar.gz", hash = "sha256:d2b5255c7c6349bc1bd1e59e08cd12acbbd63ce649f2588755783aa94dfb6b1a"},
-]
-click-default-group = [
-    {file = "click-default-group-1.2.2.tar.gz", hash = "sha256:d9560e8e8dfa44b3562fbc9425042a0fd6d21956fcc2db0077f63f34253ab904"},
 ]
 colorama = [
     {file = "colorama-0.4.3-py2.py3-none-any.whl", hash = "sha256:7d73d2a99753107a36ac6b455ee49046802e59d9d076ef8e47b61499fa29afff"},
@@ -693,9 +648,6 @@ pathspec = [
 pluggy = [
     {file = "pluggy-0.13.1-py2.py3-none-any.whl", hash = "sha256:966c145cd83c96502c3c3868f50408687b38434af77734af1e9ca461a4081d2d"},
     {file = "pluggy-0.13.1.tar.gz", hash = "sha256:15b2acde666561e1298d71b523007ed7364de07029219b604cf808bfa1c765b0"},
-]
-profiling = [
-    {file = "profiling-0.1.3.tar.gz", hash = "sha256:04c0e0a7ab67268af062cf4e22eb854362d69a1629d1169244e96c893c16ab43"},
 ]
 py = [
     {file = "py-1.9.0-py2.py3-none-any.whl", hash = "sha256:366389d1db726cd2fcfc79732e75410e5fe4d31db13692115529d34069a043c2"},
@@ -798,12 +750,6 @@ typing-extensions = [
     {file = "typing_extensions-3.7.4.3-py2-none-any.whl", hash = "sha256:dafc7639cde7f1b6e1acc0f457842a83e722ccca8eef5270af2d74792619a89f"},
     {file = "typing_extensions-3.7.4.3-py3-none-any.whl", hash = "sha256:7cb407020f00f7bfc3cb3e7881628838e69d8f3fcab2f64742a5e76b2f841918"},
     {file = "typing_extensions-3.7.4.3.tar.gz", hash = "sha256:99d4073b617d30288f569d3f13d2bd7548c3a7e4c8de87db09a9d29bb3a4a60c"},
-]
-urwid = [
-    {file = "urwid-2.1.1.tar.gz", hash = "sha256:7870866e35b00b71b0c9ccdd1281c8e7fac3806d60b9c1075c95dd5dad88d526"},
-]
-valuedispatch = [
-    {file = "valuedispatch-0.0.1.tar.gz", hash = "sha256:62f4712a28089396b9fcbb962cb5b17a0a404ea151b1719f0385f5a94cb7e52a"},
 ]
 virtualenv = [
     {file = "virtualenv-20.0.31-py2.py3-none-any.whl", hash = "sha256:e0305af10299a7fb0d69393d8f04cb2965dda9351140d11ac8db4e5e3970451b"},

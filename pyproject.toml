@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aiocflib"
-version = "0.2.2"
+version = "0.3.0"
 description = "asyncio-based API for Crazyflie drones"
 authors = ["Tamas Nepusz <tamas@collmot.com>"]
 packages = [
@@ -24,7 +24,6 @@ pytest-cov = "^2.10.0"
 tox = "^3.17.1"
 trio = "^0.16.0"
 mypy = "^0.782"
-profiling = "^0.1.3"
 black = {version = "^20.8b1", allow-prereleases = true}
 
 [tool.poetry.extras]
