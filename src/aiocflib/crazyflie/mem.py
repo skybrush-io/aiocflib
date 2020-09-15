@@ -166,7 +166,7 @@ class MemoryHandlerBase(MemoryHandler):
         return self._element.type
 
     async def write(self, addr: int, data: bytes) -> None:
-        for start, size in self._chunkify(
+        for start, size in chunkify(
             0, len(data), step=MemoryHandler.MAX_WRITE_REQUEST_LENGTH
         ):
             status = await self._write_chunk(addr + start, data[start : (start + size)])

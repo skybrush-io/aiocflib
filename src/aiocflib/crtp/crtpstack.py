@@ -1,9 +1,10 @@
 """Classes for modeling and handling CRTP packets."""
 
-from anyio import create_queue, Queue
+from anyio import create_memory_object_stream
+from anyio.abc import ObjectReceiveStream
 from array import array
 from collections import defaultdict
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from enum import IntEnum
 from functools import partial
 from inspect import iscoroutinefunction
@@ -263,10 +264,10 @@ class CRTPDispatcher:
         self._by_port_sync = defaultdict(list)
         self._by_port_async = defaultdict(list)
 
-    @contextmanager
-    def create_packet_queue(
+    @asynccontextmanager
+    async def create_packet_queue(
         self, port: Optional[CRTPPortLike] = None, *, queue_size: int = 0
-    ) -> Queue:
+    ) -> ObjectReceiveStream:
         """Context manager that creates a queue that will yield incoming
         CRTP packets coming from the given port.
 
@@ -276,12 +277,13 @@ class CRTPDispatcher:
                 before blocking. Typically 0 is enough.
 
         Returns:
-            a queue in which the dispatcher will place all packets that match
-            the given port (or all ports if no port is specified)
+            a readable stream in which the dispatcher will place all packets
+            that match the given port (or all ports if no port is specified)
         """
-        queue = create_queue(queue_size)
-        with self.registered(queue.put, port=port):
-            yield queue
+        tx_queue, rx_queue = create_memory_object_stream(queue_size)
+        async with tx_queue:
+            with self.registered(tx_queue.send, port=port):
+                yield rx_queue
 
     async def dispatch(self, packet: CRTPPacket) -> None:
         """Handles an incoming CRTP packet and dispatches them to the

@@ -1,4 +1,4 @@
-from anyio import aopen
+from anyio import open_file
 from enum import IntEnum
 from math import ceil
 from struct import Struct
@@ -292,7 +292,7 @@ class BootloaderTarget:
                 written during the operation
         """
         if isinstance(firmware, str):
-            async with await aopen(firmware, "rb") as fp:
+            async with await open_file(firmware, "rb") as fp:
                 firmware = await fp.read()
 
         await self.write_flash(self.firmware_address, firmware, on_progress=on_progress)

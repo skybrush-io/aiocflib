@@ -1,8 +1,10 @@
 """Asynchronous USB driver for the Crazyflie."""
 
-from anyio import connect_tcp, create_queue, Stream
+from anyio import connect_tcp
+from anyio.abc import ByteStream
+from anyio.streams.buffered import BufferedByteReceiveStream
 from array import array
-from async_exit_stack import AsyncExitStack
+from contextlib import AsyncExitStack
 from functools import partial
 from typing import Optional
 
@@ -34,8 +36,6 @@ class SITL:
             port: the port to connect to
         """
         self._address = host, port
-        self._inbound_queue = create_queue(256)
-
         self._exit_stack = None  # type: Optional[AsyncExitStack]
         self._client = None
 
@@ -48,6 +48,7 @@ class SITL:
         await self._exit_stack.__aenter__()
         tcp_context = await connect_tcp(*self._address)
         client = await self._exit_stack.enter_async_context(tcp_context)
+        client = BufferedByteReceiveStream(client)
 
         return _SITLCommunicator(
             partial(self._send_bytes, client), partial(self._receive_bytes, client)
@@ -59,7 +60,9 @@ class SITL:
         finally:
             self._exit_stack = None
 
-    async def _receive_bytes(self, client: Stream) -> Optional[array]:
+    async def _receive_bytes(
+        self, client: BufferedByteReceiveStream
+    ) -> Optional[array]:
         """Receives some data from the SITL connection in a synchronous manner.
 
         Parameters:
@@ -74,7 +77,7 @@ class SITL:
         length = ord(await client.receive_exactly(1))
         return await client.receive_exactly(length)
 
-    async def _send_bytes(self, client: Stream, data: bytes) -> None:
+    async def _send_bytes(self, client: ByteStream, data: bytes) -> None:
         """Sends some data via the TCP connection in a synchronous manner.
 
         Parameters:

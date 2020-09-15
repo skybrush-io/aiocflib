@@ -3,7 +3,7 @@ and log table-of-contents entries from a Crazyflie.
 """
 
 from abc import abstractmethod, ABCMeta
-from anyio import aopen
+from anyio import open_file
 from binascii import hexlify
 from collections import defaultdict
 from functools import partial
@@ -264,7 +264,7 @@ class FilesystemBasedTOCCache(TOCCache):
 
         result = []
 
-        async with await aopen(str(path), "rb") as fp:
+        async with await open_file(str(path), "rb") as fp:
             data = await fp.read(1)
             if not data:
                 raise IOError("unexpected end of file")
@@ -306,7 +306,7 @@ class FilesystemBasedTOCCache(TOCCache):
         success = False
 
         try:
-            async with await aopen(str(path), "wb") as fp:
+            async with await open_file(str(path), "wb") as fp:
                 await fp.write(b"\x01")
                 for item in items:
                     length = len(item)

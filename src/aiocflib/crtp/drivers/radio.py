@@ -1,8 +1,14 @@
 import sys
 
-from anyio import create_lock, create_queue, move_on_after, sleep
-from async_generator import asynccontextmanager, async_generator, yield_
+from anyio import (
+    create_lock,
+    create_memory_object_stream,
+    move_on_after,
+    sleep,
+    WouldBlock,
+)
 from collections import namedtuple
+from contextlib import asynccontextmanager
 from functools import partial
 from operator import attrgetter
 from typing import Callable, Optional, Tuple, List
@@ -36,13 +42,15 @@ __all__ = ("RadioDriver",)
 
 
 _instances = {}
-_instances_lock = create_lock()
+_instances_lock = None
 
 
 @asynccontextmanager
-@async_generator
 async def SharedCrazyradio(index: int):
-    global _instances
+    global _instances, _instances_lock
+
+    if _instances_lock is None:
+        _instances_lock = create_lock()
 
     async with _instances_lock:
         radio, instance, count = _instances.get(index, (None, None, None))
@@ -54,7 +62,7 @@ async def SharedCrazyradio(index: int):
             _instances[index] = (radio, instance, count + 1)
 
     try:
-        await yield_(instance)
+        yield instance
     finally:
         async with _instances_lock:
             radio, instance, count = _instances[index]
@@ -190,7 +198,6 @@ class RadioDriver(CRTPDriver):
     }
 
     @asynccontextmanager
-    @async_generator
     async def _connected_to(self, uri: str):
         try:
             parts = parse_radio_uri(uri)
@@ -205,7 +212,7 @@ class RadioDriver(CRTPDriver):
             async with create_daemon_task_group() as task_group:
                 await task_group.spawn(self._worker, radio)
                 await task_group.spawn(self._safe_link_supervisor, radio)
-                await yield_(self)
+                yield self
 
     def __init__(self, preset: str = "default"):
         """Constructor.
@@ -225,8 +232,8 @@ class RadioDriver(CRTPDriver):
             self.apply_preset("default")
 
         # TODO(ntamas): what if the in_queue is full?
-        self._in_queue = create_queue(256)
-        self._out_queue = create_queue(1)
+        self._in_queue_tx, self._in_queue_rx = create_memory_object_stream(256)
+        self._out_queue_tx, self._out_queue_rx = create_memory_object_stream(1)
 
     async def get_status(self) -> str:
         return "Crazyradio version {0}".format(self._device.version)
@@ -300,7 +307,7 @@ class RadioDriver(CRTPDriver):
         Returns:
             the next CRTP packet that was received
         """
-        return await self._in_queue.get()
+        return await self._in_queue_rx.receive()
 
     async def send_packet(self, packet: CRTPPacket) -> None:
         """Sends a CRTP packet.
@@ -308,7 +315,7 @@ class RadioDriver(CRTPDriver):
         Parameters:
             packet: the packet to send
         """
-        await self._out_queue.put(packet)
+        await self._out_queue_tx.send(packet)
 
     @classmethod
     async def scan_interfaces(
@@ -454,7 +461,7 @@ class RadioDriver(CRTPDriver):
             # No resending needed, process response and get next packet to send
             if response.data:
                 inbound_packet = CRTPPacket.from_bytes(response.data)
-                await self._in_queue.put(inbound_packet)
+                await self._in_queue_tx.send(inbound_packet)
 
             # Figure out how much to wait before the next null packet is sent
             delay_before_next_null_packet = self.polling_strategy(response.data)
@@ -462,18 +469,17 @@ class RadioDriver(CRTPDriver):
                 # Wait for a given number of seconds
                 outbound_packet = null_packet
                 async with move_on_after(delay_before_next_null_packet):
-                    outbound_packet = await self._out_queue.get()
+                    outbound_packet = await self._out_queue_rx.receive()
             elif delay_before_next_null_packet < 0:
                 # Wait indefinitely
-                outbound_packet = await self._out_queue.get()
+                outbound_packet = await self._out_queue_rx.receive()
             else:
                 # Poll the outbound queue; send a null packet if the queue is
                 # empty
-                outbound_packet = (
-                    null_packet
-                    if self._out_queue.empty()
-                    else await self._out_queue.get()
-                )
+                try:
+                    outbound_packet = await self._out_queue_rx.receive_nowait()
+                except WouldBlock:
+                    outbound_packet = null_packet
 
 
 register("bradio")(partial(RadioDriver, preset="patient"))

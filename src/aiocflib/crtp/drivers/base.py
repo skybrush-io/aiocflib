@@ -1,7 +1,7 @@
 """Interface specificaton for asynchronous CRTP driver implementations."""
 
 from abc import ABCMeta, abstractmethod, abstractproperty
-from async_generator import asynccontextmanager, async_generator, yield_
+from contextlib import asynccontextmanager
 from typing import List, Optional
 
 from aiocflib.crtp.crtpstack import CRTPPacket
@@ -21,7 +21,6 @@ class CRTPDriver(metaclass=ABCMeta):
 
     @staticmethod
     @asynccontextmanager
-    @async_generator
     async def connected_to(uri: str, *args, **kwds):
         """Creates a CRTPDriver_ instance from a URI specification and connects
         to the Crazyflie located at the given URI. Closes the connection when the
@@ -55,7 +54,7 @@ class CRTPDriver(metaclass=ABCMeta):
             driver = middleware(driver)
 
         async with driver._connected_to(uri):
-            await yield_(driver)
+            yield driver
 
     @abstractmethod
     async def _connected_to(self, uri: str):

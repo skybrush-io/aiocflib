@@ -1,5 +1,5 @@
-from anyio import create_queue, move_on_after
-from async_generator import asynccontextmanager, async_generator, yield_
+from anyio import create_memory_object_stream, move_on_after, WouldBlock
+from contextlib import asynccontextmanager
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -38,7 +38,6 @@ class SITLDriver(CRTPDriver):
     }
 
     @asynccontextmanager
-    @async_generator
     async def _connected_to(self, uri: str):
         parts = urlparse(uri)
         host, _, port = parts.netloc.partition(":")
@@ -48,7 +47,7 @@ class SITLDriver(CRTPDriver):
         async with SITL(host, port) as sitl:
             async with create_daemon_task_group() as task_group:
                 await task_group.spawn(self._worker, sitl)
-                await yield_(self)
+                yield self
 
     def __init__(self, preset: str = "default"):
         """Constructor.
@@ -64,8 +63,8 @@ class SITLDriver(CRTPDriver):
             self.apply_preset("default")
 
         # TODO(ntamas): what if the in_queue is full?
-        self._in_queue = create_queue(256)
-        self._out_queue = create_queue(1)
+        self._in_queue_tx, self._in_queue_rx = create_memory_object_stream(256)
+        self._out_queue_tx, self._out_queue_rx = create_memory_object_stream(1)
 
     def apply_preset(self, name: str) -> None:
         """Applies a preset strategy to the given connection to control how
@@ -105,7 +104,7 @@ class SITLDriver(CRTPDriver):
         Returns:
             the next CRTP packet that was received
         """
-        return await self._in_queue.get()
+        return await self._in_queue_rx.receive()
 
     async def send_packet(self, packet: CRTPPacket) -> None:
         """Sends a CRTP packet.
@@ -113,7 +112,7 @@ class SITLDriver(CRTPDriver):
         Parameters:
             packet: the packet to send
         """
-        await self._out_queue.put(packet)
+        await self._out_queue_tx.send(packet)
 
     async def _worker(self, sitl: SITL) -> None:
         """Worker task that runs continuously and handles the sending and
@@ -135,7 +134,7 @@ class SITLDriver(CRTPDriver):
 
             if response is not None:
                 inbound_packet = CRTPPacket.from_bytes(response)
-                await self._in_queue.put(inbound_packet)
+                await self._in_queue_tx.send(inbound_packet)
             else:
                 response = b"\xff"
 
@@ -145,15 +144,14 @@ class SITLDriver(CRTPDriver):
                 # Wait for a given number of seconds
                 outbound_packet = null_packet
                 async with move_on_after(delay_before_next_null_packet):
-                    outbound_packet = await self._out_queue.get()
+                    outbound_packet = await self._out_queue_rx.receive()
             elif delay_before_next_null_packet < 0:
                 # Wait indefinitely
-                outbound_packet = await self._out_queue.get()
+                outbound_packet = await self._out_queue_rx.receive()
             else:
                 # Poll the outbound queue; send a null packet if the queue is
                 # empty
-                outbound_packet = (
-                    null_packet
-                    if self._out_queue.empty()
-                    else await self._out_queue.get()
-                )
+                try:
+                    outbound_packet = await self._out_queue_rx.receive_nowait()
+                except WouldBlock:
+                    outbound_packet = null_packet

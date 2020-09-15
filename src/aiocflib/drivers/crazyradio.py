@@ -10,11 +10,10 @@ from aiocflib.utils.usb import (
     USBDevice,
     USBError,
 )
-from anyio import create_lock, run_in_thread
+from anyio import create_lock, run_sync_in_worker_thread
 from array import array
-from async_exit_stack import AsyncExitStack
-from async_generator import asynccontextmanager, async_generator, yield_
 from binascii import hexlify
+from contextlib import asynccontextmanager, AsyncExitStack
 from enum import IntEnum
 from functools import total_ordering, wraps
 from typing import Iterable, List, Optional, Union
@@ -310,7 +309,7 @@ class Crazyradio:
         """Creates a list of low-level driver objects by scanning the USB buses
         for a suitable USB dongle.
         """
-        devices = await run_in_thread(_find_devices)
+        devices = await run_sync_in_worker_thread(_find_devices)
         return [cls(device) for device in devices]
 
     @classmethod
@@ -326,7 +325,7 @@ class Crazyradio:
         Raises:
             NotFoundError: if there is no such device with the given index
         """
-        devices = await run_in_thread(_find_devices)
+        devices = await run_sync_in_worker_thread(_find_devices)
         try:
             device = devices[index]
         except IndexError:
@@ -849,7 +848,6 @@ class _CfRadioCommunicator:
             setattr(self, name, create_proxy_for(name))
 
     @asynccontextmanager
-    @async_generator
     async def configure(self, configuration: RadioConfiguration):
         """Configures the radio address, channel and data rate according to
         the given configuration object, and establishes a context. While the
@@ -867,7 +865,7 @@ class _CfRadioCommunicator:
                 await self._sender(self._radio._configure, configuration)
             except Full:
                 raise IOError("Request queue to radio outbound thread is full")
-            await yield_()
+            yield
 
 
 async def test():

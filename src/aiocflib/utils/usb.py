@@ -1,7 +1,7 @@
 """USB-related low-level utility functions."""
 
 from anyio import create_lock
-from async_generator import asynccontextmanager, async_generator, yield_
+from contextlib import asynccontextmanager
 from typing import Any, List
 from weakref import WeakValueDictionary
 
@@ -41,7 +41,6 @@ except Exception:
 
 
 @asynccontextmanager
-@async_generator
 async def claim_device(device: USBDevice):
     """Asynchronous context manager that claims a USB device and prevents
     others from claiming the same device as long as the execution stays
@@ -55,7 +54,7 @@ async def claim_device(device: USBDevice):
         _locks[uid] = lock = create_lock()
 
     async with lock:
-        await yield_()
+        yield
 
 
 def find_devices(vid: int, pid: int) -> List[USBDevice]:

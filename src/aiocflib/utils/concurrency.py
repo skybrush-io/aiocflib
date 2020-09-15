@@ -1,17 +1,15 @@
 """Utility functions related to concurrency management."""
 
 from anyio import (
-    CapacityLimiter,
     create_capacity_limiter,
     create_condition,
     create_event,
     create_task_group,
     open_cancel_scope,
     run_async_from_thread,
-    run_in_thread,
-    TaskGroup,
+    run_sync_in_worker_thread,
 )
-from async_generator import async_generator, yield_
+from anyio.abc import CapacityLimiter, TaskGroup
 from functools import partial
 from inspect import iscoroutinefunction
 from outcome import capture
@@ -230,11 +228,10 @@ class ObservableValue(Generic[T]):
     def __aiter__(self):
         return self._observe()
 
-    @async_generator
     async def _observe(self):
-        await yield_(self._value)
+        yield self._value
         while True:
-            await yield_(await self.wait())
+            yield await self.wait()
 
 
 class ThreadContext(Generic[T]):
@@ -274,13 +271,13 @@ class ThreadContext(Generic[T]):
         """
 
         def respond_from_reader(value: Any) -> None:
-            run_async_from_thread(queue_to_caller.put, value)
+            run_async_from_thread(queue_to_caller.send, value)
 
         def reader_thread(queue: Queue, on_started: Callable[[Any], None]):
             if setup:
                 setup()
 
-            on_started(queue_to_caller.get)
+            on_started(queue_to_caller.receive)
 
             try:
                 while True:
@@ -407,7 +404,10 @@ class ThreadContext(Generic[T]):
         success = False
         try:
             await self._task_group.spawn(
-                run_in_thread, self._target, self._queue, self._notify_thread_started
+                run_sync_in_worker_thread,
+                self._target,
+                self._queue,
+                self._notify_thread_started,
             )
             result = await self._value.wait()
             success = True

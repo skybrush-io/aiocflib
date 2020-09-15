@@ -1,7 +1,11 @@
 """Asynchronous USB driver for the Crazyflie."""
 
-from anyio import create_queue, run_in_thread
-from async_exit_stack import AsyncExitStack
+from anyio import (
+    create_memory_object_stream,
+    run_sync_in_worker_thread,
+)
+from anyio.streams.stapled import StapledObjectStream
+from contextlib import AsyncExitStack
 from functools import partial
 from typing import List, Optional
 
@@ -68,7 +72,7 @@ class CfUsb:
         """Creates a list of low-level driver objects by scanning the USB buses
         for a suitable USB dongle.
         """
-        return await run_in_thread(_find_devices)
+        return await run_sync_in_worker_thread(_find_devices)
 
     @classmethod
     async def detect_one(cls, *, index: int = 0):
@@ -99,12 +103,12 @@ class CfUsb:
             device: the USB device to use
         """
         self._device = device
-        self._inbound_queue = create_queue(256)
+        self._in_queue = StapledObjectStream(*create_memory_object_stream(256))
         self._use_crtp_to_usb = bool(crtp_to_usb)
 
         self._receiver_thread_context = ThreadContext.create_reader(
             self._receive_bytes,
-            self._inbound_queue,
+            self._in_queue,
             setup=self._configure_device,
             teardown=self._teardown_device,
         )
@@ -115,7 +119,7 @@ class CfUsb:
 
     async def get_serial(self) -> str:
         """Returns the serial number of the associated device."""
-        return await run_in_thread(self._get_serial_sync)
+        return await run_sync_in_worker_thread(self._get_serial_sync)
 
     @property
     def use_crtp_to_usb(self):

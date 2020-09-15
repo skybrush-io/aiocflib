@@ -1,4 +1,4 @@
-from async_generator import asynccontextmanager, async_generator, yield_
+from contextlib import asynccontextmanager
 from typing import List, Optional
 from urllib.parse import urlparse
 
@@ -22,7 +22,6 @@ class USBDriver(CRTPDriver):
     """
 
     @asynccontextmanager
-    @async_generator
     async def _connected_to(self, uri: str):
         parts = urlparse(uri)
 
@@ -39,7 +38,7 @@ class USBDriver(CRTPDriver):
 
         try:
             async with device as self._device:
-                await yield_(self)
+                yield self
         finally:
             self._device = None
 

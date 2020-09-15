@@ -1,8 +1,9 @@
 """Classes related to accessing the logging subsystem of a Crazyflie."""
 
 from anyio import create_lock
-from async_generator import asynccontextmanager, async_generator, yield_, yield_from_
+from async_generator import async_generator, yield_, yield_from_
 from collections import namedtuple
+from contextlib import asynccontextmanager
 from enum import IntEnum
 from functools import partial
 from itertools import count
@@ -404,7 +405,6 @@ class LogBlock:
         return self._dispose
 
     @asynccontextmanager
-    @async_generator
     async def submitted(self):
         """Async context manager that submits the log specification to the
         Crazyflie when entering the context and removes it when exiting the
@@ -412,7 +412,7 @@ class LogBlock:
         """
         disposer = await self.submit()
         try:
-            await yield_()
+            yield
         finally:
             await disposer()
 
@@ -489,9 +489,7 @@ class Log:
 
         self._operation_lock = create_lock()
 
-    def create_block(
-        self,
-    ) -> LogBlock:
+    def create_block(self,) -> LogBlock:
         """Creates a new, empty log block specification object that can be
         used to start logging variables from the Crazyflie.
         """

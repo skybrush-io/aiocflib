@@ -3,7 +3,7 @@ driver instance before / after performing some operations on the call
 arguments.
 """
 
-from async_generator import asynccontextmanager, async_generator, yield_
+from contextlib import asynccontextmanager
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.crtp.drivers.base import CRTPDriver
@@ -26,10 +26,9 @@ class MiddlewareBase(CRTPDriver):
         self._init()
 
     @asynccontextmanager
-    @async_generator
     async def _connected_to(self, uri: str):
         async with self._wrapped._connected_to(uri):
-            await yield_()
+            yield
 
     def _init(self) -> None:
         pass

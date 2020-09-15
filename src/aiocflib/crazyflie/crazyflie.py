@@ -300,20 +300,16 @@ async def test():
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
 
-        return
-
         with timing("Fetching log TOC"):
             await cf.log.validate()
         with timing("Fetching parameters TOC"):
             await cf.parameters.validate()
 
-        """
         with timing("Reading from memory"):
             memory = await cf.memory.find(MemoryType.LED)
             data = b"\xfc\x00" * 8
             await memory.write(0, data)
             await memory.read(0, len(data))
-        """
 
         """
         await cf.parameters.set("motorPowerSet.enable", 1)
@@ -327,6 +323,7 @@ async def test():
         await sleep(10)
         await cf.parameters.set("motorPowerSet.enable", 0)
         """
+        return
 
         block = cf.log.create_block()
         block.add_variable("pm.vbat")
