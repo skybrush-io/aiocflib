@@ -39,7 +39,7 @@ class CRTPDriver(metaclass=ABCMeta):
         if not sep:
             raise ValueError("CRTP driver URI must contain ://")
 
-        scheme, *middleware = scheme.split("+")
+        scheme, *middleware_names = scheme.split("+")
 
         try:
             driver_factory = find_driver(scheme)
@@ -49,8 +49,11 @@ class CRTPDriver(metaclass=ABCMeta):
         driver = driver_factory(*args, **kwds)
         driver.uri = uri
 
-        for middleware_name in middleware:
-            middleware = find_middleware(middleware_name)
+        for middleware_name in middleware_names:
+            try:
+                middleware = find_middleware(middleware_name)
+            except KeyError:
+                raise WrongURIType("Unknown middleware in URI: {0!r}".format(middleware_name))
             driver = middleware(driver)
 
         async with driver._connected_to(uri):

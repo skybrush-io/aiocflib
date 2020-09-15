@@ -16,6 +16,7 @@ from binascii import hexlify
 from contextlib import asynccontextmanager, AsyncExitStack
 from enum import IntEnum
 from functools import total_ordering, wraps
+from sys import exc_info
 from typing import Iterable, List, Optional, Union
 
 from aiocflib.utils.addressing import (
@@ -384,19 +385,25 @@ class Crazyradio:
         communication over the given low-level device. Returns when the
         thread has been started.
         """
-        self._exit_stack = AsyncExitStack()
+        assert self._exit_stack is None
 
-        stack = await self._exit_stack.__aenter__()
-        await stack.enter_async_context(claim_device(self._device))
-        sender = await stack.enter_async_context(self._sender_thread_context)
+        exit_stack = AsyncExitStack()
+
+        try:
+            await exit_stack.__aenter__()
+            await exit_stack.enter_async_context(claim_device(self._device))
+            sender = await exit_stack.enter_async_context(self._sender_thread_context)
+            self._exit_stack = exit_stack
+        finally:
+            if self._exit_stack is None:
+                await exit_stack.__aexit__(*exc_info())
 
         return _CfRadioCommunicator(sender, self)
 
     async def __aexit__(self, exc_type, exc_value, tb):
-        try:
-            await self._exit_stack.__aexit__(exc_type, exc_value, tb)
-        finally:
-            self._exit_stack = None
+        exit_stack = self._exit_stack
+        self._exit_stack = None
+        return await exit_stack.__aexit__(exc_type, exc_value, tb)
 
     def _configure_device(self):
         """Configures the USB device when the worker thread starts.
@@ -829,7 +836,7 @@ class _CfRadioCommunicator:
                 except Full:
                     raise IOError("Request queue to radio outbound thread is full")
 
-            return wraps(target)(proxy)
+            return proxy
 
         methods = (
             "configure_send_and_receive_bytes",

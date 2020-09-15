@@ -2,6 +2,7 @@
 
 from anyio import move_on_after
 from async_generator import async_generator, yield_from_
+from contextlib import AsyncExitStack
 from sys import exc_info
 from typing import Iterable, Optional, Union
 
@@ -30,21 +31,29 @@ class CRTPDevice:
 
         self._driver = None
         self._task_group = None
+        self._exit_stack = None
 
     async def __aenter__(self):
-        self._task_group = create_daemon_task_group()
+        assert self._exit_stack is None
 
+        exit_stack = AsyncExitStack()
+        await exit_stack.__aenter__()
+
+        self._task_group = create_daemon_task_group()
         try:
-            spawner = await self._task_group.__aenter__()
+            spawner = await exit_stack.enter_async_context(self._task_group)
             await spawner.spawn_and_wait_until_started(self._open_connection)
-        except BaseException:
-            await self._task_group.__aexit__(*exc_info())
-            raise
+            self._exit_stack = exit_stack
+        finally:
+            if self._exit_stack is None:
+                await exit_stack.__aexit__(*exc_info())
 
         return self
 
     async def __aexit__(self, exc_type, exc_value, tb):
-        return await self._task_group.__aexit__(exc_type, exc_value, tb)
+        exit_stack = self._exit_stack
+        self._exit_stack = None
+        return await exit_stack.__aexit__(exc_type, exc_value, tb)
 
     async def _message_handler(self, driver):
         """Worker task that receives incoming messages from the device and

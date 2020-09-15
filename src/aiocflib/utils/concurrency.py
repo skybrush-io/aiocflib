@@ -5,7 +5,6 @@ from anyio import (
     create_condition,
     create_event,
     create_task_group,
-    open_cancel_scope,
     run_async_from_thread,
     run_sync_in_worker_thread,
 )
@@ -74,32 +73,21 @@ class DaemonTaskGroup(TaskGroup):
     """
 
     def __init__(self):
-        self._cancel_scopes = []
-        self._task_group = None
+        self._task_group = create_task_group()
         self._spawner = None
 
     async def __aenter__(self):
-        self._task_group = create_task_group()
         self._spawner = await self._task_group.__aenter__()
         return self
 
     async def __aexit__(self, exc_type, exc_value, tb):
-        for cancel_scope in reversed(self._cancel_scopes):
-            try:
-                await cancel_scope.cancel()
-            except Exception:
-                # well, meh
-                pass
+        self._spawner = None
+
+        await self._task_group.cancel_scope.cancel()
         return await self._task_group.__aexit__(exc_type, exc_value, tb)
 
     async def spawn(self, func, *args, **kwds):
-        scope = open_cancel_scope()
-        self._cancel_scopes.append(scope)
-        try:
-            return await self._spawner.spawn(self._run, scope, func, *args, **kwds)
-        except Exception:
-            self._cancel_scopes.remove(scope)
-            raise
+        return await self._spawner.spawn(func, *args, **kwds)
 
     async def spawn_and_wait_until_started(self, func, *args, **kwds):
         on_opened = create_event()
@@ -423,8 +411,11 @@ class ThreadContext(Generic[T]):
             self._queue.put(None)
             self._queue = None
 
-        if self._task_group:
-            await self._task_group.__aexit__(exc_type, exc_value, tb)
-            self._task_group = None
-
-        self._value = None
+        try:
+            if self._task_group:
+                try:
+                    await self._task_group.__aexit__(exc_type, exc_value, tb)
+                finally:
+                    self._task_group = None
+        finally:
+            self._value = None

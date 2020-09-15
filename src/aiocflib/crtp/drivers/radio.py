@@ -1,16 +1,17 @@
-import sys
-
 from anyio import (
-    create_lock,
+    create_event,
     create_memory_object_stream,
     move_on_after,
     sleep,
     WouldBlock,
 )
+from anyio.abc import Event
 from collections import namedtuple
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from functools import partial
 from operator import attrgetter
+from sys import exc_info
 from typing import Callable, Optional, Tuple, List
 
 from aiocflib.crtp.crtpstack import CRTPPacket
@@ -19,6 +20,7 @@ from aiocflib.drivers.crazyradio import (
     Crazyradio,
     CrazyradioAddress,
     RadioConfiguration,
+    _CfRadioCommunicator,
 )
 from aiocflib.utils.addressing import parse_radio_uri
 from aiocflib.utils.concurrency import create_daemon_task_group, gather, ObservableValue
@@ -42,40 +44,92 @@ __all__ = ("RadioDriver",)
 
 
 _instances = {}
-_instances_lock = None
+
+
+@dataclass
+class _SharedCrazyradioState:
+    radio: Optional[Crazyradio] = None
+    instance: Optional[_CfRadioCommunicator] = None
+    count: int = 0
+    _initializing_event: Event = field(default_factory=create_event)
+    _destroying_event: Optional[Event] = None
+
+    @property
+    def destroying(self) -> bool:
+        return self._destroying_event is not None
+
+    async def initialize(self, index: int) -> None:
+        assert self.radio is None and self.instance is None
+        assert self.count == 0
+
+        radio = await Crazyradio.detect_one(index=index)
+        instance = await radio.__aenter__()
+
+        self.radio = radio
+        self.instance = instance
+
+        await self._initializing_event.set()
+
+    def invalidate(self) -> None:
+        self.invalidated = True
+
+    def start_destruction(self) -> Tuple[Crazyradio, Event]:
+        assert self.count == 1
+        assert self._destroying_event is None
+
+        radio = self.radio
+        self.radio = None
+        self.instance = None
+        self.count = 0
+        self._destroying_event = create_event()
+
+        return radio, self._destroying_event
+
+    async def wait_until_initialized(self) -> None:
+        await self._initializing_event.wait()
 
 
 @asynccontextmanager
 async def SharedCrazyradio(index: int):
-    global _instances, _instances_lock
+    global _instances
 
-    if _instances_lock is None:
-        _instances_lock = create_lock()
-
-    async with _instances_lock:
-        radio, instance, count = _instances.get(index, (None, None, None))
-        if radio is None:
-            radio = await Crazyradio.detect_one(index=index)
-            instance = await radio.__aenter__()
-            _instances[index] = (radio, instance, 1)
+    while True:
+        state = _instances.get(index)
+        if state is None:
+            # This radio was not used yet so we need to initialize it
+            _instances[index] = _SharedCrazyradioState()
+            await _instances[index].initialize(index)
+        elif state.destroying:
+            # This radio is being destroyed in another task so let's wait until
+            # it is released and then try to acquire it again
+            await state.wait_until_destroyed()
         else:
-            _instances[index] = (radio, instance, count + 1)
+            # This radio is either already initialized or is currently being
+            # initialized so we are okay
+            break
+
+    # Wait until the radio is initialized
+    await state.wait_until_initialized()
+    state.count += 1
 
     try:
-        yield instance
+        yield state.instance
     finally:
-        async with _instances_lock:
-            radio, instance, count = _instances[index]
-            if count == 1:
-                try:
-                    # It is totally normal to have exceptions here; for instance,
-                    # if some tasks were cancelled in the context, the cancellation
-                    # exception propagates here
-                    await radio.__aexit__(*sys.exc_info())
-                finally:
-                    _instances.pop(index)
-            else:
-                _instances[index] = radio, instance, count - 1
+        # When using Trio, we are not allowed to start any additional cancel
+        # scopes here, otherwise Trio will complain about a "corrupted cancel
+        # scope stack".
+        state = _instances.get(index)
+        if state.count > 1:
+            state.count -= 1
+        elif state.count == 1:
+            radio, event = state.start_destruction()
+            try:
+                await radio.__aexit__(*exc_info())
+            finally:
+                _instances.pop(index)
+            await event.set()
+        else:
+            raise RuntimeError("Corrupted radio reference counter")
 
 
 #: Type specification for radio driver presets
