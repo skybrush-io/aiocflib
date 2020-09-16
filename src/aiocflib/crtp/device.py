@@ -132,7 +132,7 @@ class CRTPDevice:
         command: Optional[Union[int, bytes, Iterable[Union[int, bytes]]]] = None,
         data: CRTPDataLike = None,
         timeout: float = 0.2,
-        attempts: int = 1,
+        attempts: int = 3,
     ):
         """Sends a command packet to the device and waits for the next
         matching response packet. Returns the data section of the response
