@@ -174,10 +174,18 @@ class ObservableValue(Generic[T]):
         self._condition = create_condition()
         self._value = value
 
-    async def set(self, value: T) -> None:
-        """Sets a new value and notifies all tasks waiting for the value."""
+    async def set(self, value: T, force: bool = False) -> None:
+        """Sets a new value and notifies all tasks waiting for the value.
+
+        Does not notify other tasks if the new value is exactly the same as
+        the old one, unless `force` is set to `True`.
+        """
+        if value == self._value and not force:
+            return
+
+        self._value = value
+
         async with self._condition:
-            self._value = value
             await self._condition.notify_all()
 
     update = set
@@ -188,7 +196,7 @@ class ObservableValue(Generic[T]):
         return self._value
 
     async def wait(self) -> T:
-        """Waits for the value to be change, and returns the most recent value
+        """Waits for the value to change, and returns the most recent value
         at the earliest possible occasion.
         """
         async with self._condition:
@@ -217,9 +225,18 @@ class ObservableValue(Generic[T]):
         return self._observe()
 
     async def _observe(self):
-        yield self._value
+        last_value = self._value
+        yield last_value
+
         while True:
-            yield await self.wait()
+            if last_value != self._value:
+                last_value = self._value
+                yield last_value
+                # By the time we get back here, the value might have changed
+                # again so we cannot call wait() now, we need to loop and
+                # compare the current value with the last one
+            else:
+                await self.wait()
 
 
 class ThreadContext(Generic[T]):

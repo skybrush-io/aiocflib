@@ -449,7 +449,6 @@ class RadioDriver(CRTPDriver):
         """
         async for enabled, acquired in self._safe_link_state.observe():
             if enabled and not acquired:
-                await self._safe_link_state.enable()
                 async with radio.configure(self._configuration):
                     await self._acquire_safe_link_mode(radio)
 
