@@ -40,13 +40,10 @@ class Motors:
             delay: the delay between consecutive tests, in seconds
         """
         cf = self._crazyflie
-
-        await cf.parameters.set("motorPowerSet.enable", 1)
-
         if indices is None:
             indices = (1, 2, 3, 4)
 
-        try:
+        async with cf.parameters.set_and_restore("motorPowerSet.enable", 1, 0):
             for index, motor_index in enumerate(indices):
                 param_name = f"motorPowerSet.m{index + 1}"
                 if index > 0:
@@ -54,5 +51,3 @@ class Motors:
                 await cf.parameters.set(param_name, power)
                 await sleep(1)
                 await cf.parameters.set(param_name, 0)
-        finally:
-            await cf.parameters.set("motorPowerSet.enable", 0)

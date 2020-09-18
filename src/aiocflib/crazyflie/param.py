@@ -1,6 +1,7 @@
 """Classes related to accessing the parameters subsystem of a Crazyflie."""
 
 from collections import namedtuple
+from contextlib import asynccontextmanager
 from enum import IntEnum
 from struct import Struct, error as StructError
 from typing import Tuple, Union
@@ -250,6 +251,35 @@ class Parameters:
             raise ValueError("invalid response for parameter setting")
 
         self._values[name] = parameter.parse_value(response)
+
+    @asynccontextmanager
+    async def set_and_restore(
+        self, name: str, value, restore_to=None, fetch: bool = False
+    ):
+        """Asynchronous context manager that sets the value of a parameter
+        when entering the context and restores it to another value when exiting
+        the context.
+
+        Parameters:
+            name: the fully-qualified name of the parameter
+            value: the new value of the parameter
+            restore_to: the old value of the parameter to restore when exiting
+                the context. `None` means to use the last cached copy of the
+                parameter, or to fetch a new parameter if `fetch` is set to
+                `True`.
+            fetch: whether to fetch the old parameter value unconditionally before
+                entering the context. Used only if `restore_to` is `None`,
+                otherwise the value of `restore_to` will be unsed, in which
+                case there is no point in fetching the old value.
+        """
+        if restore_to is None:
+            restore_to = await self.get(name, fetch=fetch)
+
+        try:
+            await self.set(name, value)
+            yield
+        finally:
+            await self.set(name, restore_to)
 
     async def set_fast(self, name: str, type: ParameterTypeLike, value) -> None:
         """Sets the value of a parameter without fetching the full parameter
