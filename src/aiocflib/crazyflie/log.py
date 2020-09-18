@@ -1,17 +1,17 @@
 """Classes related to accessing the logging subsystem of a Crazyflie."""
 
 from anyio import create_lock
-from async_generator import async_generator, yield_, yield_from_
 from collections import namedtuple
 from contextlib import asynccontextmanager
 from enum import IntEnum
 from functools import partial
 from itertools import count
 from struct import Struct, error as StructError
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import AsyncIterable, Iterable, List, Optional, Tuple, Union
 
-from aiocflib.crtp import CRTPPort
+from aiocflib.crtp import CRTPPacket, CRTPPort
 from aiocflib.errors import error_to_string
+from aiocflib.utils import anop
 from aiocflib.utils.toc import fetch_table_of_contents_gracefully
 from aiocflib.utils.typing import Disposer
 
@@ -332,7 +332,6 @@ class LogBlock:
         )
         self._items.append(item)
 
-    @async_generator
     async def receive(
         self,
         *,
@@ -356,41 +355,97 @@ class LogBlock:
             frequency: the logging frequency, in Hertz. Takes precedence over
                 `period` if both are given
         """
+        start_args = dict(period=period, period_msec=period_msec, frequency=frequency)
+        async with self.submitted(allow_multi=True):
+            async with self.started(**start_args):
+                async for packet in self._owner.data_packets():
+                    if len(packet.data) >= 4 and packet.data[0] == self.id:
+                        yield LogMessage.from_bytes(packet.data, block=self)
+
+    async def start(
+        self,
+        *,
+        period: Optional[float] = None,
+        period_msec: Optional[int] = None,
+        frequency: Optional[float] = None,
+    ) -> Disposer:
+        """Starts this log specification on the Crazyflie.
+
+        Also submits the log specification to the Crazyflie if it has not been
+        submitted yet.
+
+        This is a low-level function; typically you should use the `started()`
+        context manager to ensure that everything is cleaned up properly.
+
+        Parameters:
+            period: the logging period, in seconds
+            period_msec: the logging period, in milliseconds. Takes precedence
+                over `period` or `frequency`.
+            frequency: the logging frequency, in Hertz. Takes precedence over
+                `period` if both are given
+
+        Returns:
+            a function that can be used to stop the log block on the Crazyflie
+        """
         period_msec = self._process_period_and_frequency(
             period=period, period_msec=period_msec, frequency=frequency
         )
 
-        if self.is_submitted:
-            await yield_from_(self._receive(period_msec))
-        else:
-            async with self.submitted():
-                await yield_from_(self._receive(period_msec))
-
-    @async_generator
-    async def _receive(self, period_msec):
         await self._owner._start_log_block_by_id(self.id, period_msec)
-        try:
-            packets = self._owner._crazyflie.packets(port=CRTPPort.LOGGING)
-            async for packet in packets:
-                if (
-                    packet.channel == LoggingChannel.DATA
-                    and len(packet.data) >= 4
-                    and packet.data[0] == self.id
-                ):
-                    await yield_(LogMessage.from_bytes(packet.data, block=self))
-        finally:
-            await self._owner._stop_log_block_by_id(self.id)
+        return partial(self._owner._stop_log_block_by_id, self.id)
 
-    async def submit(self) -> Disposer:
+    @asynccontextmanager
+    async def started(
+        self,
+        *,
+        period: Optional[float] = None,
+        period_msec: Optional[int] = None,
+        frequency: Optional[float] = None,
+    ):
+        """Asynchronous context manager that starts the log block with the given
+        logging period upon entering the context and stops it upon exiting.
+
+        Also submits the log specification to the Crazyflie if it has not been
+        submitted yet.
+
+        Parameters:
+            period: the logging period, in seconds
+            period_msec: the logging period, in milliseconds. Takes precedence
+                over `period` or `frequency`.
+            frequency: the logging frequency, in Hertz. Takes precedence over
+                `period` if both are given
+        """
+        disposer = await self.start(
+            period=period, period_msec=period_msec, frequency=frequency
+        )
+        try:
+            yield
+        finally:
+            await disposer()
+
+    async def submit(self, allow_multi: bool = False) -> Disposer:
         """Submits this log specification to the Crazyflie and creates a new
         log block.
+
+        This is a low-level function; typically you should use the `submitted()`
+        context manager to ensure that everything is cleaned up properly.
+
+        Parameters:
+            allow_multi: whether to allow multiple submissions. When the block
+                is already submitted and this argument is `True`, the function
+                will do nothing and return an empty disposer function. Otherwise
+                the function will raise a RuntimeError when trying to submit
+                the same block multiple times
 
         Returns:
             a function that can be used to remove the log block from the
             Crazyflie
         """
         if self.is_submitted:
-            raise RuntimeError("log block is already submitted to Crazyflie")
+            if allow_multi:
+                return anop
+            else:
+                raise RuntimeError("log block is already submitted to Crazyflie")
 
         id, self._disposer = await self._owner._submit_block(self)
         self.id = id
@@ -405,7 +460,7 @@ class LogBlock:
         return self._dispose
 
     @asynccontextmanager
-    async def submitted(self):
+    async def submitted(self, allow_multi: bool = False):
         """Async context manager that submits the log specification to the
         Crazyflie when entering the context and removes it when exiting the
         context.
@@ -489,11 +544,34 @@ class Log:
 
         self._operation_lock = create_lock()
 
-    def create_block(self,) -> LogBlock:
+    def create_block(self) -> LogBlock:
         """Creates a new, empty log block specification object that can be
         used to start logging variables from the Crazyflie.
         """
         return LogBlock(self)
+
+    async def data_packets(self) -> AsyncIterable[CRTPPacket]:
+        """Async generator that yields logging-related messages from a
+        Crazyflie.
+
+        This includes messages related to TOC handling and log control packets,
+        not only log data. If you are interested in log data packets only,
+        use ``data_packets()``.
+        """
+        async for packet in self._crazyflie.packets(port=CRTPPort.LOGGING):
+            if packet.channel == LoggingChannel.DATA:
+                yield packet
+
+    async def packets(self) -> AsyncIterable[CRTPPacket]:
+        """Async generator that yields logging-related messages from a
+        Crazyflie.
+
+        This includes messages related to TOC handling and log control packets,
+        not only log data. If you are interested in log data packets only,
+        use ``data_packets()``.
+        """
+        async for packet in self._crazyflie.packets(port=CRTPPort.LOGGING):
+            yield packet
 
     async def reset(self):
         """Resets the logging framework and clears all logging blocks."""

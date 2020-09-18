@@ -29,7 +29,7 @@ python-versions = "*"
 version = "1.4.4"
 
 [[package]]
-category = "main"
+category = "dev"
 description = "Async generators and context managers for Python 3.5+"
 name = "async-generator"
 optional = false
@@ -480,7 +480,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["jaraco.itertools", "func-timeout"]
 
 [metadata]
-content-hash = "e3404227dcaeb12ebf237f7dbb8ef3dcad1e8a39aabaedc5cbb37d25793ff95f"
+content-hash = "43352a3c7c08180af49ffa15fcf88a97416bd17ffca05e982de737baca9128c3"
 python-versions = "^3.7"
 
 [metadata.files]

@@ -10,7 +10,6 @@ packages = [
 [tool.poetry.dependencies]
 python = "^3.7"
 anyio = "^2.0.0"
-async-generator = "^1.10"
 outcome = "^1.0.1"
 pyusb = "^1.0.2"
 colorama = "^0.4.3"

@@ -1,10 +1,9 @@
 """Superclass for devices that use the CRTP protocol for communication."""
 
 from anyio import move_on_after
-from async_generator import async_generator, yield_from_
 from contextlib import AsyncExitStack
 from sys import exc_info
-from typing import Iterable, Optional, Union
+from typing import AsyncIterable, Iterable, Optional, Union
 
 from .crtpstack import CRTPDispatcher, CRTPPacket, CRTPDataLike, CRTPPortLike
 from .drivers import CRTPDriver
@@ -104,10 +103,9 @@ class CRTPDevice:
         """
         return self._dispatcher
 
-    @async_generator
     async def packets(
         self, port: Optional[CRTPPortLike] = None, *, queue_size: int = 0
-    ):
+    ) -> AsyncIterable[CRTPPacket]:
         """Asynchronous generator that yields incoming packets matching the
         given port.
 
@@ -119,10 +117,11 @@ class CRTPDevice:
         Yields:
             incoming CRTP packets
         """
-        with self.dispatcher.create_packet_queue(
+        async with self.dispatcher.create_packet_queue(
             port=port, queue_size=queue_size
         ) as queue:
-            await yield_from_(queue)
+            async for packet in queue:
+                yield packet
 
     async def run_command(
         self,

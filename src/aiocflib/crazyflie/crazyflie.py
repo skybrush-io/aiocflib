@@ -18,6 +18,7 @@ if MYPY:
     from .console import Console
     from .log import Log
     from .mem import Memory
+    from .motors import Motors
     from .param import Parameters
     from .platform import Platform
 
@@ -78,6 +79,7 @@ class Crazyflie(CRTPDevice):
         from .localization import Localization
         from .log import Log
         from .mem import Memory
+        from .motors import Motors
         from .param import Parameters
         from .platform import Platform
 
@@ -86,6 +88,7 @@ class Crazyflie(CRTPDevice):
         self._localization = Localization(self)
         self._log = Log(self)
         self._memory = Memory(self)
+        self._motors = Motors(self)
         self._parameters = Parameters(self)
         self._platform = Platform(self)
 
@@ -147,6 +150,11 @@ class Crazyflie(CRTPDevice):
     def memory(self) -> Memory:
         """The memory subsystem of the Crazyflie."""
         return self._memory
+
+    @property
+    def motors(self) -> Motors:
+        """The motors subsystem of the Crazyflie."""
+        return self._motors
 
     @property
     def param(self) -> Parameters:
@@ -292,13 +300,16 @@ async def test():
     # uri = "usb+log://0"
 
     async with Crazyflie(uri, cache="/tmp/cfcache") as cf:
+        """
         await cf.commander.send_setpoint(0, 0, 0, 20000)
         await sleep(3)
         await cf.commander.stop()
+        """
 
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
+        return
 
         with timing("Fetching log TOC"):
             await cf.log.validate()
@@ -310,20 +321,6 @@ async def test():
             data = b"\xfc\x00" * 8
             await memory.write(0, data)
             await memory.read(0, len(data))
-
-        """
-        await cf.parameters.set("motorPowerSet.enable", 1)
-        for var in "m1 m2 m3 m4".split():
-            await cf.parameters.set("motorPowerSet." + var, 20000)
-            await sleep(1.5)
-            await cf.parameters.set("motorPowerSet." + var, 0)
-            await sleep(2.5)
-        for var in "m1 m2 m3 m4".split():
-            await cf.parameters.set("motorPowerSet." + var, 40000)
-        await sleep(10)
-        await cf.parameters.set("motorPowerSet.enable", 0)
-        """
-        return
 
         block = cf.log.create_block()
         block.add_variable("pm.vbat")

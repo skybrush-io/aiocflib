@@ -1,6 +1,5 @@
 """Classes related to handling platform service messages of a Crazyflie."""
 
-from async_generator import async_generator, yield_from_
 from enum import IntEnum
 from typing import Optional
 
@@ -142,9 +141,9 @@ class Platform:
         )
         return response.startswith(b"Bitcraze Crazyflie")
 
-    @async_generator
     async def packets(self):
         """Async generator that yields platform service messages from a
         Crazyflie.
         """
-        await yield_from_(self._crazyflie.packets(port=CRTPPort.PLATFORM))
+        async for packet in self._crazyflie.packets(port=CRTPPort.PLATFORM):
+            yield packet
