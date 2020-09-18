@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from anyio import sleep
+from anyio import move_on_after, sleep
 from binascii import hexlify
 from typing import Optional
 
@@ -309,7 +309,6 @@ async def test():
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
-        return
 
         with timing("Fetching log TOC"):
             await cf.log.validate()
@@ -322,14 +321,18 @@ async def test():
             await memory.write(0, data)
             await memory.read(0, len(data))
 
-        block = cf.log.create_block()
-        block.add_variable("pm.vbat")
-        block.add_variable("kalman.stateX")
-        block.add_variable("kalman.stateY")
-        block.add_variable("kalman.stateZ")
+        session = cf.log.create_session()
+        session.create_block(
+            "pm.vbat",
+            "stateEstimate.x",
+            "stateEstimate.y",
+            "stateEstimate.z",
+            frequency=5,
+        )
 
-        async for entry in block.receive(frequency=20):
-            pass
+        async with session:
+            async with move_on_after(3):
+                await session.process_messages()
 
 
 if __name__ == "__main__":

@@ -1,17 +1,29 @@
 """Classes related to accessing the logging subsystem of a Crazyflie."""
 
 from anyio import create_lock
-from collections import namedtuple
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, AsyncExitStack
+from dataclasses import dataclass
 from enum import IntEnum
 from functools import partial
-from itertools import count
+from itertools import count, zip_longest
 from struct import Struct, error as StructError
-from typing import AsyncIterable, Iterable, List, Optional, Tuple, Union
+from typing import (
+    Any,
+    AsyncIterable,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
 from aiocflib.crtp import CRTPPacket, CRTPPort
 from aiocflib.errors import error_to_string
 from aiocflib.utils import anop
+from aiocflib.utils.concurrency import aclosing
 from aiocflib.utils.toc import fetch_table_of_contents_gracefully
 from aiocflib.utils.typing import Disposer
 
@@ -63,8 +75,6 @@ class LoggingControlCommand(IntEnum):
     CREATE_BLOCK_V2 = 6
     APPEND_BLOCK_V2 = 7
 
-
-_VariableSpecification = namedtuple("_VariableSpecification", "id type group name")
 
 #: Dictionary mapping integer type codes to their C types, Python structs and
 #: aliases
@@ -140,9 +150,15 @@ VariableTypeLike = Union[str, int, VariableType]
 _type_names = dict((alias, type) for type in VariableType for alias in type.aliases)
 
 
-class VariableSpecification(_VariableSpecification):
+@dataclass(frozen=True)
+class VariableSpecification:
     """Class representing the specification of a single log variable of the
     Crazyflie."""
+
+    id: str
+    type: int
+    group: str
+    name: str
 
     @classmethod
     def from_bytes(cls, data: bytes, id: int):
@@ -189,16 +205,19 @@ class VariableSpecification(_VariableSpecification):
         return b"".join(parts)
 
 
-_LogBlockItem = namedtuple("_LogBlockItem", "name id fetch_as stored_as")
-
-
-class LogBlockItem(_LogBlockItem):
+@dataclass(frozen=True)
+class LogBlockItem:
     """A single item in a log block specification that holds the name of a
     log variable and the type it should be fetched as over the wire from the
     Crazyflie. The type does not need to match the type that is used to _store_
     the same variable in the Crazyflie firmware - conversion will occur
     on-the-fly.
     """
+
+    name: str
+    id: str
+    fetch_as: int
+    stored_as: int
 
     def to_bytes(self) -> bytes:
         """Returns a byte-level representation of this item that can be used in
@@ -213,54 +232,77 @@ class LogBlockItem(_LogBlockItem):
         )
 
 
-_LogMessage = namedtuple("_LogMessage", "timestamp block items")
-
-
-class LogMessage(_LogMessage):
+@dataclass(frozen=True)
+class LogMessage:
     """Value object representing a single log message from the Crazyflie."""
 
+    timestamp: int
+    block: "LogBlock"
+    items: Tuple
+    handler: "LogMessageHandler"
+
     @classmethod
-    def from_bytes(cls, data: bytes, block: "LogBlock"):
+    def from_bytes(cls, data: bytes, block: "LogBlock", handler: "LogMessageHandler"):
         return cls(
             block=block,
             timestamp=int.from_bytes(data[1:4], byteorder="little"),
             items=block._decode_values(data),
+            handler=handler,
         )
+
+    def process(self, *args, **kwds):
+        """Syntactic sugar for calling the message handler associated with the
+        message, witn the message as its first argument.
+
+        Any additional arguments are forwarded intact to the handler.
+        """
+        if self.handler:
+            return self.handler(self, *args, **kwds)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Converts the items in the log message to a dictionary based on the
+        log items in the associated block.
+        """
+        return self.block._to_dict(self.items)
+
+
+#: Type specification for log message handlers in a log session
+LogMessageHandler = Callable[[LogMessage], Union[None, Awaitable[None]]]
+
+
+def _process_period_and_frequency(
+    *,
+    period: Optional[float] = None,
+    frequency: Optional[float] = None,
+    period_msec: Optional[int] = None,
+    default: int = 100,
+) -> int:
+    """Processes `period` and `frequency` keyword arguments from a
+    function call, returning an appropriate period in milliseconds.
+
+    Parameters:
+        period: the logging period, in seconds
+        period_msec: the logging period, in milliseconds. Takes precedence
+            over `period` or `frequency`.
+        frequency: the logging frequency, in Hertz. Takes precedence over
+            `period` if both are given
+        default: the default logging period to return, in milliseconds,
+            if neither the period nor the frequency are given
+
+    Returns:
+        the logging period, in milliseconds
+    """
+    if period_msec is not None:
+        return int(period_msec)
+    if frequency is None:
+        frequency = 1.0 / period if period is not None else 10.0
+    return 1000.0 // frequency
 
 
 class LogBlock:
     """Specification of a single log block that bundles together a desired
     logging period and a list of variables to log.
     """
-
-    @staticmethod
-    def _process_period_and_frequency(
-        *,
-        period: Optional[float] = None,
-        frequency: Optional[float] = None,
-        period_msec: Optional[int] = None,
-        default: int = 100,
-    ) -> int:
-        """Processes `period` and `frequency` keyword arguments from a
-        function call, returning an appropriate period in milliseconds.
-
-        Parameters:
-            period: the logging period, in seconds
-            period_msec: the logging period, in milliseconds. Takes precedence
-                over `period` or `frequency`.
-            frequency: the logging frequency, in Hertz. Takes precedence over
-                `period` if both are given
-            default: the default logging period to return, in milliseconds,
-                if neither the period nor the frequency are given
-
-        Returns:
-            the logging period, in milliseconds
-        """
-        if period_msec is not None:
-            return int(period_msec)
-        if frequency is None:
-            frequency = 1.0 / period if period is not None else 10.0
-        return 1000.0 // frequency
 
     def __init__(self, owner: "Log"):
         """Constructor.
@@ -338,7 +380,7 @@ class LogBlock:
         period: Optional[float] = None,
         period_msec: Optional[int] = None,
         frequency: Optional[float] = None,
-    ):
+    ) -> AsyncIterable[LogMessage]:
         """Async generator that yields log messages according to the
         specification from the Crazyflie.
 
@@ -359,8 +401,7 @@ class LogBlock:
         async with self.submitted(allow_multi=True):
             async with self.started(**start_args):
                 async for packet in self._owner.data_packets():
-                    if len(packet.data) >= 4 and packet.data[0] == self.id:
-                        yield LogMessage.from_bytes(packet.data, block=self)
+                    yield LogMessage.from_bytes(packet.data, block=self)
 
     async def start(
         self,
@@ -387,10 +428,9 @@ class LogBlock:
         Returns:
             a function that can be used to stop the log block on the Crazyflie
         """
-        period_msec = self._process_period_and_frequency(
+        period_msec = _process_period_and_frequency(
             period=period, period_msec=period_msec, frequency=frequency
         )
-
         await self._owner._start_log_block_by_id(self.id, period_msec)
         return partial(self._owner._stop_log_block_by_id, self.id)
 
@@ -503,6 +543,13 @@ class LogBlock:
                 pass
             self._disposer = None
 
+    def _to_dict(self, values: Iterable[Any]) -> Dict[str, Any]:
+        return {
+            item.name: value
+            for item, value in zip_longest(self._items, values, fillvalue=None)
+            if item is not None
+        }
+
     def _validate_packet_size(self):
         """Checks whether the contents of this log specification would fit into
         a single CRTP packet.
@@ -517,6 +564,174 @@ class LogBlock:
                     size, MAX_LOG_DATA_PACKET_SIZE
                 )
             )
+
+
+class LogSession:
+    """Class representing a single logging session that consists of multiple
+    log blocks, log block frequency settings and handler functions.
+
+    The session can be used either as an asynchronous generator (via its
+    `messages()` method), which will yield the decoded log messages
+    corresponding to the log blocks registered in the session, or directly as
+    an asynchronous context manager. In both cases, the log blocks are submitted
+    to the Crazyflie and then started when the iteration starts or when the
+    execution enters the context, and everything is cleaned up when the
+    iteration stops or when the execution leaves the context.
+    """
+
+    def __init__(self, owner: "Log"):
+        """Constructor.
+
+        Parameters:
+            owner: the log object that owns this specification
+        """
+        self._owner = owner
+        self._blocks = []
+
+        self._exit_stack = None
+        self._id_mapping = None
+
+    def add_block(
+        self,
+        block: LogBlock,
+        *,
+        period: Optional[float] = None,
+        period_msec: Optional[int] = None,
+        frequency: Optional[float] = None,
+        handler: Optional[LogMessageHandler] = None,
+    ) -> None:
+        """Adds a new block to the session.
+
+        The block must not be registerd in any other session and it must not
+        be submitted to a Crazyflie yet.
+
+        Removing blocks is not supported yet; if you need to remove a block,
+        close the session and start a new one.
+
+        Parameters:
+            block: the log block to add
+
+        Keyword arguments:
+            period: the logging period, in seconds
+            period_msec: the logging period, in milliseconds. Takes precedence
+                over `period` or `frequency`.
+            frequency: the logging frequency, in Hertz. Takes precedence over
+                `period` if both are given
+            handler: the handler function to call when log data related to this
+                block arrives in the session. The handler is called only when
+                the log session is used as a context manager. When the log
+                session is used as an async generator, the handler is attached
+                to the generated log message in the `handler` property instead,
+                and the caller can decide whether the handler should be called
+                or not.
+        """
+        if block.is_submitted:
+            raise RuntimeError("block is already submitted to a Crazyflie")
+        if block in self._blocks:
+            raise RuntimeError("block is already added to this session")
+
+        period_msec = _process_period_and_frequency(
+            period=period, period_msec=period_msec, frequency=frequency
+        )
+        self._blocks.append((block, period_msec, handler))
+
+    def create_block(
+        self,
+        *args,
+        period: Optional[float] = None,
+        period_msec: Optional[int] = None,
+        frequency: Optional[float] = None,
+        handler: Optional[LogMessageHandler] = None,
+    ) -> LogBlock:
+        """Shorthand function for creating a log block and adding it immediately
+        to the session.
+
+        Each positional argument must be the name of a variable to add to the
+        log block.
+
+        Keyword arguments:
+            period: the logging period, in seconds
+            period_msec: the logging period, in milliseconds. Takes precedence
+                over `period` or `frequency`.
+            frequency: the logging frequency, in Hertz. Takes precedence over
+                `period` if both are given
+            handler: the handler function to call when log data related to this
+                block arrives in the session. The handler is called only when
+                the log session is used as a context manager. When the log
+                session is used as an async generator, the handler is attached
+                to the generated log message in the `handler` property instead,
+                and the caller can decide whether the handler should be called
+                or not.
+        """
+        block = self._owner.create_block()
+        for arg in args:
+            block.add_variable(arg)
+        self.add_block(
+            block,
+            period=period,
+            period_msec=period_msec,
+            frequency=frequency,
+            handler=handler,
+        )
+        return block
+
+    async def __aenter__(self):
+        if self._exit_stack is not None:
+            raise RuntimeError("cannot use the same session twice")
+
+        self._exit_stack = AsyncExitStack()
+        await self._exit_stack.__aenter__()
+
+        id_mapping = {}
+        for entry in self._blocks:
+            block, _, _ = entry
+            await self._exit_stack.enter_async_context(block.submitted())
+            id_mapping[block.id] = entry
+
+        for block, period_msec, _ in self._blocks:
+            await self._exit_stack.enter_async_context(
+                block.started(period_msec=period_msec)
+            )
+
+        self._id_mapping = id_mapping
+
+    async def __aexit__(self, exc_type, exc, tb):
+        try:
+            return await self._exit_stack.__aexit__(exc_type, exc, tb)
+        finally:
+            self._exit_stack = None
+            self._id_mapping = None
+
+    async def messages(self) -> AsyncIterable[LogMessage]:
+        """Yields log messages matching the log blocks specified in the session,
+        _without_ calling the handler functions registered on them. You can
+        call the handler functions by invoking the `process()` method on the
+        yielded log messages.
+        """
+        if self._id_mapping is None:
+            raise RuntimeError(
+                "You must enter the session context first; use 'async with'"
+            )
+
+        id_mapping = self._id_mapping
+        async for packet in self._owner.data_packets():
+            log_block_id = packet.data[0]
+            entry = id_mapping.get(log_block_id)
+            if entry is not None:
+                block, _, handler = entry
+                yield LogMessage.from_bytes(packet.data, block=block, handler=handler)
+
+    async def process_messages(self) -> None:
+        """Async task that processes log messages matching the log blocks
+        specified in the session, calling the appropriate log handler function
+        for each of them. The handler functions must be synchronous; if you
+        want to spawn a long-running task in response to a message, spawn it
+        inside the handler function on your own or send the message to a queue,
+        which can then be processed from another task.
+        """
+        async with aclosing(self.messages()) as gen:
+            async for message in gen:
+                message.process()
 
 
 class Log:
@@ -547,8 +762,18 @@ class Log:
     def create_block(self) -> LogBlock:
         """Creates a new, empty log block specification object that can be
         used to start logging variables from the Crazyflie.
+
+        If you plan to use multiple log blocks at the same time, consider
+        using `create_session()` instead.
         """
         return LogBlock(self)
+
+    def create_session(self) -> LogSession:
+        """Creates a new logging session object that can be used to start
+        multiple log blocks at the same time and automatically call handler
+        functions associated to them.
+        """
+        return LogSession(self)
 
     async def data_packets(self) -> AsyncIterable[CRTPPacket]:
         """Async generator that yields logging-related messages from a
@@ -559,7 +784,7 @@ class Log:
         use ``data_packets()``.
         """
         async for packet in self._crazyflie.packets(port=CRTPPort.LOGGING):
-            if packet.channel == LoggingChannel.DATA:
+            if packet.channel == LoggingChannel.DATA and len(packet.data) >= 4:
                 yield packet
 
     async def packets(self) -> AsyncIterable[CRTPPacket]:

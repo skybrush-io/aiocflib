@@ -29,6 +29,7 @@ from typing import (
 
 __all__ = (
     "AwaitableValue",
+    "aclosing",
     "create_daemon_task_group",
     "Full",
     "ObservableValue",
@@ -38,6 +39,21 @@ __all__ = (
 T = TypeVar("T")
 
 TaskStartedNotifier = Callable[[], Awaitable[None]]
+
+
+class aclosing:
+    """Context manager that handles the closing of an asynchronous generator
+    when the context is exited.
+    """
+
+    def __init__(self, aiter):
+        self._aiter = aiter
+
+    async def __aenter__(self):
+        return self._aiter
+
+    async def __aexit__(self, *args):
+        await self._aiter.aclose()
 
 
 class AwaitableValue(Generic[T]):
