@@ -356,10 +356,10 @@ class Parameters:
 
         if not response:
             raise IndexError("parameter index out of range")
-        if len(response) < 3:
+        if len(response) < 2:
             raise ValueError("invalid response for parameter query")
 
-        return parameter.parse_value(response[3:])
+        return parameter.parse_value(response[1:])
 
     async def _get_parameter_spec_by_index(self, index: int) -> ParameterSpecification:
         """Returns the specification of the parameter with the given index.

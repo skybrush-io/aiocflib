@@ -315,6 +315,9 @@ async def test():
         with timing("Fetching parameters TOC"):
             await cf.parameters.validate()
 
+        async with cf.parameters.set_and_restore("ring.effect", 6):
+            await sleep(1)
+
         with timing("Reading from memory"):
             memory = await cf.memory.find(MemoryType.LED)
             data = b"\xfc\x00" * 8
