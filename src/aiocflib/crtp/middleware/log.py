@@ -80,6 +80,10 @@ class LoggingMiddleware(MiddlewareBase):
             return packet.channel == 1
         elif packet.port == CRTPPort.COMMANDER_GENERIC:
             return packet.channel == 0
+        elif packet.port == CRTPPort.PLATFORM:
+            return packet.channel == 1
+        elif packet.port == CRTPPort.DEBUG:
+            return packet.channel == 0
 
         return False
 
