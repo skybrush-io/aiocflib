@@ -2,7 +2,7 @@
 instance.
 """
 
-from aiocflib.crtp.crtpstack import CRTPPacket
+from aiocflib.crtp.crtpstack import CRTPPacket, CRTPPort
 from hexdump import dump, hexdump
 
 from .base import MiddlewareBase
@@ -27,6 +27,10 @@ except ImportError:
     _has_colors = False
 
 
+#: Underlined style extension for colorama
+UNDERLINED = "\033[4m"
+
+
 @register("log")
 class LoggingMiddleware(MiddlewareBase):
     """Middleware that logs all incoming and outgoing packets of a CRTP driver
@@ -38,7 +42,11 @@ class LoggingMiddleware(MiddlewareBase):
     _unsafe_in = Fore.RED + Style.BRIGHT + "\u25c0" + Style.RESET_ALL
     _unsafe_out = Fore.RED + "\u25b6" + Style.RESET_ALL
 
-    def _format_type(self, packet: CRTPPacket) -> str:
+    @staticmethod
+    def _format_type(packet: CRTPPacket) -> str:
+        """Formats the port and channel of the given CRTP packet in the format
+        that will be used in the log.
+        """
         port, channel = packet.port, packet.channel
         try:
             code = port.code
@@ -47,7 +55,44 @@ class LoggingMiddleware(MiddlewareBase):
         return "{0:3}:{1}".format(code, channel)
 
     @staticmethod
+    def _has_command_byte(packet: CRTPPacket) -> bool:
+        """Returns whether the first byte of the data of the given CRTP packet
+        is to be interpreted as a command byte (which is a common pattern in
+        many CRTP services and channels).
+
+        Parameters:
+            packet: the CRTP packet to test
+
+        Returns:
+            whether the CRTP packet has a command byte in the first byte of the
+            data payload
+        """
+        if len(packet.data) < 1:
+            return False
+
+        if packet.port == CRTPPort.LOGGING:
+            return packet.channel in (0, 1)
+        elif packet.port == CRTPPort.PARAMETERS:
+            return packet.channel in (0, 3)
+        elif packet.port == CRTPPort.MEMORY:
+            return packet.channel == 0
+        elif packet.port == CRTPPort.LOCALIZATION:
+            return packet.channel == 1
+        elif packet.port == CRTPPort.COMMANDER_GENERIC:
+            return packet.channel == 0
+
+        return False
+
+    @staticmethod
     def _hexdump(data: bytes) -> str:
+        """Creates a hex dump from the given data.
+
+        Parameters:
+            data: the data to format as hex dump
+
+        Returns:
+            the formatted hex dump, indented properly for the log
+        """
         result = []
         for line in hexdump(data, result="generator"):
             _, _, line = line.partition(" ")
@@ -113,6 +158,8 @@ class LoggingMiddleware(MiddlewareBase):
             if self._num_null_packets:
                 self._report_null_packets()
             data = self._hexdump(packet.data)
+            if self._has_command_byte(packet):
+                data = Fore.YELLOW + UNDERLINED + data[:2] + Style.RESET_ALL + data[2:]
             type = Fore.GREEN + self._format_type(packet) + Style.RESET_ALL
             print(
                 "{0} {1} {2} {3}".format(
@@ -128,6 +175,8 @@ class LoggingMiddleware(MiddlewareBase):
     async def send_packet(self, packet: CRTPPacket):
         type = Fore.GREEN + self._format_type(packet) + Style.RESET_ALL
         data = self._hexdump(packet.data)
+        if self._has_command_byte(packet):
+            data = Fore.YELLOW + UNDERLINED + data[:2] + Style.RESET_ALL + data[2:]
         print(
             "{0} {1} {2} {3}".format(
                 self._abbreviation,
