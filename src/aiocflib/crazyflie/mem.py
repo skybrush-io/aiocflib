@@ -10,6 +10,7 @@ from typing import Callable, List, Tuple
 from aiocflib.crtp import CRTPPort, MemoryType
 from aiocflib.errors import error_to_string
 from aiocflib.utils import chunkify
+from aiocflib.utils.checksum import crc32
 from aiocflib.utils.registry import Registry
 
 from .crazyflie import Crazyflie
@@ -275,6 +276,18 @@ class Memory:
         """
         return await self.find(MemoryType.I2C)
 
+    async def read(self, type: MemoryType, addr: int, length: int) -> bytes:
+        """Shortcut to read the given number of bytes from the given address
+        of the first memory element of the given type.
+
+        Parameters:
+            type: the type of the memory element to look for
+            addr: the address to read from
+            length: the number of bytes to read
+        """
+        handler = await self.find(type)
+        return await handler.read(addr, length)
+
     async def validate(self):
         """Ensures that the basic information about the memories on the Crazyflie
         are downloaded.
@@ -283,6 +296,59 @@ class Memory:
             return
 
         self._handlers = await self._validate()
+
+    async def write(self, type: MemoryType, addr: int, data: bytes) -> bytes:
+        """Shortcut to write the given data to the given address of the first
+        memory element of the given type.
+
+        Parameters:
+            type: the type of the memory element to write to
+            addr: the address to write to
+            data: the data to write
+        """
+        handler = await self.find(type)
+        return await handler.write(addr, data)
+
+    async def write_with_checksum(
+        self,
+        type: MemoryType,
+        addr: int,
+        data: bytes,
+        *,
+        only_if_changed: bool = False,
+        checksum: Callable[[bytes], bytes] = crc32,
+    ) -> int:
+        """Writes some data to the given address of the first memory element of
+        the given type, _prepended by a checksum_.
+
+        The primary purpose of this function is to prevent spending time with
+        writing some data to some place in the Crazyflie memory if the same data
+        has been written before. See the documentation of the
+        `write_with_checksum()` function for more details; this method is just
+        a convenience wrapper around it.
+
+        Parameters:
+            type: the type of the memory element to write to
+            addr: the address to write to. The first few bytes will contain the
+                checksum; the real data will be written _after_ the checksum.
+                The length of the checksum will be returned from the function.
+            data: the data to write
+            only_if_changed: whether to write the data only if we detect that
+                the checksum in front of the data is not identical to the
+                expected checksum. When this parameter is False (which is the
+                default), the data will be written unconditionally.
+            checksum: the checksum function. This function must take the data to
+                write and return a bytes object of _fixed_ length that contains
+                the checksum of the data.
+
+        Returns:
+            the number of checksum bytes to skip if we want to read the data
+            only, without its checksum
+        """
+        handler = await self.find(type)
+        return await write_with_checksum(
+            handler, addr, data, only_if_changed=only_if_changed, checksum=checksum
+        )
 
     async def _get_memory_details(self, index: int) -> MemoryElement:
         """Retrieves detailed information about a single memory with the given
@@ -326,3 +392,62 @@ class Memory:
             MemoryHandler.for_element(memory, owner=self._crazyflie)
             for memory in memories
         ]
+
+
+async def write_with_checksum(
+    handler: MemoryHandler,
+    addr: int,
+    data: bytes,
+    *,
+    only_if_changed: bool = False,
+    checksum: Callable[[bytes], bytes] = crc32,
+) -> int:
+    """Writes some data to the given address, _prepended by a checksum_.
+
+    The primary purpose of this function is to prevent spending time with
+    writing some data to some place in the Crazyflie memory if the same data
+    has been written before. This is achieved by prepending the data with a
+    checksum of fixed length. During subsequent write attempts, one can read
+    the checksum first and compare it with the expected checksum of the
+    data; if the two are the same, one can simply assume that the data has
+    already been written and skip writing it again.
+
+    Implementation note: since the Crazyflie memory segments are initialized
+    to all-zeros after powerup, we must ensure that the checksum that we
+    write to the Crazyflie memory is never zero. When the checksum function
+    supplied by the user returns a checksum where all bytes are zeros, the
+    checksum will be replaced by a placeholder value.
+
+    Parameters:
+        addr: the address to write to. The first few bytes will contain the
+            checksum; the real data will be written _after_ the checksum.
+            The length of the checksum will be returned from the function.
+        data: the data to write
+        only_if_changed: whether to write the data only if we detect that
+            the checksum in front of the data is not identical to the
+            expected checksum. When this parameter is False (which is the
+            default), the data will be written unconditionally.
+        checksum: the checksum function. This function must take the data to
+            write and return a bytes object of _fixed_ length that contains
+            the checksum of the data.
+
+    Returns:
+        the number of checksum bytes to skip if we want to read the data
+        only, without its checksum
+    """
+    expected_chksum = checksum(data)
+    chksum_length = len(expected_chksum)
+
+    if not only_if_changed:
+        need_to_write = True
+    else:
+        observed_chksum = await handler.read(addr, chksum_length)
+        need_to_write = observed_chksum != expected_chksum
+
+    if need_to_write:
+        zeros = bytes([0] * chksum_length)
+        await handler.write(addr, zeros)
+        await handler.write(addr + chksum_length, data)
+        await handler.write(addr, expected_chksum)
+
+    return chksum_length

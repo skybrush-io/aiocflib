@@ -315,7 +315,7 @@ async def test():
         with timing("Fetching parameters TOC"):
             await cf.parameters.validate()
 
-        async with cf.parameters.set_and_restore("ring.effect", 6):
+        async with cf.parameters.set_and_restore("ring.effect", 6, 0):
             await sleep(1)
 
         with timing("Reading from memory"):
@@ -323,6 +323,14 @@ async def test():
             data = b"\xfc\x00" * 8
             await memory.write(0, data)
             await memory.read(0, len(data))
+
+        with timing("Writing to memory with checksum"):
+            await cf.memory.write_with_checksum(
+                MemoryType.LED, 0, b"\xde\xad\xbe\xef", only_if_changed=True
+            )
+            await cf.memory.write_with_checksum(
+                MemoryType.LED, 0, b"\xde\xad\xbe\xef", only_if_changed=True
+            )
 
         session = cf.log.create_session()
         session.create_block(
