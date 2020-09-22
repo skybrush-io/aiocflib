@@ -15,7 +15,9 @@ __all__ = ("Crazyflie",)
 
 MYPY = False
 if MYPY:
+    from .commander import Commander
     from .console import Console
+    from .high_level_commander import HighLevelCommander
     from .log import Log
     from .mem import Memory
     from .motors import Motors
@@ -76,6 +78,7 @@ class Crazyflie(CRTPDevice):
         # Initialize sub-modules; avoid circular import
         from .commander import Commander
         from .console import Console
+        from .high_level_commander import HighLevelCommander
         from .localization import Localization
         from .log import Log
         from .mem import Memory
@@ -85,6 +88,7 @@ class Crazyflie(CRTPDevice):
 
         self._commander = Commander(self)
         self._console = Console(self)
+        self._high_level_commander = HighLevelCommander(self)
         self._localization = Localization(self)
         self._log = Log(self)
         self._memory = Memory(self)
@@ -103,7 +107,7 @@ class Crazyflie(CRTPDevice):
         await driver.use_safe_link()
 
     @property
-    def commander(self) -> Console:
+    def commander(self) -> Commander:
         """The low-level (roll-pitch-yaw-thrust) commander module of the
         Crazyflie.
         """
@@ -123,6 +127,12 @@ class Crazyflie(CRTPDevice):
         messages you are interested in.
         """
         return self._dispatcher
+
+    @property
+    def high_level_commander(self) -> HighLevelCommander:
+        """The high-level commander module of the Crazyflie.
+        """
+        return self._high_level_commander
 
     @property
     def link_quality(self) -> ObservableValue[float]:

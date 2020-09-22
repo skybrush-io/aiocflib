@@ -18,10 +18,10 @@ class SetpointType(IntEnum):
     """
 
     STOP = 0
-    VELOCITY_WORLD = 1  # vx, vy, vz, yawrate, <Bffff
-    ZDISTANCE = 2  # roll, pitch, yawrate, zdistance, <Bffff
-    HOVER = 5  # vx, vy, yawrate, zdistance, <Bffff
-    POSITION = 7  # x, y, z, yaw, <Bffff
+    VELOCITY_WORLD = 1
+    Z_DISTANCE = 2
+    HOVER = 5
+    POSITION = 7
 
 
 class Commander:
@@ -29,30 +29,53 @@ class Commander:
     setpoint messages to a Crazyflie instance.
     """
 
-    _setpoint_struct = Struct("<fffH")
+    _hover_setpoint_struct = Struct("<Bffff")
+    _position_setpoint_struct = Struct("<Bffff")
+    _rpyt_setpoint_struct = Struct("<fffH")
+    _velocity_world_setpoint_struct = Struct("<Bffff")
+    _z_distance_setpoint_struct = Struct("<Bffff")
 
-    def __init__(self, crazyflie: Crazyflie, x_mode: bool = False):
+    def __init__(self, crazyflie: Crazyflie):
         """Constructor.
 
         Parameters:
             crazyflie: the Crazyflie to which we need to send the messages
-            x_mode: whether to enable client-side X-mode. This will
-                recalculate the setpoints before sending them to the
         """
         self._crazyflie = crazyflie
-        self._x_mode = False
 
-    def set_client_xmode(self, enabled):
-        """Enables or disables the client-side X-mode of the commander. When
-        the mode is enabled, setpoints are automatically recalculated in the
-        client to treat a cross-framed drone as if it was an X-framed one.
+    async def send_hover_setpoint(
+        self,
+        vx: float = 0.0,
+        vy: float = 0.0,
+        yaw_rate: float = 0.0,
+        z_distance: float = 0.0,
+    ) -> None:
+        """Sends a hover setpoint to the Crazyflie; velocity is specified in the
+        XY plane, along with the desired distance from the ground and the yaw
+        rate.
 
-        This function is kept for sake of compatibility with the official
-        Crazyflie Python library. You can also use the `x_mode` property.
+        Velocity components are in m/s. Yaw rate is in degrees/s. Z distance is
+        in meters.
         """
-        self.x_mode = enabled
+        data = self._hover_setpoint_struct.pack(
+            SetpointType.HOVER, vx, vy, yaw_rate, z_distance
+        )
+        await self._crazyflie.send_packet(port=CRTPPort.GENERIC_COMMANDER, data=data)
 
-    async def send_setpoint(self, roll, pitch, yaw, thrust):
+    async def send_position_setpoint(
+        self, x: float = 0.0, y: float = 0.0, z: float = 0.0, yaw: float = 0.0,
+    ) -> None:
+        """Sends a position setpoint to the Crazyflie with a fixed X-Y-Z
+        coordinate triplet and a yaw angle.
+
+        Coordinates are in meters; yaw is in degrees.
+        """
+        data = self._position_setpoint_struct.pack(SetpointType.POSITION, x, y, z, yaw)
+        await self._crazyflie.send_packet(port=CRTPPort.GENERIC_COMMANDER, data=data)
+
+    async def send_setpoint(
+        self, roll: float, pitch: float, yaw: float, thrust: int
+    ) -> None:
         """Sends a low-level roll-pitch-yaw-thrust setpoint to the
         Crazyflie.
 
@@ -64,30 +87,46 @@ class Commander:
         elif thrust < 0:
             thrust = 0
 
-        if self._x_mode:
-            roll, pitch = 0.707 * (roll - pitch), 0.707 * (roll + pitch)
-
-        data = self._setpoint_struct.pack(roll, -pitch, yaw, thrust)
+        data = self._rpyt_setpoint_struct.pack(roll, -pitch, yaw, thrust)
         await self._crazyflie.send_packet(port=CRTPPort.COMMANDER, data=data)
 
-    async def send_stop_setpoint(self):
+    async def send_stop_setpoint(self) -> None:
         """Sends an immediate stop command, stopping the motors and potentially
         making the Crazyflie fall down and crash.
         """
         await self._crazyflie.send_packet(
-            port=CRTPPort.COMMANDER_GENERIC, data=SetpointType.STOP
+            port=CRTPPort.GENERIC_COMMANDER, data=SetpointType.STOP
         )
 
-    stop = send_stop_setpoint
+    async def send_velocity_world_setpoint(
+        self, vx: float = 0.0, vy: float = 0.0, vz: float = 0.0, yaw_rate: float = 0.0
+    ) -> None:
+        """Sends a low-level velocity setpoint in the world coordinate frame to
+        the Crazyflie.
 
-    @property
-    def x_mode(self):
-        """Returns whether the commander is in client-side X-mode. When the
-        mode is enabled, setpoints are automatically recalculated in the
-        client to treat a cross-framed drone as if it was an X-framed one.
+        Thrust is automatically capped between 0 and 65535. Velocity components
+        are in m/s.
         """
-        return self._x_mode
+        data = self._velocity_world_setpoint_struct.pack(
+            SetpointType.VELOCITY_WORLD, vx, vy, vz, yaw_rate
+        )
+        await self._crazyflie.send_packet(port=CRTPPort.GENERIC_COMMANDER, data=data)
 
-    @x_mode.setter
-    def x_mode(self, value):
-        self._x_mode = bool(value)
+    async def send_z_distance_setpoint(
+        self,
+        roll: float = 0.0,
+        pitch: float = 0.0,
+        yaw_rate: float = 0.0,
+        z_distance: float = 0.0,
+    ) -> None:
+        """Sends a low-level setpoint where the height is defined as an absolute
+        setpoint along with the desired roll and pitch angles and the yaw rate.
+
+        Roll and pitch are in degrees; yaw rate is in degrees/s.
+        """
+        data = self._z_distance_setpoint_struct.pack(
+            SetpointType.Z_DISTANCE, roll, pitch, yaw_rate, z_distance
+        )
+        await self._crazyflie.send_packet(port=CRTPPort.GENERIC_COMMANDER, data=data)
+
+    stop = send_stop_setpoint

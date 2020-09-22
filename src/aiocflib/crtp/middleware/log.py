@@ -78,7 +78,9 @@ class LoggingMiddleware(MiddlewareBase):
             return packet.channel == 0
         elif packet.port == CRTPPort.LOCALIZATION:
             return packet.channel == 1
-        elif packet.port == CRTPPort.COMMANDER_GENERIC:
+        elif packet.port == CRTPPort.GENERIC_COMMANDER:
+            return packet.channel == 0
+        elif packet.port == CRTPPort.HIGH_LEVEL_COMMANDER:
             return packet.channel == 0
         elif packet.port == CRTPPort.PLATFORM:
             return packet.channel == 1
