@@ -3,6 +3,7 @@
 
 from contextlib import asynccontextmanager
 from enum import IntEnum
+from math import radians
 from struct import Struct
 from typing import Optional
 
@@ -119,8 +120,8 @@ class HighLevelCommander:
         y: float,
         z: float,
         *,
-        yaw: float,
         duration: float,
+        yaw: float = 0.0,
         relative: bool = False,
         group_mask: int = ALL_GROUPS,
     ) -> None:
@@ -131,7 +132,7 @@ class HighLevelCommander:
             x: the X coordinate of the new position
             y: the Y coordinate of the new position
             z: the Z coordinate of the new position
-            yaw: the yaw angle to reach at the new position
+            yaw: the yaw angle to reach at the new position, in degrees
             duration: duration of the movement, in seconds
             relative: defines whether the coordinates are absolute (`False`)
                 or relative to the current position (`True`)
@@ -139,7 +140,14 @@ class HighLevelCommander:
                 should apply to
         """
         data = self._go_to_struct.pack(
-            HighLevelCommand.GO_TO, group_mask, relative, x, y, z, yaw, duration
+            HighLevelCommand.GO_TO,
+            group_mask,
+            relative,
+            x,
+            y,
+            z,
+            radians(yaw),
+            duration,
         )
         await self._crazyflie.send_packet(port=CRTPPort.HIGH_LEVEL_COMMANDER, data=data)
 
@@ -175,7 +183,12 @@ class HighLevelCommander:
         use_current_yaw = yaw is None
         yaw = yaw or 0.0
         data = self._land_struct.pack(
-            HighLevelCommand.LAND_2, group_mask, height, yaw, use_current_yaw, duration
+            HighLevelCommand.LAND_2,
+            group_mask,
+            height,
+            radians(yaw),
+            use_current_yaw,
+            duration,
         )
         await self._crazyflie.send_packet(port=CRTPPort.HIGH_LEVEL_COMMANDER, data=data)
 
@@ -248,6 +261,7 @@ class HighLevelCommander:
         Parameters:
             height: the absolute height to take off to, in meters
             duration: duration of the takeoff, in seconds
+            yaw: the target yaw, in degrees; `None` to use the current yaw
             group_mask: mask that defines which Crazyflie drones this command
                 should apply to
         """
@@ -257,7 +271,7 @@ class HighLevelCommander:
             HighLevelCommand.TAKEOFF_2,
             group_mask,
             height,
-            yaw,
+            radians(yaw),
             use_current_yaw,
             duration,
         )
