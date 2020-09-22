@@ -4,6 +4,7 @@
 from contextlib import asynccontextmanager
 from enum import IntEnum
 from struct import Struct
+from typing import Optional
 
 from aiocflib.crtp import CRTPPort
 
@@ -24,6 +25,8 @@ class HighLevelCommand(IntEnum):
     GO_TO = 4
     START_TRAJECTORY = 5
     DEFINE_TRAJECTORY = 6
+    TAKEOFF_2 = 7
+    LAND_2 = 8
 
 
 class TrajectoryType(IntEnum):
@@ -55,9 +58,9 @@ class HighLevelCommander:
 
     _define_trajectory_struct = Struct("<BBBBIB")
     _go_to_struct = Struct("<BBBfffff")
-    _land_struct = Struct("<BBff")
+    _land_struct = Struct("<BBff?f")
     _start_trajectory_struct = Struct("<BBBBBf")
-    _takeoff_struct = Struct("<BBff")
+    _takeoff_struct = Struct("<BBff?f")
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
@@ -74,7 +77,7 @@ class HighLevelCommander:
         addr: int,
         num_pieces: int = 0,
         location: TrajectoryLocation = TrajectoryLocation.MEMORY,
-        type: TrajectoryType = TrajectoryType.POLY4D
+        type: TrajectoryType = TrajectoryType.POLY4D,
     ) -> None:
         """Defines a trajectory in the trajectory memory of the Crazyflie.
 
@@ -115,6 +118,7 @@ class HighLevelCommander:
         x: float,
         y: float,
         z: float,
+        *,
         yaw: float,
         duration: float,
         relative: bool = False,
@@ -152,18 +156,26 @@ class HighLevelCommander:
         )
 
     async def land(
-        self, height: float, duration: float, group_mask: int = ALL_GROUPS
+        self,
+        height: float,
+        *,
+        duration: float,
+        yaw: Optional[float] = None,
+        group_mask: int = ALL_GROUPS,
     ) -> None:
         """Sends a takeoff command to the Crazyflie.
 
         Parameters:
             height: the target height to land to, in meters
             duration: duration of the landing, in seconds
+            yaw: the target yaw, in degrees; `None` to use the current yaw
             group_mask: mask that defines which Crazyflie drones this command
                 should apply to
         """
+        use_current_yaw = yaw is None
+        yaw = yaw or 0.0
         data = self._land_struct.pack(
-            HighLevelCommand.LAND, group_mask, height, duration
+            HighLevelCommand.LAND_2, group_mask, height, yaw, use_current_yaw, duration
         )
         await self._crazyflie.send_packet(port=CRTPPort.HIGH_LEVEL_COMMANDER, data=data)
 
@@ -187,7 +199,7 @@ class HighLevelCommander:
         time_scale: float = 1,
         relative: bool = False,
         reversed: bool = False,
-        group_mask: int = ALL_GROUPS
+        group_mask: int = ALL_GROUPS,
     ) -> None:
         """Starts a trajectory that was already uploaded to the trajectory memory
         of the Crazyflie.
@@ -224,7 +236,12 @@ class HighLevelCommander:
         )
 
     async def takeoff(
-        self, height: float, duration: float, group_mask: int = ALL_GROUPS
+        self,
+        height: float,
+        *,
+        duration: float,
+        yaw: Optional[float] = None,
+        group_mask: int = ALL_GROUPS,
     ) -> None:
         """Sends a takeoff command to the Crazyflie.
 
@@ -234,7 +251,15 @@ class HighLevelCommander:
             group_mask: mask that defines which Crazyflie drones this command
                 should apply to
         """
+        use_current_yaw = yaw is None
+        yaw = yaw or 0.0
         data = self._takeoff_struct.pack(
-            HighLevelCommand.TAKEOFF, group_mask, height, duration
+            HighLevelCommand.TAKEOFF_2,
+            group_mask,
+            height,
+            yaw,
+            use_current_yaw,
+            duration,
         )
         await self._crazyflie.send_packet(port=CRTPPort.HIGH_LEVEL_COMMANDER, data=data)
+

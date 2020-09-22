@@ -2,6 +2,7 @@
 
 from enum import IntEnum
 from struct import Struct
+from typing import Optional, Sequence, Union
 
 from aiocflib.crtp import CRTPPort
 
@@ -41,6 +42,7 @@ class Localization:
     """
 
     _external_position_struct = Struct("<fff")
+    _external_pose_struct = Struct("<Bfffffff")
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
@@ -51,19 +53,47 @@ class Localization:
         """
         self._crazyflie = crazyflie
 
-    async def send_external_position(self, x: float, y: float, z: float) -> None:
+    async def send_external_position(
+        self,
+        x: Union[float, Sequence[float]],
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+    ) -> None:
         """Sends position information originating from an external positioning
         system into the Crazyflie.
 
         Parameters:
-            x: the X coordinate
+            x: the X coordinate. May also be a full 3D position vector; in this
+                case y and z must be `None`.
             y: the Y coordinate
             z; the Z coordinate
         """
+        if y is None and z is None:
+            x, y, z = x
         await self._crazyflie.send_packet(
             port=CRTPPort.LOCALIZATION,
             channel=LocalizationChannel.EXTERNAL_POSITION,
             data=self._external_position_struct.pack(x, y, z),
+        )
+
+    async def send_external_pose(
+        self, pos: Sequence[float], quat: Sequence[float]
+    ) -> None:
+        """Sends pose (position and attitude) information originating from an
+        external positioning system into the Crazyflie.
+
+        Parameters:
+            pos: the position vector (x, y, z)
+            quat: the attitude quaternion (qx, qy, qz, qw)
+        """
+        x, y, z = pos
+        qx, qy, qz, qw = quat
+        await self._crazyflie.send_packet(
+            port=CRTPPort.LOCALIZATION,
+            channel=LocalizationChannel.GENERIC,
+            data=self._external_pose_struct.pack(
+                GenericLocalizationCommand.EXT_POSE, x, y, z, qx, qy, qz, qw
+            ),
         )
 
     async def send_lpp_short_packet(self, data: bytes) -> None:
