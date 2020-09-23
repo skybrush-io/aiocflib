@@ -1,6 +1,9 @@
 """Classes related to handling console messages of a Crazyflie."""
 
+from anyio import fail_after
+
 from aiocflib.crtp import CRTPPort
+from aiocflib.utils.concurrency import aclosing
 
 from .crazyflie import Crazyflie
 
@@ -21,29 +24,55 @@ class Console:
         """
         self._crazyflie = crazyflie
 
-    async def messages(self):
+    async def messages(self, timeout: float = 1, partial_message_marker: str = "…"):
         """Async generator that yields full console messages from a
         Crazyflie.
 
         This generator essentially re-assembles the individual console message
         packets into full lines.
-        """
-        # TODO(ntamas): handle <F> marker
-        # TODO(ntamas): timeout if a partial line is received and no messages
-        # follow it for a while; yield the partial line back to the user
-        parts = []
 
-        async for packet in self.packets():
-            data = packet.data.rstrip(b"\x00")
+        Parameters:
+            timeout: maximum number of seconds to wait for a newline character
+                after a console message. If no newline character is received
+                in this timeframe after a console message, the message will
+                be posted separately, followd by a partial message marker
+            partial_message_marker: marker to append to messages if a newline
+                was not received in time after having received the message
+        """
+        partial_message_marker = partial_message_marker.encode("UTF-8")
+        if not partial_message_marker.endswith(b"\n"):
+            partial_message_marker += b"\n"
+
+        parts = []
+        gen = self.packets()
+
+        async with aclosing(gen):
             while True:
-                data, sep, rest = data.partition(b"\n")
-                parts.append(data)
-                if sep:
-                    yield (b"".join(parts).decode("UTF-8", errors="backslashreplace"))
-                    parts.clear()
-                    data = rest
+                if not parts:
+                    packet = await gen.__anext__()
                 else:
-                    break
+                    try:
+                        async with fail_after(timeout):
+                            packet = await gen.__anext__()
+                    except TimeoutError:
+                        packet = None
+                        data = partial_message_marker
+
+                if packet is not None:
+                    data = packet.data.rstrip(b"\x00")
+
+                while True:
+                    data, sep, rest = data.partition(b"\n")
+                    if data:
+                        parts.append(data)
+                    if sep:
+                        yield (
+                            b"".join(parts).decode("UTF-8", errors="backslashreplace")
+                        )
+                        parts.clear()
+                        data = rest
+                    else:
+                        break
 
     async def packets(self):
         """Async generator that yields console message packets from a Crazyflie,
@@ -51,3 +80,24 @@ class Console:
         """
         async for packet in self._crazyflie.packets(port=CRTPPort.CONSOLE):
             yield packet
+
+
+async def test():
+    uri = "radio+log://0/80/2M/E7E7E7E704"
+    # uri = "sitl+log://"
+    # uri = "usb+log://0"
+
+    async with Crazyflie(uri) as cf:
+        async for message in cf.console.messages():
+            print(message)
+
+
+if __name__ == "__main__":
+    from aiocflib.crtp import init_drivers
+    import trio
+
+    init_drivers()
+    try:
+        trio.run(test)
+    except KeyboardInterrupt:
+        pass
