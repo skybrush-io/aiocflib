@@ -18,6 +18,7 @@ if MYPY:
     from .commander import Commander
     from .console import Console
     from .high_level_commander import HighLevelCommander
+    from .led_ring import LEDRing
     from .log import Log
     from .mem import Memory
     from .motors import Motors
@@ -79,6 +80,7 @@ class Crazyflie(CRTPDevice):
         from .commander import Commander
         from .console import Console
         from .high_level_commander import HighLevelCommander
+        from .led_ring import LEDRing
         from .localization import Localization
         from .log import Log
         from .mem import Memory
@@ -89,6 +91,7 @@ class Crazyflie(CRTPDevice):
         self._commander = Commander(self)
         self._console = Console(self)
         self._high_level_commander = HighLevelCommander(self)
+        self._led_ring = LEDRing(self)
         self._localization = Localization(self)
         self._log = Log(self)
         self._memory = Memory(self)
@@ -130,9 +133,13 @@ class Crazyflie(CRTPDevice):
 
     @property
     def high_level_commander(self) -> HighLevelCommander:
-        """The high-level commander module of the Crazyflie.
-        """
+        """The high-level commander module of the Crazyflie."""
         return self._high_level_commander
+
+    @property
+    def led_ring(self) -> LEDRing:
+        """The LED ring of the Crazyflie."""
+        return self._led_ring
 
     @property
     def link_quality(self) -> ObservableValue[float]:
@@ -341,6 +348,13 @@ async def test():
             await cf.memory.write_with_checksum(
                 MemoryType.LED, 0, b"\xde\xad\xbe\xef", only_if_changed=True
             )
+
+        await cf.led_ring.flash()
+
+        async with cf.high_level_commander.enabled():
+            await cf.high_level_commander.takeoff(1, duration=1)
+            await sleep(1.5)
+            await cf.high_level_commander.stop()
 
         session = cf.log.create_session()
         session.create_block(

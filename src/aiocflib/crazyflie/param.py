@@ -222,6 +222,35 @@ class Parameters:
             value = self._values[name] = await self._fetch(name)
         return value
 
+    async def has(self, name: str) -> bool:
+        """Returns whether the parameter with the given name is known to the
+        Crazyflie.
+
+        Parameters:
+            name: the fully-qualified name of the parameter
+
+        Returns:
+            True if the parameter is known to the Crazyflie, False otherwise
+        """
+        await self.validate()
+        return self.has_sync(name)
+        return name in self._variables_by_name
+
+    def has_sync(self, name: str) -> bool:
+        """Synchronous variant of the ``has()`` method; returns whether the
+        parameter with the given name is known to the Crazyflie.
+
+        This method assumes that the parameter TOC has already been downloaded
+        with ``self.validate()``.
+
+        Parameters:
+            name: the fully-qualified name of the parameter
+
+        Returns:
+            True if the parameter is known to the Crazyflie, False otherwise
+        """
+        return name in self._variables_by_name
+
     async def set(self, name: str, value) -> None:
         """Sets the value of a parameter, given its fully-qualified name.
 
