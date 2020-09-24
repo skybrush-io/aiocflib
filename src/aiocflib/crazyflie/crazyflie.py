@@ -19,6 +19,7 @@ if MYPY:
     from .console import Console
     from .high_level_commander import HighLevelCommander
     from .led_ring import LEDRing
+    from .localization import Localization
     from .log import Log
     from .mem import Memory
     from .motors import Motors
@@ -149,6 +150,11 @@ class Crazyflie(CRTPDevice):
         return (
             self._driver.link_quality if self._driver else ObservableValue.constant(0.0)
         )
+
+    @property
+    def localization(self) -> Localization:
+        """The localization subsystem of the Crazyflie."""
+        return self._localization
 
     @property
     def log(self) -> Log:
