@@ -111,6 +111,7 @@ class LEDRing:
         """
         async with self.set_effect_and_restore(LEDRingEffect.LED_TEST):
             await sleep(duration)
+        await self.set_headlight(False)
 
     async def turn_off(self) -> None:
         """Turns off the LED ring."""
