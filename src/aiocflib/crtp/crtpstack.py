@@ -8,12 +8,19 @@ from contextlib import asynccontextmanager, contextmanager
 from enum import IntEnum
 from functools import partial
 from inspect import iscoroutinefunction
-from typing import Awaitable, Callable, List, Optional, Tuple, Union
+from typing import Awaitable, Callable, Iterable, List, Optional, Tuple, Union
 
 from aiocflib.utils.concurrency import AwaitableValue
 
 __author__ = "CollMot Robotics Ltd"
-__all__ = ("CRTPDataLike", "CRTPDispatcher", "CRTPPacket", "CRTPPort", "CRTPPortLike")
+__all__ = (
+    "CRTPCommandLike",
+    "CRTPDataLike",
+    "CRTPDispatcher",
+    "CRTPPacket",
+    "CRTPPort",
+    "CRTPPortLike",
+)
 
 
 #: Mapping from CRTP port names to short three-letter identifiers
@@ -61,6 +68,9 @@ class CRTPPort(IntEnum):
     def code(self):
         return _crtp_port_codes[int(self)]
 
+
+#: Type alias for objects that can be convered into a CRTP command byte
+CRTPCommandLike = Union[int, bytes, Iterable[Union[int, bytes]]]
 
 #: Type alias for objects that can be converted into the data of a CRTP packet
 CRTPDataLike = Union[array, bytearray, bytes, str, List[int], Tuple[int]]

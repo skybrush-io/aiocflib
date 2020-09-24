@@ -1,4 +1,5 @@
 from .crtpstack import (
+    CRTPCommandLike,
     CRTPDataLike,
     CRTPDispatcher,
     CRTPPacket,
@@ -10,6 +11,7 @@ from .device import CRTPDevice
 from .drivers import CRTPDriver, init_drivers
 
 __all__ = (
+    "CRTPCommandLike",
     "CRTPDataLike",
     "CRTPDevice",
     "CRTPDispatcher",

@@ -1,5 +1,5 @@
 from os import strerror
-from typing import Union
+from typing import Optional, Union
 
 __all__ = ("error_to_string",)
 
@@ -16,6 +16,16 @@ class TimeoutError(RuntimeError):
     """
 
     pass
+
+
+class CRTPCommandError(RuntimeError):
+    """Error thrown when a command sent to a CRTP-based device (for instance,
+    a Crazyflie) returned an error code.
+    """
+
+    def __init__(self, message: Optional[str] = None, code: int = 0):
+        message = message or f"CRTP command returned error {code}"
+        super().__init__(message)
 
 
 def error_to_string(value: Union[int, bytes]) -> str:

@@ -5,7 +5,13 @@ from contextlib import AsyncExitStack
 from sys import exc_info
 from typing import AsyncIterable, Iterable, Optional, Union
 
-from .crtpstack import CRTPDispatcher, CRTPPacket, CRTPDataLike, CRTPPortLike
+from .crtpstack import (
+    CRTPDispatcher,
+    CRTPPacket,
+    CRTPCommandLike,
+    CRTPDataLike,
+    CRTPPortLike,
+)
 from .drivers import CRTPDriver
 
 from aiocflib.errors import TimeoutError
@@ -128,7 +134,7 @@ class CRTPDevice:
         *,
         port: CRTPPortLike,
         channel: int = 0,
-        command: Optional[Union[int, bytes, Iterable[Union[int, bytes]]]] = None,
+        command: Optional[CRTPCommandLike] = None,
         data: CRTPDataLike = None,
         timeout: float = 0.2,
         attempts: int = 3,
@@ -225,9 +231,7 @@ class CRTPDevice:
         await self._driver.send_packet(packet)
 
 
-def _handle_command_argument(
-    command: Optional[Union[int, bytes, Iterable[Union[int, bytes]]]] = None
-) -> bytes:
+def _handle_command_argument(command: Optional[CRTPCommandLike] = None) -> bytes:
     """Helper function to handle the conversion of the `command` argument in
     `CRTPDevice.run_command()` to a `bytes` object.
     """

@@ -7,11 +7,20 @@ from math import radians
 from struct import Struct
 from typing import Optional
 
-from aiocflib.crtp import CRTPPort
+from aiocflib.crtp import CRTPCommandLike, CRTPDataLike, CRTPPort
+from aiocflib.errors import CRTPCommandError
 
 from .crazyflie import Crazyflie
 
-__all__ = ("HighLevelCommander",)
+__all__ = ("HighLevelCommander", "HighLevelCommanderError")
+
+
+class HighLevelCommanderError(CRTPCommandError):
+    """CRTPCommandError subclass for errors emitted from the high-level
+    commander module.
+    """
+
+    pass
 
 
 class HighLevelCommand(IntEnum):
@@ -57,11 +66,11 @@ class HighLevelCommander:
     Crazyflie.
     """
 
-    _define_trajectory_struct = Struct("<BBBBIB")
-    _go_to_struct = Struct("<BBBfffff")
-    _land_struct = Struct("<BBff?f")
-    _start_trajectory_struct = Struct("<BBBBBf")
-    _takeoff_struct = Struct("<BBff?f")
+    _define_trajectory_struct = Struct("<BBIB")
+    _go_to_struct = Struct("<Bfffff")
+    _land_struct = Struct("<ff?f")
+    _start_trajectory_struct = Struct("<BBBf")
+    _takeoff_struct = Struct("<ff?f")
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
@@ -91,10 +100,10 @@ class HighLevelCommander:
                 Crazyflie
             type: specifies the type (encoding) of the trajectory
         """
-        data = self._define_trajectory_struct.pack(
-            HighLevelCommand.DEFINE_TRAJECTORY, id, location, type, addr, num_pieces,
+        data = self._define_trajectory_struct.pack(location, type, addr, num_pieces)
+        await self._run_command(
+            command=(HighLevelCommand.DEFINE_TRAJECTORY, id), data=data
         )
-        await self._crazyflie.send_packet(port=CRTPPort.HIGH_LEVEL_COMMANDER, data=data)
 
     async def disable(self):
         """Disables the high-level controller on the Crazyflie."""
@@ -139,17 +148,8 @@ class HighLevelCommander:
             group_mask: mask that defines which Crazyflie drones this command
                 should apply to
         """
-        data = self._go_to_struct.pack(
-            HighLevelCommand.GO_TO,
-            group_mask,
-            relative,
-            x,
-            y,
-            z,
-            radians(yaw),
-            duration,
-        )
-        await self._crazyflie.send_packet(port=CRTPPort.HIGH_LEVEL_COMMANDER, data=data)
+        data = self._go_to_struct.pack(relative, x, y, z, radians(yaw), duration,)
+        await self._run_command(command=(HighLevelCommand.GO_TO, group_mask), data=data)
 
     async def is_enabled(self, fetch: bool = False) -> bool:
         """Retrieves whether the high-level command is currently enabled on
@@ -182,15 +182,10 @@ class HighLevelCommander:
         """
         use_current_yaw = yaw is None
         yaw = yaw or 0.0
-        data = self._land_struct.pack(
-            HighLevelCommand.LAND_2,
-            group_mask,
-            height,
-            radians(yaw),
-            use_current_yaw,
-            duration,
+        data = self._land_struct.pack(height, radians(yaw), use_current_yaw, duration,)
+        await self._run_command(
+            command=(HighLevelCommand.LAND_2, group_mask), data=data
         )
-        await self._crazyflie.send_packet(port=CRTPPort.HIGH_LEVEL_COMMANDER, data=data)
 
     async def set_group_mask(self, group_mask: int = ALL_GROUPS) -> None:
         """Sets the group mask of the Crazyflie, defining which groups the
@@ -200,10 +195,7 @@ class HighLevelCommander:
             group_mask: mask that defines which groups this Crazyflie drone
                 belongs to
         """
-        await self._crazyflie.send_packet(
-            port=CRTPPort.HIGH_LEVEL_COMMANDER,
-            data=(HighLevelCommand.SET_GROUP_MASK, group_mask),
-        )
+        await self._run_command(command=(HighLevelCommand.SET_GROUP_MASK, group_mask))
 
     async def start_trajectory(
         self,
@@ -227,15 +219,10 @@ class HighLevelCommander:
             reversed: whether to play the trajectory backwards. Not supported
                 for compressed trajectories
         """
-        data = self._start_trajectory_struct.pack(
-            HighLevelCommand.START_TRAJECTORY,
-            group_mask,
-            relative,
-            reversed,
-            id,
-            time_scale,
+        data = self._start_trajectory_struct.pack(relative, reversed, id, time_scale,)
+        await self._run_command(
+            command=(HighLevelCommand.START_TRAJECTORY, group_mask), data=data
         )
-        await self._crazyflie.send_packet(port=CRTPPort.HIGH_LEVEL_COMMANDER, data=data)
 
     async def stop(self, group_mask: int = ALL_GROUPS) -> None:
         """Sends a command to the Crazyflie to turn off the motors immediately.
@@ -244,9 +231,7 @@ class HighLevelCommander:
             group_mask: mask that defines which Crazyflie drones this command
                 should apply to
         """
-        await self._crazyflie.send_packet(
-            port=CRTPPort.HIGH_LEVEL_COMMANDER, data=(HighLevelCommand.STOP, group_mask)
-        )
+        await self._run_command(command=(HighLevelCommand.STOP, group_mask))
 
     async def takeoff(
         self,
@@ -268,12 +253,43 @@ class HighLevelCommander:
         use_current_yaw = yaw is None
         yaw = yaw or 0.0
         data = self._takeoff_struct.pack(
-            HighLevelCommand.TAKEOFF_2,
-            group_mask,
-            height,
-            radians(yaw),
-            use_current_yaw,
-            duration,
+            height, radians(yaw), use_current_yaw, duration,
         )
-        await self._crazyflie.send_packet(port=CRTPPort.HIGH_LEVEL_COMMANDER, data=data)
+        await self._run_command(
+            command=(HighLevelCommand.TAKEOFF_2, group_mask), data=data
+        )
 
+    async def _run_command(
+        self,
+        *,
+        command: Optional[CRTPCommandLike] = None,
+        data: CRTPDataLike = None,
+        **kwds,
+    ):
+        """Sends a command packet to the high-level commander port and channel
+        of the Crazyflie, waits for the next matching response packet and
+        handles the error code in the packet.
+
+        Keyword arguments not mentioned here are forwarded to the
+        ``run_command()`` method of the Crazyflie itself.
+
+        Parameters:
+            command: the command byte(s) to insert before the data bytes in
+                the data section of the packet. When this is not `None`, the
+                matching response packet is expected to have the same prefix as
+                the command itself.
+            data: the data of the request packet. When a command is present, the
+                command is inserted before the data in the body of the CRTP
+                packet.
+
+        Raises:
+            HighLevelCommanderError: if the high-level commander refused to
+                execute the command
+        """
+        response = await self._crazyflie.run_command(
+            port=CRTPPort.HIGH_LEVEL_COMMANDER, command=command, data=data, **kwds
+        )
+        if len(response) < 1:
+            raise HighLevelCommanderError(message="Response too short")
+        elif response[-1]:
+            raise HighLevelCommanderError(code=response[-1])
