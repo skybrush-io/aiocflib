@@ -591,6 +591,9 @@ class LogSession:
         self._exit_stack = None
         self._id_mapping = None
 
+        self._remove_existing_log_blocks_when_starting = False
+        self._cleanup_gracefully = False
+
     def add_block(
         self,
         block: LogBlock,
@@ -634,6 +637,28 @@ class LogSession:
             period=period, period_msec=period_msec, frequency=frequency
         )
         self._blocks.append((block, period_msec, handler))
+
+    def configure(
+        self,
+        *,
+        graceful_cleanup: Optional[bool] = None,
+        remove_existing_log_blocks: Optional[bool] = None
+    ) -> None:
+        """Conifigures the behaviour of the log session during startup and
+        cleanup.
+
+        Parameters:
+            graceful_cleanup: whether to attempt to clean up gracefully when the
+                session is stopped. Exceptions will be handled and silenced
+                during cleanup when possible.
+            remove_existing_log_blocks: whether to remove all existing log
+                blocks from the Crazyflie when this session starts.
+        """
+        if graceful_cleanup is not None:
+            self._cleanup_gracefully = bool(graceful_cleanup)
+        if remove_existing_log_blocks is not None:
+            self._remove_existing_log_blocks_when_starting = \
+                bool(remove_existing_log_blocks)
 
     def create_block(
         self,
@@ -682,6 +707,9 @@ class LogSession:
         self._exit_stack = AsyncExitStack()
         await self._exit_stack.__aenter__()
 
+        if self._remove_existing_log_blocks_when_starting:
+            await self._owner.reset()
+
         id_mapping = {}
         for entry in self._blocks:
             block, _, _ = entry
@@ -698,6 +726,9 @@ class LogSession:
     async def __aexit__(self, exc_type, exc, tb):
         try:
             return await self._exit_stack.__aexit__(exc_type, exc, tb)
+        except Exception as ex:
+            if not self._cleanup_gracefully:
+                raise ex
         finally:
             self._exit_stack = None
             self._id_mapping = None
