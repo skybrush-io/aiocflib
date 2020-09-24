@@ -37,6 +37,8 @@ class HighLevelCommand(IntEnum):
     DEFINE_TRAJECTORY = 6
     TAKEOFF_2 = 7
     LAND_2 = 8
+    TAKEOFF_WITH_VELOCITY = 9
+    LAND_WITH_VELOCITY = 10
 
 
 class TrajectoryType(IntEnum):
@@ -69,8 +71,10 @@ class HighLevelCommander:
     _define_trajectory_struct = Struct("<BBIB")
     _go_to_struct = Struct("<Bfffff")
     _land_struct = Struct("<ff?f")
+    _land_with_velocity_struct = Struct("<f?f?f")
     _start_trajectory_struct = Struct("<BBBf")
     _takeoff_struct = Struct("<ff?f")
+    _takeoff_with_velocity_struct = Struct("<f?f?f")
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
@@ -167,25 +171,69 @@ class HighLevelCommander:
         self,
         height: float,
         *,
-        duration: float,
+        duration: Optional[float] = None,
+        velocity: Optional[float] = None,
+        relative: Optional[bool] = False,
         yaw: Optional[float] = None,
         group_mask: int = ALL_GROUPS,
     ) -> None:
-        """Sends a takeoff command to the Crazyflie.
+        """Sends a landing command to the Crazyflie.
+
+        The landing velocity may be specified directly (with the `velocity`
+        parameter) or indirectly (with the `duration` parameter). When neither
+        the velocity nor the duration are prescribed, a default safe landing
+        velocity will be applied; this is decided by the firmware.
 
         Parameters:
-            height: the target height to land to, in meters
-            duration: duration of the landing, in seconds
+            height: the absolute or relative height to land to, in meters
+            duration: duration of the landing, in seconds; mutually exclusive
+                with `velocity`
+            velocity: average velocity of the landing, in m/s; mutually
+                exclusive with `duration`
+            relative: whether the landing height is relative to the current
+                height; positive relative height is below the current height
             yaw: the target yaw, in degrees; `None` to use the current yaw
             group_mask: mask that defines which Crazyflie drones this command
                 should apply to
         """
+        if duration is not None and velocity is not None:
+            raise ValueError("duration and velocity are mutually exclusive")
+
+        if duration is not None:
+            if duration < 0:
+                raise ValueError("duration may not be negative")
+            elif duration == 0:
+                duration = None
+
         use_current_yaw = yaw is None
         yaw = yaw or 0.0
-        data = self._land_struct.pack(height, radians(yaw), use_current_yaw, duration,)
-        await self._run_command(
-            command=(HighLevelCommand.LAND_2, group_mask), data=data
-        )
+
+        if relative and duration is not None:
+            # Firmware supports relative height only when the velocity is
+            # specified, so we need to turn the duration into velocity
+            velocity, duration = abs(height) / duration, None
+
+        if velocity is None:
+            velocity = 0   # firmware picks a velocity
+        elif velocity < 0:
+            raise ValueError("velocity may not be negative")
+
+        # Convert yaw into radians
+        yaw = radians(yaw)
+
+        # Decide which command to use
+        if duration is not None:
+            data = self._land_struct.pack(height, yaw, use_current_yaw, duration)
+            await self._run_command(
+                command=(HighLevelCommand.LAND_2, group_mask), data=data
+            )
+        else:
+            data = self._land_with_velocity_struct.pack(
+                height, relative, yaw, use_current_yaw, velocity
+            )
+            await self._run_command(
+                command=(HighLevelCommand.LAND_WITH_VELOCITY, group_mask), data=data
+            )
 
     async def set_group_mask(self, group_mask: int = ALL_GROUPS) -> None:
         """Sets the group mask of the Crazyflie, defining which groups the
@@ -237,27 +285,68 @@ class HighLevelCommander:
         self,
         height: float,
         *,
-        duration: float,
+        duration: Optional[float] = None,
+        velocity: Optional[float] = None,
+        relative: Optional[bool] = False,
         yaw: Optional[float] = None,
         group_mask: int = ALL_GROUPS,
     ) -> None:
         """Sends a takeoff command to the Crazyflie.
 
+        The takeoff velocity may be specified directly (with the `velocity`
+        parameter) or indirectly (with the `duration` parameter). When neither
+        the velocity nor the duration are prescribed, a default safe takeoff
+        velocity will be applied; this is decided by the firmware.
+
         Parameters:
-            height: the absolute height to take off to, in meters
-            duration: duration of the takeoff, in seconds
+            height: the absolute or relative height to take off to, in meters
+            duration: duration of the takeoff, in seconds; mutually exclusive
+                with `velocity`
+            velocity: average velocity of the takeoff, in m/s; mutually
+                exclusive with `duration`
+            relative: whether the takeoff height is relative to the current
+                height; positive relative height is above the current height
             yaw: the target yaw, in degrees; `None` to use the current yaw
             group_mask: mask that defines which Crazyflie drones this command
                 should apply to
         """
+        if duration is not None and velocity is not None:
+            raise ValueError("duration and velocity are mutually exclusive")
+        if duration is not None:
+            if duration < 0:
+                raise ValueError("duration may not be negative")
+            elif duration == 0:
+                duration = None
+
         use_current_yaw = yaw is None
         yaw = yaw or 0.0
-        data = self._takeoff_struct.pack(
-            height, radians(yaw), use_current_yaw, duration,
-        )
-        await self._run_command(
-            command=(HighLevelCommand.TAKEOFF_2, group_mask), data=data
-        )
+
+        if relative and duration is not None:
+            # Firmware supports relative height only when the velocity is
+            # specified, so we need to turn the duration into velocity
+            velocity, duration = abs(height) / duration, None
+
+        if velocity is None:
+            velocity = 0   # firmware picks a velocity
+        elif velocity < 0:
+            raise ValueError("velocity may not be negative")
+
+        # Convert yaw into radians
+        yaw = radians(yaw)
+
+        # Decide which command to use
+        if duration is not None:
+            data = self._takeoff_struct.pack(height, yaw, use_current_yaw, duration)
+            await self._run_command(
+                command=(HighLevelCommand.TAKEOFF_2, group_mask), data=data
+            )
+        else:
+            data = self._takeoff_with_velocity_struct.pack(
+                height, relative, yaw, use_current_yaw, velocity
+            )
+            await self._run_command(
+                command=(HighLevelCommand.TAKEOFF_WITH_VELOCITY, group_mask), data=data
+            )
 
     async def _run_command(
         self,
