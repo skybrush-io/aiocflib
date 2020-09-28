@@ -283,7 +283,7 @@ class RadioDriver(CRTPDriver):
         try:
             self.apply_preset(preset)
         except KeyError:
-            self.apply_preset("default")
+            raise ValueError(f"No such preset: {preset}")
 
         # TODO(ntamas): what if the in_queue is full?
         self._in_queue_tx, self._in_queue_rx = create_memory_object_stream(256)
@@ -454,7 +454,8 @@ class RadioDriver(CRTPDriver):
 
     async def _worker(self, radio: Crazyradio) -> None:
         """Worker task that runs continuously and handles the sending and
-        receiving of packets to/from a given Crazyradio instance.
+        receiving of packets between a given Crazyradio instance and a single
+        Crazyflie (or other CRTP device).
 
         Parameters:
             radio: the Crazyradio instance to use
@@ -517,7 +518,9 @@ class RadioDriver(CRTPDriver):
                 await self._in_queue_tx.send(inbound_packet)
 
             # Figure out how much to wait before the next null packet is sent
-            delay_before_next_null_packet = self.polling_strategy(response.data)
+            delay_before_next_null_packet = self.polling_strategy(
+                response.data, to_send
+            )
             if delay_before_next_null_packet > 0:
                 # Wait for a given number of seconds
                 outbound_packet = null_packet

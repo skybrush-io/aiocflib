@@ -139,7 +139,7 @@ class SITLDriver(CRTPDriver):
                 response = b"\xff"
 
             # Figure out how much to wait before the next null packet is sent
-            delay_before_next_null_packet = self.polling_strategy(response)
+            delay_before_next_null_packet = self.polling_strategy(response, to_send)
             if delay_before_next_null_packet > 0:
                 # Wait for a given number of seconds
                 outbound_packet = null_packet

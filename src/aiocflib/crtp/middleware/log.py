@@ -179,6 +179,8 @@ class LoggingMiddleware(MiddlewareBase):
         return packet
 
     async def send_packet(self, packet: CRTPPacket):
+        if self._num_null_packets:
+            self._report_null_packets()
         type = Fore.GREEN + self._format_type(packet) + Style.RESET_ALL
         data = self._hexdump(packet.data)
         if self._has_command_byte(packet):

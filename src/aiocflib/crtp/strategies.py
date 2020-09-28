@@ -13,7 +13,7 @@ __all__ = (
 
 
 #: Type specification for polling strategies
-PollingStrategy = Callable[[bytes], float]
+PollingStrategy = Callable[[bytes, bytes], float]
 
 #: Type specification for result objects of a resending strategy
 ResendingStrategyResult = Union[str, float]
@@ -50,11 +50,12 @@ class DefaultPollingStrategy:
         self._is_idle = False
         self._interval = 1 / frequency
 
-    def __call__(self, data: bytes) -> float:
+    def __call__(self, data: bytes, sent: bytes) -> float:
         """Returns the time to wait before we send the next null packet.
 
         Parameters:
             data: the last packet that we have received from the drone
+            sent: the last packet that we have sent to the drone
 
         Returns:
             the proposed time to wait before sending the next null packet,
@@ -62,7 +63,7 @@ class DefaultPollingStrategy:
         """
         # The packet starts with the header so its length is always at least
         # 1. The packet is effectively empty if its length is less than 2.
-        if len(data) > 1:
+        if len(sent) > 1 or len(data) > 1:
             self._empty_packet_counter = 0
             self._is_idle = False
         elif not self._is_idle:
@@ -77,11 +78,12 @@ class NoPollingStrategy:
     downlink; it is assumed that we expect responses to our own packets only.
     """
 
-    def __call__(self, data: bytes) -> float:
+    def __call__(self, received: bytes, sent: bytes) -> float:
         """Returns the time to wait before we send the next null packet.
 
         Parameters:
             data: the last packet that we have received from the drone
+            sent: the last packet that we have sent to the drone
 
         Returns:
             -1 because it means "wait indefinitely" for the caller.
@@ -117,11 +119,12 @@ class BackoffPollingStrategy:
         self._max_delay = float(max_delay)
         self._delay = self._initial_delay
 
-    def __call__(self, data: bytes) -> float:
+    def __call__(self, data: bytes, sent: bytes) -> float:
         """Returns the time to wait before we send the next null packet.
 
         Parameters:
             data: the last packet that we have received from the drone
+            sent: the last packet that we have sent to the drone
 
         Returns:
             the proposed time to wait before sending the next null packet, in
@@ -129,7 +132,7 @@ class BackoffPollingStrategy:
         """
         # The packet starts with the header so its length is always at least
         # 1. The packet is effectively empty if its length is less than 2.
-        if len(data) > 1:
+        if len(sent) > 1 or len(data) > 1:
             self._empty_packet_counter = 0
             self._is_idle = False
         elif not self._is_idle:

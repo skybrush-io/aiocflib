@@ -62,6 +62,8 @@ def parse_radio_uri(uri: str, allow_prefix: bool = False) -> Dict:
 
     The dictionary will have the following keys:
 
+    * ``scheme`` (the URI scheme)
+
     * ``index`` (the index of the radio if multiple radio devices are present)
 
     * ``channel`` (the channel index)
@@ -69,8 +71,6 @@ def parse_radio_uri(uri: str, allow_prefix: bool = False) -> Dict:
     * ``data_rate`` (the data rate)
 
     * ``address`` (the parsed address)
-
-    The scheme of the supplied URI is ignored (but its existence is validated).
 
     Parameters:
         uri: the URI to parse
@@ -141,7 +141,13 @@ def parse_radio_uri(uri: str, allow_prefix: bool = False) -> Dict:
     if path:
         raise ValueError("Excess parts at the end of the path")
 
-    return dict(address=address, channel=channel, data_rate=data_rate, index=index)
+    return dict(
+        address=address,
+        channel=channel,
+        data_rate=data_rate,
+        index=index,
+        scheme=scheme,
+    )
 
 
 def to_radio_address(
@@ -208,15 +214,19 @@ class BootloaderAddressSpace(AddressSpace):
     could be listening.
     """
 
-    def __init__(self, index: int = 0):
+    def __init__(self, index: int = 0, scheme: str = "radio"):
         """Constructor.
 
         Parameters:
             index: the index of the Crazyradio to return in the URIs of the
                 address space
+            scheme: the URI address scheme to return in the URIs of the address
+                space
         """
         self._index = int(index)
-        self._items = ["radio://{0}/{1}".format(index, channel) for channel in (0, 110)]
+        self._items = [
+            "{0}://{1}/{2}".format(scheme, index, channel) for channel in (0, 110)
+        ]
 
     def __getitem__(self, index):
         return self._items[index]
@@ -265,6 +275,7 @@ class RadioAddressSpace(AddressSpace):
         data_rate: Union[CrazyradioDataRate, str] = CrazyradioDataRate.DR_2MPS,
         prefix: Union[bytes, str] = "E7E7E7E7",
         length: int = 256,
+        scheme: str = "radio",
     ):
         """Constructor.
 
@@ -279,16 +290,19 @@ class RadioAddressSpace(AddressSpace):
                 URIs of the address space
             length: the size of the address space; the first address will
                 correspond to the address obtained from the prefix
+            scheme: the URI address scheme to return in the URIs of the address
+                space
         """
         self._index = int(index)
         self._channel = int(channel)
         self._data_rate = CrazyradioDataRate.from_string(data_rate)
+        self._scheme = str(scheme)
         self._prefix = to_radio_address(prefix, allow_prefix=True)
         self._length = max(0, int(length))
 
         self._base_address = int.from_bytes(self._prefix, byteorder="big")
-        self._uri_prefix = "radio://{0}/{1}/{2}".format(
-            self._index, self._channel, str(self._data_rate)
+        self._uri_prefix = "{0}://{1}/{2}/{3}".format(
+            self._scheme, self._index, self._channel, str(self._data_rate)
         )
         self._uri_format = self._uri_prefix + "/{0}"
 
@@ -332,17 +346,20 @@ class USBAddressSpace(AddressSpace):
         await result.refresh()
         return result
 
-    def __init__(self, length: int = 32):
+    def __init__(self, length: int = 32, scheme: str = "usb"):
         """Constructor.
 
         Parameters:
             length: the length of the address space
+            scheme: the URI address scheme to return in the URIs of the address
+                space
         """
         self._length = max(0, int(length))
+        self._format_str = "{0}://".format(scheme) + "{0}"
 
     def __getitem__(self, index: int) -> str:
         if index >= 0 and index < self._length:
-            return "usb://{0}".format(index)
+            return self._format_str.format(index)
         else:
             raise IndexError
 

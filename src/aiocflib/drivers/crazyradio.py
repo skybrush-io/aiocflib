@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager, AsyncExitStack
 from enum import IntEnum
 from functools import total_ordering, wraps
 from sys import exc_info
-from typing import Iterable, List, Optional, Union
+from typing import Iterable, List, Optional, Tuple, Union
 
 from aiocflib.utils.addressing import (
     CrazyradioAddress,
@@ -85,7 +85,7 @@ def _find_devices(serial: Optional[str] = None) -> List[USBDevice]:
     return candidates
 
 
-def get_serials() -> List[str]:
+def get_serials() -> Tuple[str]:
     """Returns the serial numbers of all the connected Crazyradio dongles.
 
     Returns:
@@ -170,7 +170,7 @@ class RadioConfiguration:
 
         The scheme of the supplied URI is ignored; it is assumed that the rest
         of the URI follows the format used for ``radio://`` URIs, and that the
-        first path component is the radio index (which will be ignored).
+        first path component is the radio index (which will also be ignored).
         """
         parts = parse_radio_uri(uri)
         del parts["index"]
@@ -182,6 +182,7 @@ class RadioConfiguration:
         address: Optional[CrazyradioAddressLike] = None,
         channel: Optional[int] = None,
         data_rate: CrazyradioDataRate = CrazyradioDataRate.DR_2MPS,
+        scheme: str = "radio",
     ):
         """Constructor.
 
@@ -192,10 +193,13 @@ class RadioConfiguration:
                 for radio channel scans where we want to specify that the
                 scan will happen on all channels. `None` is not allowed if the
                 object is used for declaring where packets should be sent.
+            scheme: the URI scheme to use when converting the configuration to
+                a URI
         """
         self._address = Crazyradio.to_address(address) if address is not None else None
         self._channel = channel
         self._data_rate = data_rate
+        self._scheme = str(scheme)
 
     @property
     def address(self) -> Optional[CrazyradioAddress]:
@@ -219,13 +223,20 @@ class RadioConfiguration:
             self._address is not None
             and self._channel is not None
             and self._data_rate is not None
+            and self._scheme is not None
         )
+
+    @property
+    def scheme(self) -> str:
+        """The URI scheme to use when converting this configuration to a URI."""
+        return self._scheme
 
     def replace(
         self,
         address: Optional[CrazyradioAddressLike] = None,
         data_rate: Optional[CrazyradioDataRate] = None,
         channel: Optional[int] = None,
+        scheme: Optional[str] = None,
     ):
         """Replaces the address, the data rate and/or the channel in the
         configuration object and returns a new configuration object.
@@ -234,13 +245,14 @@ class RadioConfiguration:
             address=address if address is not None else self._address,
             data_rate=data_rate if data_rate is not None else self._data_rate,
             channel=channel if channel is not None else self._channel,
+            scheme=scheme if scheme is not None else self._scheme,
         )
 
     def to_uri(self, index: int = 0) -> str:
         """Converts the radio configuration to a string URI that can be
         passed to a CRTPDevice_ constructor.
         """
-        parts = ["radio://{0}".format(index)]
+        parts = ["{0}://{1}".format(self.scheme, index)]
         if self.channel is not None:
             parts.append(str(self.channel))
             if self.data_rate is not None:
@@ -250,10 +262,11 @@ class RadioConfiguration:
         return "/".join(parts)
 
     def __eq__(self, other):
-        return (self._data_rate, self._channel, self._address) == (
+        return (self._data_rate, self._channel, self._address, self._scheme) == (
             other._data_rate,
             other._channel,
             other._address,
+            other._scheme,
         )
 
     def __lt__(self, other):
@@ -261,17 +274,19 @@ class RadioConfiguration:
         # sortable in a way that same data rates are clustered together. This
         # is because it is faster to switch addresses than channels or data
         # rates, and we want the radio scans to be as fast as possible.
-        return (self._data_rate, self._channel, self._address) < (
+        return (self._data_rate, self._channel, self._address, self._scheme) < (
             other._data_rate,
             other._channel,
             other._address,
+            other._scheme,
         )
 
     def __repr__(self):
         return (
             "{0.__class__.__name__}(address={0.address!r}, "
             "channel={0.channel!r}, "
-            "data_rate={0.data_rate!r})"
+            "data_rate={0.data_rate!r}, "
+            "scheme={0.scheme!r})"
         ).format(self)
 
 
