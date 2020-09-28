@@ -200,7 +200,7 @@ class PatientResendingStrategy:
         """
         self._remaining = self._attempts = 50
         self._num_errors = 0
-        self._schedule = [None, 0, 0, 0, 0, 0, 0.01, 0.01, 0.01, 0.010, 0.01, 0.02]
+        self._schedule = [None, 0, 0, 0, 0, 0, 0.01, 0.01, 0.01, 0.01, 0.01, 0.02]
 
     def __call__(self, ack: bool, data: bytes) -> ResendingStrategyResult:
         """Decides whether the packet should be resent.

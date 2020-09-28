@@ -154,6 +154,11 @@ class _SafeLinkState:
         """Returns whether the safe link mode has been acquired."""
         return self._enabled_acquired.value.acquired
 
+    @property
+    def counter_bits(self) -> Tuple[int, int]:
+        """Returns the current state of the counter bits, for debugging purposes."""
+        return self._up, self._down
+
     async def disable(self) -> None:
         """Disables the safe link mode on the Crazyflie. Note that the Crazyflie
         will still operate in safe link mode if it has already been acquired,
@@ -399,24 +404,6 @@ class RadioDriver(CRTPDriver):
         """
         await self._safe_link_state.enable()
 
-    async def _acquire_safe_link_mode(self, radio: Crazyradio) -> bool:
-        """Attempts to acquire safe link mode on the Crazyflie found at the
-        address, channel and data rate that the radio is currently configured to.
-
-        Returns:
-            whether safe link mode was successfully acquired
-        """
-        safe_link_packet = CRTPPacket.safe_link().to_bytes()
-
-        for _ in range(10):
-            response = await radio.send_and_receive_bytes(safe_link_packet)
-            if response and response.data == safe_link_packet:
-                await self._safe_link_state.notify_acquired()
-                return True
-
-        await self._safe_link_state.disable()
-        return False
-
     async def _notify_safe_link_lost(self) -> None:
         """Notifies the driver that the established safe link state has been
         lost and it should re-establish the safe link state as soon as possible.
@@ -449,8 +436,29 @@ class RadioDriver(CRTPDriver):
         """
         async for enabled, acquired in self._safe_link_state.observe():
             if enabled and not acquired:
-                async with radio.configure(self._configuration):
-                    await self._acquire_safe_link_mode(radio)
+                success = False
+                while not success:
+                    async with radio.configure(self._configuration):
+                        success = await self._try_to_acquire_safe_link_mode(radio)
+                    if not success:
+                        await sleep(0.25)
+
+    async def _try_to_acquire_safe_link_mode(self, radio: Crazyradio):
+        """Attempts to acquire safe link mode on the Crazyflie found at the
+        address, channel and data rate that the radio is currently configured to.
+
+        Returns:
+            whether the safe link mode was acquired successfully
+        """
+        safe_link_packet = CRTPPacket.safe_link().to_bytes()
+
+        for _ in range(10):
+            response = await radio.send_and_receive_bytes(safe_link_packet)
+            if response and response.data == safe_link_packet:
+                await self._safe_link_state.notify_acquired()
+                return True
+
+        return False
 
     async def _worker(self, radio: Crazyradio) -> None:
         """Worker task that runs continuously and handles the sending and
@@ -461,7 +469,10 @@ class RadioDriver(CRTPDriver):
             radio: the Crazyradio instance to use
         """
         if self._safe_link_state.enabled:
-            await self._safe_link_state.wait_until_acquired()
+            # Wait at most 2 seconds for safe-link mode before proceeding
+            # without it
+            async with move_on_after(2):
+                await self._safe_link_state.wait_until_acquired()
 
         null_packet = outbound_packet = CRTPPacket.null()
         delay_before_next_null_packet = 0.01
@@ -502,11 +513,26 @@ class RadioDriver(CRTPDriver):
                 # Bail out -- too many packets lost
                 raise IOError("Too many packets lost")
             elif action == 0:
-                # Resend immediately
+                # Resend immediately. If the packet that we are trying to send
+                # is a filler (null) packet, poll the outbound packet queue and
+                # check whether we can send something useful instead of just
+                # pulling the downstream
+                if outbound_packet is null_packet:
+                    try:
+                        outbound_packet = await self._out_queue_rx.receive_nowait()
+                    except WouldBlock:
+                        outbound_packet = null_packet
                 continue
             elif action > 0:
-                # Wait a bit before resending
-                await sleep(action)
+                # Wait a bit before resending. If the packet that we are trying
+                # to send is a filler (null) packet, poll the outbound packet
+                # queue after the delay and check whether we can send something
+                # useful instead of just pulling the downstream
+                if outbound_packet is null_packet:
+                    async with move_on_after(action):
+                        outbound_packet = await self._out_queue_rx.receive()
+                else:
+                    await sleep(action)
                 continue
             else:
                 # Invalid response, resend immediately
