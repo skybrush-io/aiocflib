@@ -357,11 +357,6 @@ async def test():
 
         await cf.led_ring.flash()
 
-        async with cf.high_level_commander.enabled():
-            await cf.high_level_commander.takeoff(1, duration=1)
-            await sleep(1.5)
-            await cf.high_level_commander.stop()
-
         session = cf.log.create_session()
         session.create_block(
             "pm.vbat",

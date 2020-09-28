@@ -3,13 +3,15 @@ and log table-of-contents entries from a Crazyflie.
 """
 
 from abc import abstractmethod, ABCMeta
-from anyio import open_file
+from anyio import create_lock, open_file
 from binascii import hexlify
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
 from struct import Struct
 from typing import Awaitable, Callable, Iterable, Optional, Union, Tuple, TypeVar
+
 from aiocflib.utils.registry import Registry
 
 __all__ = ("TOCCache",)
@@ -93,6 +95,18 @@ class TOCCache(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
+    def get_key(self) -> Optional[str]:
+        """Returns a short string identifier that uniquely identifies this
+        cache, or `None` if no such key can be derived.
+
+        The purpose of this method is to allow us to create locks to
+        semantically equivalent caches. The idea is that the locks are
+        associated to the keys of the TOC caches; in other words, if two
+        caches have the same key, then locking one of them implicitly locks the
+        other and vice versa.
+        """
+        return None
+
     def namespace(self, namespace: str) -> "TOCCache":
         """Returns another TOC cache instance that is restricted to the given
         namespace.
@@ -141,6 +155,9 @@ class NullTOCCache(TOCCache):
 
     async def has(self, hash: bytes, namespace: Optional[Namespace] = None) -> bool:
         return False
+
+    def get_key(self) -> Optional[str]:
+        return "null"
 
     async def store(
         self,
@@ -203,9 +220,15 @@ class FilesystemBasedTOCCache(TOCCache):
         """
         self._path = None
         self._read_only = bool(read_only)
+        self._key = None
 
     def _configure(self, uri):
         self.path = uri
+
+    def get_key(self) -> Optional[str]:
+        if self._key is None:
+            self._key = self.path.resolve() if self.path else None
+        return self._key
 
     @property
     def path(self) -> Path:
@@ -219,6 +242,7 @@ class FilesystemBasedTOCCache(TOCCache):
             raise ValueError("TOC cache is already configured")
 
         self._path = Path(value)
+        self._key = None
 
     def _path_for_hash(
         self, hash: bytes, namespace: Optional[Namespace] = None
@@ -341,6 +365,13 @@ class NamespacedTOCCacheWrapper(TOCCache):
     ) -> Iterable[TOCItem]:
         return await self._wrapped.find(hash, self._remap(namespace))
 
+    def get_key(self) -> Optional[str]:
+        if self._wrapped is not None and self._namespace:
+            root_key = self._wrapped.get_key()
+            return f"{root_key}{self._separator}{self._namespace}"
+        else:
+            return None
+
     async def has(self, hash: bytes, namespace: Optional[Namespace] = None) -> bool:
         return await self._wrapped.has(hash, self._remap(namespace))
 
@@ -359,6 +390,24 @@ class NamespacedTOCCacheWrapper(TOCCache):
             return self._separator.join(self._namespace, namespace)
 
 
+#: Dictionary that maps TOCCache classes to dictionaries that map cache keys to their locks
+_cache_locks = defaultdict(lambda: defaultdict(create_lock))
+
+
+@asynccontextmanager
+async def _locked_cache(cache: TOCCache, key_suffix: Optional[str] = None):
+    key = cache.get_key()
+    if key is None:
+        yield
+    else:
+        cls = cache.__class__
+        locks = _cache_locks[cls]
+        if key_suffix:
+            key = f"{key}:{key_suffix}"
+        async with locks[key]:
+            yield
+
+
 T = TypeVar("T")
 
 
@@ -373,25 +422,26 @@ async def fetch_table_of_contents_gracefully(
     hash = Struct("<I").pack(hash)
     result = None
 
-    try:
-        # Try to fetch the parameters from the cache based on the hash
-        if cache:
-            items = await cache.find(hash)
-            result = [from_bytes(data, id=id) for id, data in enumerate(items)]
-    except Exception:
-        pass
+    async with _locked_cache(cache, key_suffix=hash.hex()):
+        try:
+            # Try to fetch the parameters from the cache based on the hash
+            if cache:
+                items = await cache.find(hash)
+                result = [from_bytes(data, id=id) for id, data in enumerate(items)]
+        except Exception:
+            pass
 
-    if result is None:
-        # Retrieving the cached entries failed; let's try to fetch on
-        # our own
-        result = [await single_item_fetcher_func(i) for i in range(num_items)]
+        if result is None:
+            # Retrieving the cached entries failed; let's try to fetch on
+            # our own
+            result = [await single_item_fetcher_func(i) for i in range(num_items)]
 
-        # Store the fetched entries in the cache
-        if cache:
-            try:
-                await cache.store(hash, [to_bytes(item) for item in result])
-            except Exception:
-                # Storing items in the cache failed, but let's not freak out
-                pass
+            # Store the fetched entries in the cache
+            if cache:
+                try:
+                    await cache.store(hash, [to_bytes(item) for item in result])
+                except Exception:
+                    # Storing items in the cache failed, but let's not freak out
+                    pass
 
     return result
