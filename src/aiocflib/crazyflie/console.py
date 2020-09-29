@@ -48,15 +48,20 @@ class Console:
 
         async with aclosing(gen):
             while True:
-                if not parts:
-                    packet = await gen.__anext__()
-                else:
-                    try:
-                        async with fail_after(timeout):
-                            packet = await gen.__anext__()
-                    except TimeoutError:
-                        packet = None
-                        data = partial_message_marker
+                packet = None
+
+                try:
+                    if not parts:
+                        packet = await gen.__anext__()
+                    else:
+                        try:
+                            async with fail_after(timeout):
+                                packet = await gen.__anext__()
+                        except TimeoutError:
+                            packet = None
+                            data = partial_message_marker
+                except StopAsyncIteration:
+                    break
 
                 if packet is not None:
                     data = packet.data.rstrip(b"\x00")
