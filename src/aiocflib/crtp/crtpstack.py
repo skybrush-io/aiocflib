@@ -91,6 +91,8 @@ class MemoryType(IntEnum):
     LIGHTHOUSE = 0x14
     MEMORY_TESTER = 0x15
     SD_CARD = 0x16
+    LED_MEMORY = 0x17
+    APP = 0x18
 
     @property
     def description(self):
