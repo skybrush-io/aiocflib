@@ -11,7 +11,7 @@ __all__ = ("Platform",)
 
 
 class LinkControlChannel(IntEnum):
-    """Enum representig the names of the link control channels in the link
+    """Enum representing the names of the link control channels in the link
     control service of the CRTP protocol.
     """
 

@@ -23,7 +23,7 @@ class ParameterChannel(IntEnum):
     TABLE_OF_CONTENTS = 0
     READ = 1
     WRITE = 2
-    COMMAND = 3
+    MISC = 3
 
 
 class ParameterTOCCommand(IntEnum):
@@ -43,10 +43,11 @@ class ParameterCommand(IntEnum):
     """Enum representing the names of the generic commands in the parameter
     service of the CRTP protocol.
 
-    These commadns are valid for ParameterChannel.COMMAND (i.e. channel 3).
+    These commands are valid for ParameterChannel.MISC (i.e. channel 3).
     """
 
     SET_BY_NAME = 0
+    VALUE_UPDATED = 1
 
 
 _ParameterSpecification = namedtuple(
@@ -325,7 +326,7 @@ class Parameters:
         data = bytes((type,)) + type.encode_value(value)
         response = await self._crazyflie.run_command(
             port=CRTPPort.PARAMETERS,
-            channel=ParameterChannel.COMMAND,
+            channel=ParameterChannel.MISC,
             command=command,
             data=data,
         )
