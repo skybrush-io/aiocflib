@@ -52,7 +52,7 @@ class LEDRing:
         """Instructs the LED ring to show a brief light signal to attract
         attention.
         """
-        await self._crazyflie.parameters.set("ring.lightSignalTrigger", 1)
+        await self._crazyflie.parameters.set("system.highlight", 1)
 
     async def get_effect(self) -> Union[LEDRingEffect, int]:
         """Returns the current effect code of the LED ring.
