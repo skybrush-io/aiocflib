@@ -28,6 +28,7 @@ class PlatformChannel(IntEnum):
 
     PLATFORM_COMMAND = 0
     VERSION_COMMAND = 1
+    APP_CHANNEL = 2
 
 
 class PlatformCommand(IntEnum):

@@ -78,6 +78,7 @@ class Crazyflie(CRTPDevice):
         self._cache = TOCCache.create(cache) if cache else None
 
         # Initialize sub-modules; avoid circular import
+        from .app_channel import AppChannel
         from .commander import Commander
         from .console import Console
         from .high_level_commander import HighLevelCommander
@@ -89,6 +90,7 @@ class Crazyflie(CRTPDevice):
         from .param import Parameters
         from .platform import Platform
 
+        self._app_channel = AppChannel(self)
         self._commander = Commander(self)
         self._console = Console(self)
         self._high_level_commander = HighLevelCommander(self)
