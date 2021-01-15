@@ -85,6 +85,14 @@ class Platform:
         else:
             return None
 
+    async def get_firmware_revision(self) -> Optional[str]:
+        """Returns the firmware revision of the Crazyflie; `None` if the connected
+        device is not a Crazyflie.
+        """
+        if "firmware_revision" not in self._cache:
+            self._cache["firmware_revision"] = await self._get_firmware_revision()
+        return self._cache["firmware_revision"]
+
     async def get_firmware_version(self) -> Optional[str]:
         """Returns the firmware version of the Crazyflie; `None` if the connected
         device is not a Crazyflie.
@@ -92,6 +100,14 @@ class Platform:
         if "firmware_version" not in self._cache:
             self._cache["firmware_version"] = await self._get_firmware_version()
         return self._cache["firmware_version"]
+
+    async def _get_firmware_revision(self) -> Optional[str]:
+        if await self.is_crazyflie():
+            rev0 = await self._crazyflie.param.get("firmware.revision0")
+            rev1 = await self._crazyflie.param.get("firmware.revision1")
+            return f"{rev0:08x}{rev1:04x}"
+        else:
+            return None
 
     async def _get_firmware_version(self) -> Optional[str]:
         if await self.is_crazyflie():
