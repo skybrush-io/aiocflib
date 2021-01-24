@@ -8,6 +8,8 @@ __all__ = (
     "BootloaderAddressSpace",
     "CrazyradioAddress",
     "CrazyradioAddressLike",
+    "DEFAULT_RADIO_ADDRESS",
+    "DEFAULT_RADIO_BROADCAST_ADDRESS",
     "RadioAddressSpace",
     "USBAddressSpace",
 )
@@ -21,6 +23,9 @@ CrazyradioAddressLike = Union[int, bytes, str]
 
 #: The default Crazyradio address
 DEFAULT_RADIO_ADDRESS = b"\xe7\xe7\xe7\xe7\xe7"  # type: CrazyradioAddress
+
+#: The default Crazyradio broadcast address
+DEFAULT_RADIO_BROADCAST_ADDRESS = b"\xff\xe7\xe7\xe7\xe7"  # type: CrazyradioAddress
 
 
 class CrazyradioDataRate(IntEnum):
@@ -56,7 +61,11 @@ class CrazyradioDataRate(IntEnum):
             return "250K"
 
 
-def parse_radio_uri(uri: str, allow_prefix: bool = False) -> Dict:
+def parse_radio_uri(
+    uri: str,
+    allow_prefix: bool = False,
+    default_address: CrazyradioAddress = DEFAULT_RADIO_ADDRESS,
+) -> Dict:
     """Parses a Crazyflie radio URI and returns a dictionary containing the
     parsed parts.
 
@@ -76,7 +85,9 @@ def parse_radio_uri(uri: str, allow_prefix: bool = False) -> Dict:
         uri: the URI to parse
         allow_prefix: whether to allow the user to specify only a prefix of the
             Crazyradio address (where we will assume that the remaining bytes
-            are all zeros).
+            are all zeros)
+        default_address: the default address to use when the address is omitted
+            from the URI
     """
     scheme, sep, path = uri.partition("://")
     if not sep:
@@ -135,7 +146,7 @@ def parse_radio_uri(uri: str, allow_prefix: bool = False) -> Dict:
         except Exception as ex:
             raise ValueError("Invalid address: {0!r}".format(address)) from ex
     else:
-        address = DEFAULT_RADIO_ADDRESS
+        address = default_address
 
     # Extra parts at the end
     if path:

@@ -169,7 +169,7 @@ class CRTPDevice:
             the data section of the response packet
         """
         if command is not None:
-            command = _handle_command_argument(command)
+            command = _handle_data_argument(command)
             packet = CRTPPacket(port=port, channel=channel)
             request = (command + bytes(data)) if data else command
             packet.data = request
@@ -227,11 +227,11 @@ class CRTPDevice:
             data: the body of the request packet
         """
         packet = CRTPPacket(port=port, channel=channel)
-        packet.data = _handle_command_argument(data)
+        packet.data = _handle_data_argument(data)
         await self._driver.send_packet(packet)
 
 
-def _handle_command_argument(command: Optional[CRTPCommandLike] = None) -> bytes:
+def _handle_data_argument(command: Optional[CRTPCommandLike] = None) -> bytes:
     """Helper function to handle the conversion of the `command` argument in
     `CRTPDevice.run_command()` to a `bytes` object.
     """
