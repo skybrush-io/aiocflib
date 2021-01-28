@@ -330,6 +330,13 @@ class RadioAddressSpace(AddressSpace):
         else:
             raise IndexError
 
+    @property
+    def uri_prefix(self) -> str:
+        """Returns the URI prefix of this address space, without the section
+        reserved for the address.
+        """
+        return self._uri_prefix
+
     def __getitem__(self, index: int) -> str:
         address = self.get_address_for(index)
         return self._uri_format.format(hexlify(address).decode("ascii").upper())
