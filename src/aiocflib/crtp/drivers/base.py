@@ -53,7 +53,9 @@ class CRTPDriver(metaclass=ABCMeta):
             try:
                 middleware = find_middleware(middleware_name)
             except KeyError:
-                raise WrongURIType("Unknown middleware in URI: {0!r}".format(middleware_name))
+                raise WrongURIType(
+                    "Unknown middleware in URI: {0!r}".format(middleware_name)
+                )
             driver = middleware(driver)
 
         async with driver._connected_to(uri):
@@ -78,16 +80,6 @@ class CRTPDriver(metaclass=ABCMeta):
             an async context manager that connects to the specified URI when
             the context is entered and that closes the connection when the
             context is exited
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    async def get_status(self) -> str:
-        """Returns a status string that describes the current state of the
-        interface.
-
-        Returns:
-            the status string
         """
         raise NotImplementedError
 

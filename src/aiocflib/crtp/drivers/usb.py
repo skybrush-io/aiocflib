@@ -42,9 +42,6 @@ class USBDriver(CRTPDriver):
         finally:
             self._device = None
 
-    async def get_status(self):
-        return "No information available"
-
     @property
     def index(self) -> Optional[int]:
         """The index of the USB device on the USB hub, or `None` if not known."""

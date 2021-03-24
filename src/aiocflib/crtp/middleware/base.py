@@ -33,9 +33,6 @@ class MiddlewareBase(CRTPDriver):
     def _init(self) -> None:
         pass
 
-    async def get_status(self) -> str:
-        return self._wrapped.get_status()
-
     @property
     def is_safe(self) -> bool:
         return self._wrapped.is_safe

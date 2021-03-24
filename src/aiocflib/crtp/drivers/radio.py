@@ -237,6 +237,15 @@ class _SafeLinkState:
         await self._enabled_acquired.wait_until(attrgetter("acquired"))
 
 
+#: Dictionary mapping human-readable names to pairs or polling and resending
+#: strategies that can be used by a radio driver
+RADIO_DRIVER_PRESETS = {
+    "default": (DefaultPollingStrategy, DefaultResendingStrategy),
+    "patient": (BackoffPollingStrategy, PatientResendingStrategy),
+    "noPolling": (NoPollingStrategy, DefaultResendingStrategy),
+}
+
+
 @register("radio")
 class RadioDriver(CRTPDriver):
     """CRTP driver that allows us to communicate with a Crazyflie via a
@@ -250,11 +259,7 @@ class RadioDriver(CRTPDriver):
             last packet if it failed or whether we should drop the connection
     """
 
-    PRESETS = {
-        "default": (DefaultPollingStrategy, DefaultResendingStrategy),
-        "patient": (BackoffPollingStrategy, PatientResendingStrategy),
-        "noPolling": (NoPollingStrategy, DefaultResendingStrategy),
-    }
+    PRESETS = RADIO_DRIVER_PRESETS
 
     @asynccontextmanager
     async def _connected_to(self, uri: str):
@@ -293,9 +298,6 @@ class RadioDriver(CRTPDriver):
         # TODO(ntamas): what if the in_queue is full?
         self._in_queue_tx, self._in_queue_rx = create_memory_object_stream(256)
         self._out_queue_tx, self._out_queue_rx = create_memory_object_stream(1)
-
-    async def get_status(self) -> str:
-        return "Crazyradio version {0}".format(self._device.version)
 
     @property
     def address(self) -> Optional[CrazyradioAddress]:

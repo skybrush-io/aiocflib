@@ -80,9 +80,6 @@ class SITLDriver(CRTPDriver):
 
         self.polling_strategy = preset[0]()
 
-    async def get_status(self):
-        return "Software-in-the-loop simulator"
-
     @property
     def is_safe(self) -> bool:
         return True
