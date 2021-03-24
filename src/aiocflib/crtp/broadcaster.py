@@ -85,13 +85,13 @@ async def Broadcaster(uri: str) -> AsyncContextManager[_Broadcaster]:
 async def test():
     from aiocflib.bootloader.target import BootloaderTargetType
     from aiocflib.bootloader.types import BootloaderCommand
-    from aiocflib.crtp.crtpstack import CRTPPort
+    from aiocflib.crtp.crtpstack import CRTPPort, LinkControlChannel
 
     async with Broadcaster("radio://0/80/2M") as broadcaster:
         print(repr(broadcaster.uri))
         await broadcaster.send_packet(
             port=CRTPPort.LINK_CONTROL,
-            channel=3,
+            channel=LinkControlChannel.BOOTLOADER,
             data=(BootloaderTargetType.NRF51, BootloaderCommand.SHUTDOWN),
         )
 

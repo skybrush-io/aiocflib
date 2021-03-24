@@ -20,6 +20,7 @@ __all__ = (
     "CRTPPacket",
     "CRTPPort",
     "CRTPPortLike",
+    "LinkControlChannel",
 )
 
 
@@ -67,6 +68,21 @@ class CRTPPort(IntEnum):
     @property
     def code(self):
         return _crtp_port_codes[int(self)]
+
+
+class LinkControlChannel(IntEnum):
+    """Enum representing the names of the link control channels in the link
+    control service of the CRTP protocol.
+
+    This is declared here instead of in a dedicated "link control" module
+    because it is used in multiple places in the library (especially the
+    bootloader channel).
+    """
+
+    ECHO = 0
+    SOURCE = 1
+    SINK = 2
+    BOOTLOADER = 3
 
 
 #: Type alias for objects that can be convered into a CRTP command byte

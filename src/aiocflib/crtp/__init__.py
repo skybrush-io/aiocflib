@@ -5,6 +5,7 @@ from .crtpstack import (
     CRTPPacket,
     CRTPPort,
     CRTPPortLike,
+    LinkControlChannel,
     MemoryType,
 )
 from .device import CRTPDevice
@@ -19,6 +20,7 @@ __all__ = (
     "CRTPPacket",
     "CRTPPort",
     "CRTPPortLike",
+    "LinkControlChannel",
     "MemoryType",
     "init_drivers",
 )

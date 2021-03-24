@@ -3,22 +3,11 @@
 from enum import IntEnum
 from typing import Optional
 
-from aiocflib.crtp import CRTPPort
+from aiocflib.crtp import CRTPPort, LinkControlChannel
 
 from .crazyflie import Crazyflie
 
 __all__ = ("Platform",)
-
-
-class LinkControlChannel(IntEnum):
-    """Enum representing the names of the link control channels in the link
-    control service of the CRTP protocol.
-    """
-
-    ECHO = 0
-    SOURCE = 1
-    SINK = 2
-    BOOTLOADER = 3
 
 
 class PlatformChannel(IntEnum):

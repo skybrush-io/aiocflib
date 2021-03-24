@@ -6,7 +6,13 @@ from typing import Optional
 
 from aiocflib.bootloader.types import BootloaderCommand
 from aiocflib.bootloader.target import BootloaderTargetType
-from aiocflib.crtp import CRTPDispatcher, CRTPDevice, CRTPDriver, CRTPPort
+from aiocflib.crtp import (
+    CRTPDispatcher,
+    CRTPDevice,
+    CRTPDriver,
+    CRTPPort,
+    LinkControlChannel,
+)
 from aiocflib.errors import TimeoutError
 from aiocflib.utils.concurrency import ObservableValue
 from aiocflib.utils.toc import TOCCache, TOCCacheLike
@@ -211,7 +217,7 @@ class Crazyflie(CRTPDevice):
         # Initiate the reset and wait for the acknowledgment
         response = await self.run_command(
             port=CRTPPort.LINK_CONTROL,
-            channel=3,
+            channel=LinkControlChannel.BOOTLOADER,
             command=(BootloaderTargetType.NRF51, BootloaderCommand.RESET_INIT),
             timeout=1,
             attempts=5,
@@ -224,7 +230,7 @@ class Crazyflie(CRTPDevice):
         # Acknowledgment received, now we can send the reset command.
         await self.send_packet(
             port=CRTPPort.LINK_CONTROL,
-            channel=3,
+            channel=LinkControlChannel.BOOTLOADER,
             data=(
                 BootloaderTargetType.NRF51,
                 BootloaderCommand.RESET,
@@ -276,7 +282,7 @@ class Crazyflie(CRTPDevice):
         """
         await self.send_packet(
             port=CRTPPort.LINK_CONTROL,
-            channel=3,
+            channel=LinkControlChannel.BOOTLOADER,
             data=(BootloaderTargetType.NRF51, BootloaderCommand.RESUME),
         )
 
@@ -297,7 +303,7 @@ class Crazyflie(CRTPDevice):
         """
         await self.send_packet(
             port=CRTPPort.LINK_CONTROL,
-            channel=3,
+            channel=LinkControlChannel.BOOTLOADER,
             data=(BootloaderTargetType.NRF51, BootloaderCommand.SUSPEND),
         )
 
@@ -308,7 +314,7 @@ class Crazyflie(CRTPDevice):
         """Sends a packet to the Crazyflie that turns it off completely."""
         await self.send_packet(
             port=CRTPPort.LINK_CONTROL,
-            channel=3,
+            channel=LinkControlChannel.BOOTLOADER,
             data=(BootloaderTargetType.NRF51, BootloaderCommand.SHUTDOWN),
         )
 
@@ -320,9 +326,14 @@ async def test():
     from aiocflib.crtp import MemoryType
     from aiocflib.utils import timing
 
-    uri = "radio+log://0/80/2M/E7E7E7E704"
+    logging = False
+
+    uri = "radio://0/80/2M/E7E7E7E701"
     # uri = "sitl+log://"
     # uri = "usb+log://0"
+
+    if logging:
+        uri = uri.replace("://", "+log://")
 
     async with Crazyflie(uri, cache="/tmp/cfcache") as cf:
         """

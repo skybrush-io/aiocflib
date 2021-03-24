@@ -496,7 +496,7 @@ class Crazyradio:
         This function also caches the last configuration object it was called
         with. If the current configuration object is the same as the last one
         and there were no manual changes to the address, channel and data
-        rates in the meanwile with the appropriate methods, the configuration
+        rates in the meanwhile with the appropriate methods, the configuration
         step will be skipped to save some USB bandwidth.
         """
         if configuration is not self._current_configuration:

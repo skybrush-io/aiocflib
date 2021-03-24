@@ -1,4 +1,4 @@
-from aiocflib.crtp import CRTPDevice, CRTPPort
+from aiocflib.crtp import CRTPDevice, CRTPPort, LinkControlChannel
 from aiocflib.errors import NotFoundError
 from aiocflib.drivers.crazyradio import Crazyradio
 from aiocflib.utils.addressing import BootloaderAddressSpace
@@ -175,7 +175,11 @@ class Bootloader(CRTPDevice):
         """
         new_kwds = dict(timeout=1, attempts=5)
         new_kwds.update(kwds)
-        return await self.run_command(port=CRTPPort.LINK_CONTROL, channel=3, **new_kwds)
+        return await self.run_command(
+            port=CRTPPort.LINK_CONTROL,
+            channel=LinkControlChannel.BOOTLOADER,
+            **new_kwds
+        )
 
     async def send_bootloader_packet(self, data, **kwds) -> None:
         """Shortcut to ``self.send_packet()`` with the CRTP port and channel
@@ -186,7 +190,10 @@ class Bootloader(CRTPDevice):
         port, channel 3.
         """
         return await self.send_packet(
-            port=CRTPPort.LINK_CONTROL, channel=3, data=data, **kwds
+            port=CRTPPort.LINK_CONTROL,
+            channel=LinkControlChannel.BOOTLOADER,
+            data=data,
+            **kwds
         )
 
     async def validate(self) -> None:
