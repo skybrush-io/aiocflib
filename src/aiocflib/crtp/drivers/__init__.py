@@ -12,6 +12,7 @@ def init_drivers():
     drivers and middleware you wish to use in the driver URIs before
     constructing a driver object.
     """
+    from .cpplink import CppRadioDriver  # noqa
     from .radio import RadioDriver  # noqa
     from .sitl import SITLDriver  # noqa
     from .usb import USBDriver  # noqa
