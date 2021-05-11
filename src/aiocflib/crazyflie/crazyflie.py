@@ -328,9 +328,10 @@ async def test():
 
     logging = False
 
+    # uri = "cppradio://0/80/2M/E7E7E7E701"
     uri = "radio://0/80/2M/E7E7E7E701"
-    # uri = "sitl+log://"
-    # uri = "usb+log://0"
+    # uri = "sitl://"
+    # uri = "usb://0"
 
     if logging:
         uri = uri.replace("://", "+log://")
@@ -370,6 +371,7 @@ async def test():
 
         await cf.led_ring.flash()
 
+        """
         session = cf.log.create_session()
         session.create_block(
             "pm.vbat",
@@ -380,8 +382,9 @@ async def test():
         )
 
         async with session:
-            async with move_on_after(3):
+            with move_on_after(3):
                 await session.process_messages()
+        """
 
 
 if __name__ == "__main__":

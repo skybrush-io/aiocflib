@@ -130,7 +130,7 @@ class LEDRing:
 async def test():
     from anyio import sleep
 
-    uri = "radio+log://0/80/2M/E7E7E7E704"
+    uri = "radio+log://0/80/2M/E7E7E7E701"
     # uri = "sitl+log://"
     # uri = "usb+log://0"
 

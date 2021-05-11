@@ -9,7 +9,7 @@ from aiocflib.utils import timing
 
 
 async def run_test():
-    URI = "radio://0/80/2M/E7E7E7E701"
+    URI = "cppradio://0/80/2M/E7E7E7E701"
 
     PACKET_SIZE = 24
     NUM_PACKETS = 1024

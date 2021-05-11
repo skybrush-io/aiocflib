@@ -1,12 +1,12 @@
 """Utility functions related to concurrency management."""
 
 from anyio import (
-    create_capacity_limiter,
-    create_condition,
-    create_event,
+    CapacityLimiter,
+    Condition,
+    Event,
     create_task_group,
-    run_async_from_thread,
-    run_sync_in_worker_thread,
+    from_thread,
+    to_thread,
 )
 from anyio.abc import CapacityLimiter, TaskGroup
 from functools import partial
@@ -38,7 +38,7 @@ __all__ = (
 
 T = TypeVar("T")
 
-TaskStartedNotifier = Callable[[], Awaitable[None]]
+TaskStartedNotifier = Callable[[], None]
 
 
 class aclosing:
@@ -64,16 +64,16 @@ class AwaitableValue(Generic[T]):
 
     def __init__(self):
         """Constructor."""
-        self._event = create_event()
+        self._event = Event()
         self._value = None
 
-    async def set(self, value: T) -> None:
+    def set(self, value: T) -> None:
         """Sets a value and notifies all tasks waiting for the value."""
         if self._event.is_set():
             raise RuntimeError("awaitable value is already set")
 
         self._value = value
-        await self._event.set()
+        self._event.set()
 
     async def wait(self) -> T:
         """Waits for the value to be populated, and returns the value when
@@ -102,12 +102,12 @@ class DaemonTaskGroup(TaskGroup):
         await self._task_group.cancel_scope.cancel()
         return await self._task_group.__aexit__(exc_type, exc_value, tb)
 
-    async def spawn(self, func, *args, **kwds):
-        return await self._spawner.spawn(func, *args, **kwds)
+    def start_soon(self, func, *args, **kwds):
+        return self._spawner.start_soon(func, *args, **kwds)
 
-    async def spawn_and_wait_until_started(self, func, *args, **kwds):
-        on_opened = create_event()
-        await self.spawn(partial(func, notify_started=on_opened.set), *args, **kwds)
+    async def start(self, func, *args, **kwds):
+        on_opened = Event()
+        self.start_soon(partial(func, notify_started=on_opened.set), *args, **kwds)
         await on_opened.wait()
 
     async def _run(self, scope, func, *args, **kwds):
@@ -146,7 +146,7 @@ async def gather(
     result = []
 
     if isinstance(limiter, int):
-        limiter = create_capacity_limiter(limiter)
+        limiter = CapacityLimiter(limiter)
 
     run = (
         _gather_execute
@@ -158,7 +158,7 @@ async def gather(
         for func, args in to_execute:
             if iscoroutinefunction(func):
                 result.append(None)
-                await group.spawn(run, func, args, result, len(result) - 1)
+                group.start_soon(run, func, args, result, len(result) - 1)
             else:
                 result.append(func(*args))
 
@@ -187,7 +187,7 @@ class ObservableValue(Generic[T]):
         Parameters:
             value: the initial value
         """
-        self._condition = create_condition()
+        self._condition = Condition()
         self._value = value
 
     async def set(self, value: T, force: bool = False) -> None:
@@ -202,7 +202,7 @@ class ObservableValue(Generic[T]):
         self._value = value
 
         async with self._condition:
-            await self._condition.notify_all()
+            self._condition.notify_all()
 
     update = set
 
@@ -292,7 +292,7 @@ class ThreadContext(Generic[T]):
         """
 
         def respond_from_reader(value: Any) -> None:
-            run_async_from_thread(queue_to_caller.send, value)
+            from_thread.run(queue_to_caller.send, value)
 
         def reader_thread(queue: Queue, on_started: Callable[[Any], None]):
             if setup:
@@ -338,7 +338,7 @@ class ThreadContext(Generic[T]):
         """
 
         def respond_from_worker(container: AwaitableValue, value: Any) -> None:
-            run_async_from_thread(container.set, value)
+            from_thread.run_sync(container.set, value)
 
         def worker_thread(queue: Queue, on_started: Callable[[Any], None]):
             if setup:
@@ -410,7 +410,7 @@ class ThreadContext(Generic[T]):
         if self._value is None:
             raise RuntimeError("self._value must not be None here")
         else:
-            run_async_from_thread(self._value.set, value)
+            from_thread.run_sync(self._value.set, value)
 
     async def __aenter__(self) -> T:
         if self._task_group is not None:
@@ -424,8 +424,8 @@ class ThreadContext(Generic[T]):
 
         success = False
         try:
-            await self._task_group.spawn(
-                run_sync_in_worker_thread,
+            self._task_group.start_soon(
+                to_thread.run_sync,
                 self._target,
                 self._queue,
                 self._notify_thread_started,

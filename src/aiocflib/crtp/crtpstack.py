@@ -392,9 +392,9 @@ class CRTPDispatcher:
 
         if predicate:
 
-            async def matcher(packet: CRTPPacket) -> None:
+            def matcher(packet: CRTPPacket) -> None:
                 if predicate(packet):
-                    await value.set(packet)
+                    value.set(packet)
 
         else:
             matcher = value.set

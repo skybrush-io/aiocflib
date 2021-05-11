@@ -46,7 +46,7 @@ class SITLDriver(CRTPDriver):
 
         async with SITL(host, port) as sitl:
             async with create_daemon_task_group() as task_group:
-                await task_group.spawn(self._worker, sitl)
+                task_group.start_soon(self._worker, sitl)
                 yield self
 
     def __init__(self, preset: str = "default"):
@@ -126,7 +126,7 @@ class SITLDriver(CRTPDriver):
             await sitl.send_bytes(to_send)
 
             response = None
-            async with move_on_after(0.02):
+            with move_on_after(0.02):
                 response = await sitl.receive_bytes()
 
             if response is not None:
@@ -140,7 +140,7 @@ class SITLDriver(CRTPDriver):
             if delay_before_next_null_packet > 0:
                 # Wait for a given number of seconds
                 outbound_packet = null_packet
-                async with move_on_after(delay_before_next_null_packet):
+                with move_on_after(delay_before_next_null_packet):
                     outbound_packet = await self._out_queue_rx.receive()
             elif delay_before_next_null_packet < 0:
                 # Wait indefinitely
@@ -149,6 +149,6 @@ class SITLDriver(CRTPDriver):
                 # Poll the outbound queue; send a null packet if the queue is
                 # empty
                 try:
-                    outbound_packet = await self._out_queue_rx.receive_nowait()
+                    outbound_packet = self._out_queue_rx.receive_nowait()
                 except WouldBlock:
                     outbound_packet = null_packet

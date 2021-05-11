@@ -3,7 +3,7 @@ and log table-of-contents entries from a Crazyflie.
 """
 
 from abc import abstractmethod, ABCMeta
-from anyio import create_lock, open_file
+from anyio import Lock, open_file
 from binascii import hexlify
 from collections import defaultdict
 from contextlib import asynccontextmanager
@@ -391,7 +391,7 @@ class NamespacedTOCCacheWrapper(TOCCache):
 
 
 #: Dictionary that maps TOCCache classes to dictionaries that map cache keys to their locks
-_cache_locks = defaultdict(lambda: defaultdict(create_lock))
+_cache_locks = defaultdict(lambda: defaultdict(Lock))
 
 
 @asynccontextmanager

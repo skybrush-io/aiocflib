@@ -1,4 +1,4 @@
-from anyio import run_sync_in_worker_thread
+from anyio import to_thread
 
 from contextlib import asynccontextmanager
 from typing import List, Optional
@@ -51,7 +51,7 @@ class CppRadioDriver(CRTPDriver):
             uri = "radio://" + rest
 
         cflinkcpp = import_cflinkcpp()
-        connection = await run_sync_in_worker_thread(cflinkcpp.Connection, uri)
+        connection = await to_thread.run_sync(cflinkcpp.Connection, uri)
 
         try:
             self._connection = connection
@@ -62,7 +62,7 @@ class CppRadioDriver(CRTPDriver):
             self._connection = None
             # TODO(ntamas): why does connection.close() never return when
             # called on a worker thread???
-            # await run_sync_in_worker_thread(connection.close)
+            # await to_thread.run_sync(connection.close)
             connection.close()
 
     def __init__(self):
@@ -111,7 +111,7 @@ class CppRadioDriver(CRTPDriver):
             the next CRTP packet that was received
         """
         while True:
-            native_packet = await run_sync_in_worker_thread(self._connection.recv, 100)
+            native_packet = await to_thread.run_sync(self._connection.recv, 100)
             if native_packet.valid:
                 packet = CRTPPacket()
                 packet.port = native_packet.port
@@ -129,7 +129,7 @@ class CppRadioDriver(CRTPDriver):
         native_packet.port = packet.port
         native_packet.channel = packet.channel
         native_packet.payload = bytes(packet.data)
-        await run_sync_in_worker_thread(self._connection.send, native_packet)
+        await to_thread.run_sync(self._connection.send, native_packet)
 
     @classmethod
     async def scan_interfaces(

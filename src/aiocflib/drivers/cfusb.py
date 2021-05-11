@@ -1,9 +1,6 @@
 """Asynchronous USB driver for the Crazyflie."""
 
-from anyio import (
-    create_memory_object_stream,
-    run_sync_in_worker_thread,
-)
+from anyio import create_memory_object_stream, to_thread
 from anyio.streams.stapled import StapledObjectStream
 from contextlib import AsyncExitStack
 from functools import partial
@@ -72,7 +69,7 @@ class CfUsb:
         """Creates a list of low-level driver objects by scanning the USB buses
         for a suitable USB dongle.
         """
-        return await run_sync_in_worker_thread(_find_devices)
+        return await to_thread.run_sync(_find_devices)
 
     @classmethod
     async def detect_one(cls, *, index: int = 0):
@@ -119,7 +116,7 @@ class CfUsb:
 
     async def get_serial(self) -> str:
         """Returns the serial number of the associated device."""
-        return await run_sync_in_worker_thread(self._get_serial_sync)
+        return await to_thread.run_sync(self._get_serial_sync)
 
     @property
     def use_crtp_to_usb(self):

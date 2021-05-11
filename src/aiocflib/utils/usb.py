@@ -1,6 +1,6 @@
 """USB-related low-level utility functions."""
 
-from anyio import create_lock
+from anyio import Lock
 from contextlib import asynccontextmanager
 from typing import Any, List
 from weakref import WeakValueDictionary
@@ -51,7 +51,7 @@ async def claim_device(device: USBDevice):
     uid = get_device_uid(device)
     lock = _locks.get(uid)
     if lock is None:
-        _locks[uid] = lock = create_lock()
+        _locks[uid] = lock = Lock()
 
     async with lock:
         yield

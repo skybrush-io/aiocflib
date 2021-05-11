@@ -47,7 +47,7 @@ class CRTPDevice:
         self._task_group = create_daemon_task_group()
         try:
             spawner = await exit_stack.enter_async_context(self._task_group)
-            await spawner.spawn_and_wait_until_started(self._open_connection)
+            await spawner.start(self._open_connection)
             self._exit_stack = exit_stack
         finally:
             if self._exit_stack is None:
@@ -88,7 +88,7 @@ class CRTPDevice:
             # TODO(ntamas): maybe handle IOError here?
             try:
                 await self._prepare_link(driver)
-                await notify_started()
+                notify_started()
                 await self._message_handler(driver)
             finally:
                 self._driver = None
@@ -192,7 +192,7 @@ class CRTPDevice:
             while attempts > 0:
                 await self._driver.send_packet(packet)
                 if timeout > 0:
-                    async with move_on_after(timeout):
+                    with move_on_after(timeout):
                         response = await value.wait()
                 else:
                     response = await value.wait()

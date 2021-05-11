@@ -55,7 +55,7 @@ class Console:
                         packet = await gen.__anext__()
                     else:
                         try:
-                            async with fail_after(timeout):
+                            with fail_after(timeout):
                                 packet = await gen.__anext__()
                         except TimeoutError:
                             packet = None
@@ -88,7 +88,7 @@ class Console:
 
 
 async def test():
-    uri = "radio+log://0/80/2M/E7E7E7E704"
+    uri = "radio+log://0/80/2M/E7E7E7E701"
     # uri = "sitl+log://"
     # uri = "usb+log://0"
 

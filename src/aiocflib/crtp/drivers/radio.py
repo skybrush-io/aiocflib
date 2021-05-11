@@ -1,8 +1,8 @@
 from anyio import (
-    create_event,
     create_memory_object_stream,
     move_on_after,
     sleep,
+    Event,
     WouldBlock,
 )
 from anyio.abc import Event
@@ -51,7 +51,7 @@ class _SharedCrazyradioState:
     radio: Optional[Crazyradio] = None
     instance: Optional[_CfRadioCommunicator] = None
     count: int = 0
-    _initializing_event: Event = field(default_factory=create_event)
+    _initializing_event: Event = field(default_factory=Event)
     _destroying_event: Optional[Event] = None
 
     @property
@@ -81,7 +81,7 @@ class _SharedCrazyradioState:
         self.radio = None
         self.instance = None
         self.count = 0
-        self._destroying_event = create_event()
+        self._destroying_event = Event()
 
         return radio, self._destroying_event
 
@@ -274,8 +274,8 @@ class RadioDriver(CRTPDriver):
 
         async with SharedCrazyradio(index) as radio:
             async with create_daemon_task_group() as task_group:
-                await task_group.spawn(self._worker, radio)
-                await task_group.spawn(self._safe_link_supervisor, radio)
+                task_group.start_soon(self._worker, radio)
+                task_group.start_soon(self._safe_link_supervisor, radio)
                 yield self
 
     def __init__(self, preset: str = "default"):
@@ -473,7 +473,7 @@ class RadioDriver(CRTPDriver):
         if self._safe_link_state.enabled:
             # Wait at most 2 seconds for safe-link mode before proceeding
             # without it
-            async with move_on_after(2):
+            with move_on_after(2):
                 await self._safe_link_state.wait_until_acquired()
 
         null_packet = outbound_packet = CRTPPacket.null()
@@ -521,7 +521,7 @@ class RadioDriver(CRTPDriver):
                 # pulling the downstream
                 if outbound_packet is null_packet:
                     try:
-                        outbound_packet = await self._out_queue_rx.receive_nowait()
+                        outbound_packet = self._out_queue_rx.receive_nowait()
                     except WouldBlock:
                         outbound_packet = null_packet
                 continue
@@ -531,7 +531,7 @@ class RadioDriver(CRTPDriver):
                 # queue after the delay and check whether we can send something
                 # useful instead of just pulling the downstream
                 if outbound_packet is null_packet:
-                    async with move_on_after(action):
+                    with move_on_after(action):
                         outbound_packet = await self._out_queue_rx.receive()
                 else:
                     await sleep(action)
@@ -552,7 +552,7 @@ class RadioDriver(CRTPDriver):
             if delay_before_next_null_packet > 0:
                 # Wait for a given number of seconds
                 outbound_packet = null_packet
-                async with move_on_after(delay_before_next_null_packet):
+                with move_on_after(delay_before_next_null_packet):
                     outbound_packet = await self._out_queue_rx.receive()
             elif delay_before_next_null_packet < 0:
                 # Wait indefinitely
@@ -561,7 +561,7 @@ class RadioDriver(CRTPDriver):
                 # Poll the outbound queue; send a null packet if the queue is
                 # empty
                 try:
-                    outbound_packet = await self._out_queue_rx.receive_nowait()
+                    outbound_packet = self._out_queue_rx.receive_nowait()
                 except WouldBlock:
                     outbound_packet = null_packet
 

@@ -1,6 +1,6 @@
 """Classes related to accessing the logging subsystem of a Crazyflie."""
 
-from anyio import create_lock
+from anyio import Lock
 from contextlib import asynccontextmanager, AsyncExitStack
 from dataclasses import dataclass
 from enum import IntEnum
@@ -642,7 +642,7 @@ class LogSession:
         self,
         *,
         graceful_cleanup: Optional[bool] = None,
-        remove_existing_log_blocks: Optional[bool] = None
+        remove_existing_log_blocks: Optional[bool] = None,
     ) -> None:
         """Conifigures the behaviour of the log session during startup and
         cleanup.
@@ -657,8 +657,9 @@ class LogSession:
         if graceful_cleanup is not None:
             self._cleanup_gracefully = bool(graceful_cleanup)
         if remove_existing_log_blocks is not None:
-            self._remove_existing_log_blocks_when_starting = \
-                bool(remove_existing_log_blocks)
+            self._remove_existing_log_blocks_when_starting = bool(
+                remove_existing_log_blocks
+            )
 
     def create_block(
         self,
@@ -788,7 +789,7 @@ class Log:
         self._variables = None
         self._variables_by_name = None
 
-        self._operation_lock = create_lock()
+        self._operation_lock = Lock()
 
     def create_block(self) -> LogBlock:
         """Creates a new, empty log block specification object that can be
