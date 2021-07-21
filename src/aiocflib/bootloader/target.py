@@ -198,8 +198,8 @@ class BootloaderTarget:
 
         # Special support for tqdm progress bars
         if hasattr(on_progress, "reset") and hasattr(on_progress, "update"):
-            on_progress.reset(to_read)
-            on_progress = on_progress.update
+            on_progress.reset(to_read)  # type: ignore
+            on_progress = on_progress.update  # type: ignore
 
         while to_read > 0:
             page, offset = divmod(address, self.page_size)
@@ -225,7 +225,7 @@ class BootloaderTarget:
 
     async def read_firmware(
         self, length: int = -1, *, on_progress: Optional[ProgressHandler] = None
-    ) -> None:
+    ) -> bytes:
         """Reads the given number of bytes from the firmware area of the flash
         memory of the target.
 
@@ -264,8 +264,8 @@ class BootloaderTarget:
 
         # Special support for tqdm progress bars
         if hasattr(on_progress, "reset") and hasattr(on_progress, "update"):
-            on_progress.reset(len(data))
-            on_progress = on_progress.update
+            on_progress.reset(len(data))  # type: ignore
+            on_progress = on_progress.update  # type: ignore
 
         for start, size in chunkify(0, len(data), step=self.buffer_size):
             await self._fill_buffer_with(
@@ -294,6 +294,8 @@ class BootloaderTarget:
         if isinstance(firmware, str):
             async with await open_file(firmware, "rb") as fp:
                 firmware = await fp.read()
+
+        assert isinstance(firmware, bytes)
 
         await self.write_flash(self.firmware_address, firmware, on_progress=on_progress)
 

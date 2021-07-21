@@ -138,7 +138,7 @@ class CRTPDevice:
         data: CRTPDataLike = None,
         timeout: float = 0.2,
         attempts: int = 3,
-    ):
+    ) -> bytes:
         """Sends a command packet to the device and waits for the next
         matching response packet. Returns the data section of the response
         packet.

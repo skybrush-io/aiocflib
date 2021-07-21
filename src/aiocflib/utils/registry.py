@@ -1,4 +1,4 @@
-from typing import Callable, Generic, Optional, TypeVar, Union
+from typing import Callable, Generic, Optional, TypeVar, Union, overload
 
 
 T = TypeVar("T")
@@ -38,6 +38,14 @@ class Registry(Generic[T]):
                 return kwds["default"]
             else:
                 raise
+
+    @overload
+    def register(self, key: str) -> Callable[[T], T]:
+        ...
+
+    @overload
+    def register(self, key: str, value: T) -> T:
+        ...
 
     def register(
         self, key: str, value: Optional[T] = None

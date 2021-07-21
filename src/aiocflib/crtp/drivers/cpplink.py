@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from anyio import to_thread
 
 from contextlib import asynccontextmanager
-from typing import List, Optional
+from typing import Callable, List, Optional, TYPE_CHECKING
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.utils.addressing import CrazyradioAddress, parse_radio_uri
@@ -9,6 +11,9 @@ from aiocflib.utils.concurrency import ObservableValue
 
 from .base import CRTPDriver
 from .registry import register
+
+if TYPE_CHECKING:
+    import cflinkcpp
 
 
 __all__ = ("CppRadioDriver",)
@@ -41,6 +46,9 @@ class CppRadioDriver(CRTPDriver):
             last packet if it failed or whether we should drop the connection
     """
 
+    _connection: "cflinkcpp.Connection"
+    _packet_factory: Callable[[], "cflinkcpp.Packet"]
+
     @asynccontextmanager
     async def _connected_to(self, uri: str):
         # strip middleware and stuff from the URI
@@ -58,8 +66,8 @@ class CppRadioDriver(CRTPDriver):
             self._packet_factory = cflinkcpp.Packet
             yield self
         finally:
-            self._packet_factory = None
-            self._connection = None
+            self._packet_factory = None  # type: ignore
+            self._connection = None  # type: ignore
             # TODO(ntamas): why does connection.close() never return when
             # called on a worker thread???
             # await to_thread.run_sync(connection.close)
@@ -67,9 +75,9 @@ class CppRadioDriver(CRTPDriver):
 
     def __init__(self):
         """Constructor."""
-        self._connection = None
+        self._connection = None  # type: ignore
         self._link_quality = ObservableValue(0.0)
-        self._packet_factory = None
+        self._packet_factory = None  # type: ignore
 
     @property
     def address(self) -> Optional[CrazyradioAddress]:
@@ -148,10 +156,12 @@ class CppRadioDriver(CRTPDriver):
             list is returned for interfaces that do not support scanning
         """
         if isinstance(address, bytes):
-            address = int.from_bytes(address, "big", signed=False)
+            address_as_int = int.from_bytes(address, "big", signed=False)
+        else:
+            address_as_int = None
 
         scan = import_cflinkcpp().Connection.scan
-        uris = scan(address) if address is not None else scan()
+        uris = scan(address_as_int) if address_as_int is not None else scan()
         result = []
         for uri in uris:
             if uri.startswith("radio://"):
