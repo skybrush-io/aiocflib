@@ -2,13 +2,17 @@
 
 from enum import IntEnum
 from struct import Struct
-from typing import Optional, Sequence, Union
+from typing import Iterable, Optional, Sequence, Union
 
 from aiocflib.crtp import CRTPPort
 
 from .crazyflie import Crazyflie
 
 __all__ = ("Localization",)
+
+
+#: Maximum number of supported Lighthouse base stations
+NUM_LIGHTHOUSE_BASE_STATIONS = 16
 
 
 class LocalizationChannel(IntEnum):
@@ -18,6 +22,7 @@ class LocalizationChannel(IntEnum):
 
     EXTERNAL_POSITION = 0
     GENERIC = 1
+    POSITION_PACKED = 2
 
 
 class GenericLocalizationCommand(IntEnum):
@@ -34,6 +39,8 @@ class GenericLocalizationCommand(IntEnum):
     COMM_GNSS_PROPRIETARY = 7
     EXT_POSE = 8
     EXT_POSE_PACKED = 9
+    LH_ANGLE_STREAM = 10
+    LH_PERSIST_DATA = 11
 
 
 class Localization:
@@ -43,6 +50,9 @@ class Localization:
 
     _external_position_struct = Struct("<fff")
     _external_pose_struct = Struct("<Bfffffff")
+    _lpp_short_packet_struct = Struct("<BB")
+    _lighthouse_angle_struct = Struct("<Bfhhhfhhh")
+    _lighthouse_persist_struct = Struct("<HH")
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
@@ -52,6 +62,15 @@ class Localization:
                 subsystem related messages
         """
         self._crazyflie = crazyflie
+
+    async def _send_packet(
+        self,
+        data: Union[int, bytes],
+        channel: LocalizationChannel = LocalizationChannel.GENERIC,
+    ) -> None:
+        await self._crazyflie.send_packet(
+            port=CRTPPort.LOCALIZATION, channel=channel, data=data
+        )
 
     async def send_external_position(
         self,
@@ -69,11 +88,18 @@ class Localization:
             z; the Z coordinate
         """
         if y is None and z is None:
-            x, y, z = x
-        await self._crazyflie.send_packet(
-            port=CRTPPort.LOCALIZATION,
+            if isinstance(x, Iterable):
+                data = self._external_position_struct.pack(*x)
+            else:
+                raise TypeError(
+                    "x must be a sequence of floats when y and z are not given"
+                )
+        else:
+            data = self._external_position_struct.pack(x, y, z)
+
+        await self._send_packet(
+            data,
             channel=LocalizationChannel.EXTERNAL_POSITION,
-            data=self._external_position_struct.pack(x, y, z),
         )
 
     async def send_external_pose(
@@ -88,24 +114,93 @@ class Localization:
         """
         x, y, z = pos
         qx, qy, qz, qw = quat
-        await self._crazyflie.send_packet(
-            port=CRTPPort.LOCALIZATION,
-            channel=LocalizationChannel.GENERIC,
-            data=self._external_pose_struct.pack(
+        await self._send_packet(
+            self._external_pose_struct.pack(
                 GenericLocalizationCommand.EXT_POSE, x, y, z, qx, qy, qz, qw
             ),
         )
 
-    async def send_lpp_short_packet(self, data: bytes) -> None:
+    async def send_lpp_short_packet(self, dest_id: int, data: bytes) -> bool:
         """Sends an LPP short packet to the Loco Positioning System, using the
         Crazyflie as a proxy.
 
         Parameters:
+            dest_id: ID of the Loco Positioning System node to send the packet to
             data: the raw LPP short packet to send
+
+        Returns:
+            whether the LPP short packet response indicated a success or a failure
         """
-        await self._crazyflie.send_packet(
+        response = await self._crazyflie.run_command(
             port=CRTPPort.LOCALIZATION,
             channel=LocalizationChannel.GENERIC,
             command=GenericLocalizationCommand.LPP_SHORT_PACKET,
-            data=data,
+            data=self._lpp_short_packet_struct.pack(dest_id) + data,
         )
+        return len(response) > 0 and bool(response[0])
+
+    async def enable_emergency_stop(self) -> None:
+        """Sends an "enable emergency stop" packet to the Crazyflie."""
+        await self._send_packet(
+            GenericLocalizationCommand.ENABLE_EMERGENCY_STOP,
+        )
+
+    async def reset_emergency_stop_timeout(self) -> None:
+        """Sends a "reset emergency stop timeout" packet to the Crazyflie to
+        prevent it from stopping when the emergency stop watchdog is enabled.
+        """
+        await self._send_packet(
+            GenericLocalizationCommand.RESET_EMERGENCY_STOP_TIMEOUT,
+        )
+
+    async def persist_lighthouse_data(
+        self,
+        geo_list: Optional[Iterable[int]] = None,
+        calib_list: Optional[Iterable[int]] = None,
+    ) -> bool:
+        """Instructs the Crazyflie to persist the currently estimated geometry
+        and calibration data of the Lighthouse subsystem into permanent storage.
+
+        Parameters:
+            geo_list: IDs of the Lighthouse base stations (0-based) whose
+                geometry data must be persisted. Defaults to all stations when
+                omitted.
+            calib_list: IDs of the Lighthouse base stations (0-based) whose
+                calibration data must be persisted. Defaults to the same value
+                as the geometry list when omitted.
+
+        Returns:
+            whether the data was persisted successfully
+        """
+        if geo_list is None:
+            geo_list = range(NUM_LIGHTHOUSE_BASE_STATIONS)
+
+        if calib_list is None:
+            calib_list = geo_list
+
+        if not _is_valid_lighthouse_base_station_id_list(geo_list):
+            raise ValueError("Geometry base station ID list is invalid")
+        if not _is_valid_lighthouse_base_station_id_list(calib_list):
+            raise ValueError("Calibration base station ID list is invalid")
+
+        geo_mask, calib_mask = 0, 0
+        for id in geo_list:
+            geo_mask |= 1 << id
+        for id in calib_list:
+            calib_mask |= 1 << id
+
+        response = await self._crazyflie.run_command(
+            port=CRTPPort.LOCALIZATION,
+            channel=LocalizationChannel.GENERIC,
+            command=GenericLocalizationCommand.LH_PERSIST_DATA,
+            data=self._lighthouse_persist_struct.pack(geo_mask, calib_mask),
+        )
+
+        return len(response) > 0 and bool(response[0])
+
+
+def _is_valid_lighthouse_base_station_id_list(ids: Iterable[int]) -> bool:
+    return all(
+        isinstance(id, int) and id >= 0 and id < NUM_LIGHTHOUSE_BASE_STATIONS
+        for id in ids
+    )
