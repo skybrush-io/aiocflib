@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from anyio import move_on_after, sleep
+from anyio import sleep
 from binascii import hexlify
 from typing import Optional
 
@@ -63,7 +63,10 @@ class Crazyflie(CRTPDevice):
                     while tries > 0:
                         try:
                             name = await instance.platform.get_device_type_name()
-                            return name and name.startswith("Crazyflie")
+                            if name is None or not name:
+                                return False
+                            else:
+                                return name.startswith("Crazyflie")
                         except TimeoutError:
                             tries -= 1
             except Exception:
@@ -210,7 +213,7 @@ class Crazyflie(CRTPDevice):
         """The URI where the Crazyflie resides."""
         return self._uri
 
-    async def _reboot(self, to_bootloader: bool = False) -> None:
+    async def _reboot(self, to_bootloader: bool = False) -> bytes:
         """Implementation of the common parts of ``reboot()`` and
         ``reboot_to_bootloader()``.
         """
@@ -243,7 +246,8 @@ class Crazyflie(CRTPDevice):
     async def reboot(self, to_bootloader: bool = False) -> None:
         """Sends a packet to the Crazyflie that reboots its main processor."""
         await self._reboot()
-        await self._driver.notify_rebooted()
+        if self._driver:
+            await self._driver.notify_rebooted()
 
         # Give some time for the outbound thread to send the packet
         await sleep(0.1)
@@ -290,7 +294,8 @@ class Crazyflie(CRTPDevice):
         await sleep(0.1)
 
         # Notify the driver that the Crazyflie was rebooted
-        await self._driver.notify_rebooted()
+        if self._driver:
+            await self._driver.notify_rebooted()
 
     async def suspend(self) -> None:
         """Sends a packet to the Crazyflie that suspends its main processor.

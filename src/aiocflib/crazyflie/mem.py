@@ -1,11 +1,10 @@
 """Classes related to accessing the memory subsystem of a Crazyflie."""
 
 from abc import abstractmethod, abstractproperty, ABCMeta
-from collections import namedtuple
 from enum import IntEnum
 from errno import ENODATA
 from struct import Struct, error as StructError
-from typing import Callable, List, Tuple
+from typing import Callable, List, NamedTuple, Optional, Tuple
 
 from aiocflib.crtp import CRTPPort, MemoryType
 from aiocflib.errors import error_to_string
@@ -37,7 +36,9 @@ class MemoryInfoCommand(IntEnum):
     GET_DETAILS = 2
 
 
-_MemoryElement = namedtuple("_MemoryElement", "index type size address")
+_MemoryElement = NamedTuple(
+    "_MemoryElement", [("index", int), ("type", int), ("size", int), ("address", int)]
+)
 
 
 class MemoryElement(_MemoryElement):
@@ -66,9 +67,9 @@ class MemoryElement(_MemoryElement):
             raise ValueError("invalid memory description") from None
 
 
-_memory_handler_registry = (
-    Registry()
-)  # type: Registry[Callable[[MemoryElement, Crazyflie], MemoryHandler]]
+_memory_handler_registry: Registry[
+    Callable[[MemoryElement, Crazyflie], "MemoryHandler"]
+] = Registry()
 
 
 class MemoryHandler(metaclass=ABCMeta):
@@ -93,7 +94,7 @@ class MemoryHandler(metaclass=ABCMeta):
         """
         key = str(element.type)
         cls = _memory_handler_registry.find(key, default=MemoryHandlerBase)
-        return cls(element, owner=owner)
+        return cls(element, owner=owner)  # type: ignore
 
     @abstractmethod
     async def read(self, addr: int, length: int) -> bytes:
@@ -227,6 +228,9 @@ class Memory:
     subsystem of a Crazyflie instance.
     """
 
+    _crazyflie: Crazyflie
+    _handlers: Optional[List[MemoryHandler]]
+
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
 
@@ -251,12 +255,13 @@ class Memory:
             ValueError: if there is no such memory element
         """
         await self.validate()
+        assert self._handlers is not None
         for handler in self._handlers:
             if handler.type == type:
                 return handler
         raise ValueError("no memory matching type {0!r}".format(type))
 
-    async def find_all(self, type: MemoryType) -> List[MemoryElement]:
+    async def find_all(self, type: MemoryType) -> List[MemoryHandler]:
         """Finds all memory elements with the given type.
 
         Parameters:
@@ -268,6 +273,7 @@ class Memory:
             corresponding memory element.
         """
         await self.validate()
+        assert self._handlers is not None
         return [handler for handler in self._handlers if handler.type == type]
 
     async def find_eeprom(self) -> MemoryHandler:
@@ -297,7 +303,7 @@ class Memory:
 
         self._handlers = await self._validate()
 
-    async def write(self, type: MemoryType, addr: int, data: bytes) -> bytes:
+    async def write(self, type: MemoryType, addr: int, data: bytes) -> None:
         """Shortcut to write the given data to the given address of the first
         memory element of the given type.
 

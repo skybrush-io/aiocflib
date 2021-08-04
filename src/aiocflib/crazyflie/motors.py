@@ -11,6 +11,8 @@ __all__ = ("Motors",)
 class Motors:
     """Class representing the motors of a Crazyflie instance."""
 
+    _crazyflie: Crazyflie
+
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
 
@@ -47,7 +49,7 @@ class Motors:
             for index, motor_index in enumerate(indices):
                 param_name = f"motorPowerSet.m{index + 1}"
                 if index > 0:
-                    await sleep(1)
+                    await sleep(delay)
                 await cf.parameters.set(param_name, power)
-                await sleep(1)
+                await sleep(duration)
                 await cf.parameters.set(param_name, 0)

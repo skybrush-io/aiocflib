@@ -1,8 +1,10 @@
 """Classes related to handling console messages of a Crazyflie."""
 
+from typing import AsyncIterator, List
+
 from anyio import fail_after
 
-from aiocflib.crtp import CRTPPort
+from aiocflib.crtp import CRTPPacket, CRTPPort
 from aiocflib.utils.concurrency import aclosing
 
 from .crazyflie import Crazyflie
@@ -39,11 +41,11 @@ class Console:
             partial_message_marker: marker to append to messages if a newline
                 was not received in time after having received the message
         """
-        partial_message_marker = partial_message_marker.encode("UTF-8")
-        if not partial_message_marker.endswith(b"\n"):
-            partial_message_marker += b"\n"
+        partial_message_marker_bytes = partial_message_marker.encode("UTF-8")
+        if not partial_message_marker_bytes.endswith(b"\n"):
+            partial_message_marker_bytes += b"\n"
 
-        parts = []
+        parts: List[bytes] = []
         gen = self.packets()
 
         async with aclosing(gen):
@@ -59,12 +61,13 @@ class Console:
                                 packet = await gen.__anext__()
                         except TimeoutError:
                             packet = None
-                            data = partial_message_marker
                 except StopAsyncIteration:
                     break
 
                 if packet is not None:
                     data = packet.data.rstrip(b"\x00")
+                else:
+                    data = partial_message_marker_bytes
 
                 while True:
                     data, sep, rest = data.partition(b"\n")
@@ -79,7 +82,7 @@ class Console:
                     else:
                         break
 
-    async def packets(self):
+    async def packets(self) -> AsyncIterator[CRTPPacket]:
         """Async generator that yields console message packets from a Crazyflie,
         without reassembling them to full messages.
         """
@@ -88,7 +91,7 @@ class Console:
 
 
 async def test():
-    uri = "radio+log://0/80/2M/E7E7E7E701"
+    uri = "radio+log://0/80/2M/E7E7E7E709"
     # uri = "sitl+log://"
     # uri = "usb+log://0"
 

@@ -5,7 +5,7 @@ Crazyflie.
 from anyio import sleep
 from contextlib import asynccontextmanager
 from enum import IntEnum
-from typing import Optional, Union
+from typing import AsyncIterator, Optional, Union
 
 from aiocflib.utils.colors import ColorLike, to_color
 
@@ -62,6 +62,7 @@ class LEDRing:
             if the effect code is known to the enum, otherwise as an integer
         """
         value = await self._crazyflie.parameters.get("ring.effect")
+        value = int(value)
         try:
             return LEDRingEffect(value)
         except ValueError:
@@ -77,9 +78,9 @@ class LEDRing:
 
         This command also switches the mode (effect) of the LED ring.
         """
-        color = to_color(color)
+        resolved_color = to_color(color)
         await self._crazyflie.parameters.set("ring.fadeTime", 0)
-        await self._crazyflie.parameters.set("ring.fadeColor", color.rgb888)
+        await self._crazyflie.parameters.set("ring.fadeColor", resolved_color.rgb888)
         await self.set_effect(LEDRingEffect.FADE_COLOR)
 
     async def set_effect(self, effect: LEDRingEffect) -> None:
@@ -93,7 +94,7 @@ class LEDRing:
     @asynccontextmanager
     async def set_effect_and_restore(
         self, effect: LEDRingEffect, old_effect: Optional[LEDRingEffect] = None
-    ) -> None:
+    ) -> AsyncIterator[None]:
         """Context manager that sets the LED ring effect to the given light
         effect when entering the context and restores it when exiting the context.
         """
@@ -119,7 +120,7 @@ class LEDRing:
         await self.set_headlight(False)
 
     @asynccontextmanager
-    async def use(self) -> None:
+    async def use(self) -> AsyncIterator[None]:
         """Context manager that turns off the LED ring when exiting the context."""
         try:
             yield

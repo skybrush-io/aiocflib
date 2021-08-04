@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from enum import IntEnum
 from math import radians
 from struct import Struct
-from typing import Optional
+from typing import AsyncIterator, Optional
 
 from aiocflib.crtp import CRTPCommandLike, CRTPDataLike, CRTPPort
 from aiocflib.errors import CRTPCommandError
@@ -68,6 +68,8 @@ class HighLevelCommander:
     Crazyflie.
     """
 
+    _crazyflie: Crazyflie
+
     _define_trajectory_struct = Struct("<BBIB")
     _go_to_struct = Struct("<Bfffff")
     _land_struct = Struct("<ff?f")
@@ -109,16 +111,16 @@ class HighLevelCommander:
             command=(HighLevelCommand.DEFINE_TRAJECTORY, id), data=data
         )
 
-    async def disable(self):
+    async def disable(self) -> None:
         """Disables the high-level controller on the Crazyflie."""
         await self._crazyflie.parameters.set("commander.enHighLevel", 0)
 
-    async def enable(self):
+    async def enable(self) -> None:
         """Enables the high-level controller on the Crazyflie."""
         await self._crazyflie.parameters.set("commander.enHighLevel", 1)
 
     @asynccontextmanager
-    async def enabled(self):
+    async def enabled(self) -> AsyncIterator[None]:
         """Async context manager that enables the high-level controller when
         entering the context and disables it when exiting the context.
         """
@@ -152,7 +154,14 @@ class HighLevelCommander:
             group_mask: mask that defines which Crazyflie drones this command
                 should apply to
         """
-        data = self._go_to_struct.pack(relative, x, y, z, radians(yaw), duration,)
+        data = self._go_to_struct.pack(
+            relative,
+            x,
+            y,
+            z,
+            radians(yaw),
+            duration,
+        )
         await self._run_command(command=(HighLevelCommand.GO_TO, group_mask), data=data)
 
     async def is_enabled(self, fetch: bool = False) -> bool:
@@ -214,7 +223,7 @@ class HighLevelCommander:
             velocity, duration = abs(height) / duration, None
 
         if velocity is None:
-            velocity = 0   # firmware picks a velocity
+            velocity = 0  # firmware picks a velocity
         elif velocity < 0:
             raise ValueError("velocity may not be negative")
 
@@ -267,7 +276,12 @@ class HighLevelCommander:
             reversed: whether to play the trajectory backwards. Not supported
                 for compressed trajectories
         """
-        data = self._start_trajectory_struct.pack(relative, reversed, id, time_scale,)
+        data = self._start_trajectory_struct.pack(
+            relative,
+            reversed,
+            id,
+            time_scale,
+        )
         await self._run_command(
             command=(HighLevelCommand.START_TRAJECTORY, group_mask), data=data
         )
@@ -327,7 +341,7 @@ class HighLevelCommander:
             velocity, duration = abs(height) / duration, None
 
         if velocity is None:
-            velocity = 0   # firmware picks a velocity
+            velocity = 0  # firmware picks a velocity
         elif velocity < 0:
             raise ValueError("velocity may not be negative")
 
@@ -354,7 +368,7 @@ class HighLevelCommander:
         command: Optional[CRTPCommandLike] = None,
         data: CRTPDataLike = None,
         **kwds,
-    ):
+    ) -> None:
         """Sends a command packet to the high-level commander port and channel
         of the Crazyflie, waits for the next matching response packet and
         handles the error code in the packet.

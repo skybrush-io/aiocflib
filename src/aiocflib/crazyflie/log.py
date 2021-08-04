@@ -14,6 +14,7 @@ from typing import (
     Callable,
     Dict,
     Iterable,
+    Iterator,
     List,
     Optional,
     Tuple,
@@ -24,7 +25,7 @@ from aiocflib.crtp import CRTPPacket, CRTPPort
 from aiocflib.errors import error_to_string
 from aiocflib.utils import anop
 from aiocflib.utils.concurrency import aclosing
-from aiocflib.utils.toc import fetch_table_of_contents_gracefully
+from aiocflib.utils.toc import TOCCache, fetch_table_of_contents_gracefully
 from aiocflib.utils.typing import Disposer
 
 from .crazyflie import Crazyflie
@@ -155,7 +156,7 @@ class VariableSpecification:
     """Class representing the specification of a single log variable of the
     Crazyflie."""
 
-    id: str
+    id: int
     type: int
     group: str
     name: str
@@ -166,7 +167,10 @@ class VariableSpecification:
             type = data[0] & 0x0F
             group, name, *rest = data[1:].split(b"\x00")
             return cls(
-                id=id, type=type, group=group.decode("ascii"), name=name.decode("ascii")
+                id=id,
+                type=type,
+                group=group.decode("ascii"),
+                name=name.decode("ascii"),
             )
         except Exception:
             raise ValueError("invalid log variable description") from None
@@ -215,9 +219,9 @@ class LogBlockItem:
     """
 
     name: str
-    id: str
-    fetch_as: int
-    stored_as: int
+    id: int
+    fetch_as: VariableType
+    stored_as: VariableType
 
     def to_bytes(self) -> bytes:
         """Returns a byte-level representation of this item that can be used in
@@ -239,10 +243,15 @@ class LogMessage:
     timestamp: int
     block: "LogBlock"
     items: Tuple
-    handler: "LogMessageHandler"
+    handler: Optional["LogMessageHandler"]
 
     @classmethod
-    def from_bytes(cls, data: bytes, block: "LogBlock", handler: "LogMessageHandler"):
+    def from_bytes(
+        cls,
+        data: bytes,
+        block: "LogBlock",
+        handler: Optional["LogMessageHandler"] = None,
+    ):
         return cls(
             block=block,
             timestamp=int.from_bytes(data[1:4], byteorder="little"),
@@ -296,13 +305,19 @@ def _process_period_and_frequency(
         return int(period_msec)
     if frequency is None:
         frequency = 1.0 / period if period is not None else 10.0
-    return 1000.0 // frequency
+    return int(1000.0 // frequency)
 
 
 class LogBlock:
     """Specification of a single log block that bundles together a desired
     logging period and a list of variables to log.
     """
+
+    _owner: "Log"
+
+    _id: Optional[int]
+    _items: List[LogBlockItem]
+    _struct: Optional[Struct]
 
     def __init__(self, owner: "Log"):
         """Constructor.
@@ -314,18 +329,18 @@ class LogBlock:
         self._disposer = None
 
         self._id = None
-        self._items = []  # type: List[LogBlockItem]
-        self._struct = None  # type: Optional[Struct]
+        self._items = []
+        self._struct = None
 
     @property
-    def id(self) -> int:
+    def id(self) -> Optional[int]:
         """The numeric ID of the block when it is already submitted to the
-        Crazyflie.
+        Crazyflie, or `None` if it is not submitted yet.
         """
         return self._id
 
     @id.setter
-    def id(self, value: Union[int, None]) -> None:
+    def id(self, value: Optional[int]) -> None:
         if self._id == value:
             return
 
@@ -354,7 +369,7 @@ class LogBlock:
         return sum(item.fetch_as.length for item in self._items)
 
     def add_variable(
-        self, name: str, type: Optional[Union[str, VariableType]] = None
+        self, name: str, type: Optional[Union[int, VariableType]] = None
     ) -> None:
         """Adds a new variable to this logging block."""
         toc = self._owner._variables_by_name
@@ -428,6 +443,9 @@ class LogBlock:
         Returns:
             a function that can be used to stop the log block on the Crazyflie
         """
+        if self.id is None:
+            raise RuntimeError("log block was not submitted yet")
+
         period_msec = _process_period_and_frequency(
             period=period, period_msec=period_msec, frequency=frequency
         )
@@ -493,7 +511,7 @@ class LogBlock:
         format_strings = [item.fetch_as.struct.format[1:] for item in self._items]
         if format_strings and isinstance(format_strings[0], bytes):
             # Python <3.7
-            format_strings = [fmt.decode("ascii") for fmt in format_strings]
+            format_strings = [fmt.decode("ascii") for fmt in format_strings]  # type: ignore
 
         self._struct = Struct("<" + "".join(format_strings))
 
@@ -528,7 +546,7 @@ class LogBlock:
         Returns:
             the decoded values
         """
-        return self._struct.unpack_from(data, offset=4)
+        return self._struct.unpack_from(data, offset=4)  # type: ignore
 
     async def _dispose(self):
         """Removes this log block from the Crazyflie."""
@@ -726,6 +744,7 @@ class LogSession:
 
     async def __aexit__(self, exc_type, exc, tb):
         try:
+            assert self._exit_stack is not None
             return await self._exit_stack.__aexit__(exc_type, exc, tb)
         except Exception as ex:
             if not self._cleanup_gracefully:
@@ -771,6 +790,14 @@ class Log:
     subsystem of a Crazyflie instance.
     """
 
+    _block_id_generator: Iterator[int]
+    _cache: Optional[TOCCache]
+    _crazyflie: Crazyflie
+    _operation_lock: Lock
+
+    _variables: List[VariableSpecification]
+    _variables_by_name: Dict[str, VariableSpecification]
+
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
 
@@ -781,13 +808,10 @@ class Log:
         self._cache = crazyflie._get_cache_for("log_toc")
         self._crazyflie = crazyflie
 
-        self._max_packet_count = None
-        self._max_operation_count = None
+        self._block_id_generator = count()
 
-        self._block_id_generator = None
-
-        self._variables = None
-        self._variables_by_name = None
+        self._variables = None  # type: ignore
+        self._variables_by_name = None  # type: ignore
 
         self._operation_lock = Lock()
 
@@ -921,14 +945,9 @@ class Log:
             command=LoggingTOCCommand.GET_INFO_V2,
         )
         try:
-            length, hash, max_packet_count, max_operation_count = Struct(
-                "<HIBB"
-            ).unpack(response)
+            length, hash, _, _ = Struct("<HIBB").unpack(response)
         except StructError:
             raise ValueError("invalid logging TOC info response")
-
-        self._max_packet_count = max_packet_count
-        self._max_operation_count = max_operation_count
 
         return length, hash
 
@@ -971,7 +990,7 @@ class Log:
                 )
             )
 
-    async def _submit_block(self, block: LogBlock) -> Disposer:
+    async def _submit_block(self, block: LogBlock) -> Tuple[int, Disposer]:
         """Submits a log block to the Crazyflie for registration.
 
         Returns:

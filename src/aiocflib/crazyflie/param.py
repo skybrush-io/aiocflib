@@ -1,14 +1,15 @@
 """Classes related to accessing the parameters subsystem of a Crazyflie."""
 
-from collections import namedtuple
+from __future__ import annotations
+
 from contextlib import asynccontextmanager
 from enum import IntEnum
 from struct import Struct, error as StructError
-from typing import Tuple, Union
+from typing import cast, Dict, List, NamedTuple, Optional, Tuple, Union
 
 from aiocflib.crtp import CRTPPort
 from aiocflib.errors import error_to_string
-from aiocflib.utils.toc import fetch_table_of_contents_gracefully
+from aiocflib.utils.toc import TOCCache, fetch_table_of_contents_gracefully
 
 from .crazyflie import Crazyflie
 
@@ -50,8 +51,9 @@ class ParameterCommand(IntEnum):
     VALUE_UPDATED = 1
 
 
-_ParameterSpecification = namedtuple(
-    "_ParameterSpecification", "id type group name read_only"
+_ParameterSpecification = NamedTuple(
+    "_ParameterSpecification",
+    [("id", int), ("type", int), ("group", str), ("name", str), ("read_only", bool)],
 )
 
 #: Dictionary mapping integer type codes to their C types, Python structs and
@@ -89,14 +91,14 @@ class ParameterType(IntEnum):
     UINT64 = 11
 
     @classmethod
-    def to_type(cls, value):
+    def to_type(cls, value: Union[int, str, "ParameterType"]):
         """Converts an integer, string or ParameterType_ instance to a
         ParameterType.
         """
         if isinstance(value, cls):
             return value
         elif isinstance(value, str):
-            return _type_names.get(value)
+            return _type_names[value]
         else:
             return ParameterType(value)
 
@@ -192,6 +194,13 @@ class Parameters:
     subsystem of a Crazyflie instance.
     """
 
+    _cache: Optional[TOCCache]
+    _crazyflie: Crazyflie
+
+    _values: Dict[str, float]
+    _variables: List[ParameterSpecification]
+    _variables_by_name: Dict[str, ParameterSpecification]
+
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
 
@@ -202,9 +211,9 @@ class Parameters:
         self._cache = crazyflie._get_cache_for("param_toc")
         self._crazyflie = crazyflie
 
-        self._variables = None
-        self._variables_by_name = None
-        self._values = None
+        self._values = None  # type: ignore
+        self._variables = None  # type: ignore
+        self._variables_by_name = None  # type: ignore
 
     async def get(self, name: str, fetch: bool = False):
         """Returns the current value of a parameter, given its fully-qualified
@@ -320,10 +329,10 @@ class Parameters:
         of some parameters. Triggering a parameter read anywhere will download
         the TOC from the drone anyway if needed.
         """
-        type = ParameterType.to_type(type)
-        group, _, name = name.encode("ascii").rpartition(b".")
-        command = [ParameterCommand.SET_BY_NAME, group, 0, name, 0]
-        data = bytes((type,)) + type.encode_value(value)
+        resolved_type = ParameterType.to_type(type)
+        group, _, name_bytes = name.encode("ascii").rpartition(b".")
+        command = [ParameterCommand.SET_BY_NAME, group, 0, name_bytes, 0]
+        data = bytes((resolved_type,)) + resolved_type.encode_value(value)
         response = await self._crazyflie.run_command(
             port=CRTPPort.PARAMETERS,
             channel=ParameterChannel.MISC,
@@ -427,7 +436,7 @@ class Parameters:
             command=ParameterTOCCommand.READ_TOC_INFO_V2,
         )
         try:
-            return Struct("<HI").unpack(response)
+            return cast(Tuple[int, int], Struct("<HI").unpack(response))
         except StructError:
             raise ValueError("invalid parameter TOC info response")
 

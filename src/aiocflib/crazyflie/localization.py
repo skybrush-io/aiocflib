@@ -48,6 +48,8 @@ class Localization:
     subsystem of a Crazyflie instance.
     """
 
+    _crazyflie: Crazyflie
+
     _external_position_struct = Struct("<fff")
     _external_pose_struct = Struct("<Bfffffff")
     _lpp_short_packet_struct = Struct("<BB")

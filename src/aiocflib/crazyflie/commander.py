@@ -29,6 +29,8 @@ class Commander:
     setpoint messages to a Crazyflie instance.
     """
 
+    _crazyflie: Crazyflie
+
     _hover_setpoint_struct = Struct("<Bffff")
     _position_setpoint_struct = Struct("<Bffff")
     _rpyt_setpoint_struct = Struct("<fffH")
@@ -63,7 +65,11 @@ class Commander:
         await self._crazyflie.send_packet(port=CRTPPort.GENERIC_COMMANDER, data=data)
 
     async def send_position_setpoint(
-        self, x: float = 0.0, y: float = 0.0, z: float = 0.0, yaw: float = 0.0,
+        self,
+        x: float = 0.0,
+        y: float = 0.0,
+        z: float = 0.0,
+        yaw: float = 0.0,
     ) -> None:
         """Sends a position setpoint to the Crazyflie with a fixed X-Y-Z
         coordinate triplet and a yaw angle.

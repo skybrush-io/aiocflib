@@ -1,6 +1,8 @@
 """Classes related to handling platform service messages of a Crazyflie."""
 
-from aiocflib.crtp import CRTPPort
+from typing import AsyncIterator
+
+from aiocflib.crtp.crtpstack import CRTPPacket, CRTPPort
 
 from .crazyflie import Crazyflie
 from .platform import PlatformChannel
@@ -13,6 +15,8 @@ class AppChannel:
     instance.
     """
 
+    _crazyflie: Crazyflie
+
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
 
@@ -22,7 +26,7 @@ class AppChannel:
         """
         self._crazyflie = crazyflie
 
-    async def packets(self):
+    async def packets(self) -> AsyncIterator[CRTPPacket]:
         """Async generator that yields messages coming on the app-specific
         channel from a Crazyflie.
         """

@@ -1,7 +1,7 @@
 """Classes related to handling platform service messages of a Crazyflie."""
 
 from enum import IntEnum
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from aiocflib.crtp import CRTPPort, LinkControlChannel
 
@@ -42,6 +42,9 @@ class Platform:
     """Class representing the handler of platform service messages for a Crazyflie
     instance.
     """
+
+    _crazyflie: Crazyflie
+    _cache: Dict[str, Any]
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
