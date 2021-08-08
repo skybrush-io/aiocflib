@@ -54,9 +54,10 @@ class SITL:
             partial(self._send_bytes, client), partial(self._receive_bytes, client)
         )
 
-    async def __aexit__(self, exc_type, exc_value, tb):
+    async def __aexit__(self, exc_type, exc_value, tb) -> bool:
+        assert self._exit_stack is not None
         try:
-            await self._exit_stack.__aexit__(exc_type, exc_value, tb)
+            return await self._exit_stack.__aexit__(exc_type, exc_value, tb)
         finally:
             self._exit_stack = None
 

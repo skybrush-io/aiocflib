@@ -8,7 +8,7 @@ from anyio import (
     from_thread,
     to_thread,
 )
-from anyio.abc import CapacityLimiter, TaskGroup
+from anyio.abc import TaskGroup
 from functools import partial
 from inspect import iscoroutinefunction
 from outcome import capture
@@ -16,7 +16,6 @@ from queue import Full, Queue
 from sys import exc_info
 from typing import (
     Any,
-    Awaitable,
     Callable,
     Generic,
     Iterable,
@@ -52,8 +51,9 @@ class aclosing:
     async def __aenter__(self):
         return self._aiter
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args) -> bool:
         await self._aiter.aclose()
+        return False
 
 
 class AwaitableValue(Generic[T]):
@@ -61,6 +61,9 @@ class AwaitableValue(Generic[T]):
     object contains no value and the corresponding event is not set. Tasks may
     wait for the object to be populated with a value.
     """
+
+    _event: Event
+    _value: Optional[T]
 
     def __init__(self):
         """Constructor."""
@@ -80,7 +83,7 @@ class AwaitableValue(Generic[T]):
         it is populated.
         """
         await self._event.wait()
-        return self._value
+        return self._value  # type: ignore
 
 
 class DaemonTaskGroup(TaskGroup):
@@ -96,11 +99,11 @@ class DaemonTaskGroup(TaskGroup):
         self._spawner = await self._task_group.__aenter__()
         return self
 
-    async def __aexit__(self, exc_type, exc_value, tb):
+    async def __aexit__(self, exc_type, exc_value, tb) -> bool:
         self._spawner = None
 
         await self._task_group.cancel_scope.cancel()
-        return await self._task_group.__aexit__(exc_type, exc_value, tb)
+        return bool(await self._task_group.__aexit__(exc_type, exc_value, tb))
 
     def start_soon(self, func, *args, **kwds):
         return self._spawner.start_soon(func, *args, **kwds)
@@ -439,7 +442,7 @@ class ThreadContext(Generic[T]):
 
         return result if result is not None else self._queue.put_nowait
 
-    async def __aexit__(self, exc_type, exc_value, tb):
+    async def __aexit__(self, exc_type, exc_value, tb) -> bool:
         if self._queue:
             self._queue.put(None)
             self._queue = None
@@ -447,8 +450,12 @@ class ThreadContext(Generic[T]):
         try:
             if self._task_group:
                 try:
-                    await self._task_group.__aexit__(exc_type, exc_value, tb)
+                    return bool(
+                        await self._task_group.__aexit__(exc_type, exc_value, tb)
+                    )
                 finally:
                     self._task_group = None
+            else:
+                return False
         finally:
             self._value = None

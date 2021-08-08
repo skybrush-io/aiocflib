@@ -742,13 +742,14 @@ class LogSession:
 
         self._id_mapping = id_mapping
 
-    async def __aexit__(self, exc_type, exc, tb):
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
         try:
             assert self._exit_stack is not None
             return await self._exit_stack.__aexit__(exc_type, exc, tb)
         except Exception as ex:
             if not self._cleanup_gracefully:
                 raise ex
+            return True
         finally:
             self._exit_stack = None
             self._id_mapping = None

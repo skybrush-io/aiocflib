@@ -415,7 +415,8 @@ class Crazyradio:
 
         return _CfRadioCommunicator(sender, self)
 
-    async def __aexit__(self, exc_type, exc_value, tb):
+    async def __aexit__(self, exc_type, exc_value, tb) -> bool:
+        assert self._exit_stack is not None
         exit_stack = self._exit_stack
         self._exit_stack = None
         return await exit_stack.__aexit__(exc_type, exc_value, tb)
