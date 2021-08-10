@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aiocflib"
-version = "2.1.0"
+version = "2.1.1"
 description = "asyncio-based API for Crazyflie drones"
 authors = ["Tamas Nepusz <tamas@collmot.com>"]
 packages = [
