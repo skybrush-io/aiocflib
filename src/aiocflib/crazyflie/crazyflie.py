@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from anyio import sleep
 from binascii import hexlify
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from aiocflib.bootloader.types import BootloaderCommand
 from aiocflib.bootloader.target import BootloaderTargetType
@@ -19,12 +19,12 @@ from aiocflib.utils.toc import TOCCache, TOCCacheLike
 
 __all__ = ("Crazyflie",)
 
-MYPY = False
-if MYPY:
+if TYPE_CHECKING:
     from .commander import Commander
     from .console import Console
     from .high_level_commander import HighLevelCommander
     from .led_ring import LEDRing
+    from .lighthouse import Lighthouse
     from .localization import Localization
     from .log import Log
     from .mem import Memory
@@ -92,6 +92,7 @@ class Crazyflie(CRTPDevice):
         from .console import Console
         from .high_level_commander import HighLevelCommander
         from .led_ring import LEDRing
+        from .lighthouse import Lighthouse
         from .localization import Localization
         from .log import Log
         from .mem import Memory
@@ -104,6 +105,7 @@ class Crazyflie(CRTPDevice):
         self._console = Console(self)
         self._high_level_commander = HighLevelCommander(self)
         self._led_ring = LEDRing(self)
+        self._lighthouse = Lighthouse(self)
         self._localization = Localization(self)
         self._log = Log(self)
         self._memory = Memory(self)
@@ -161,6 +163,11 @@ class Crazyflie(CRTPDevice):
         return (
             self._driver.link_quality if self._driver else ObservableValue.constant(0.0)
         )
+
+    @property
+    def lighthouse(self) -> Lighthouse:
+        """The Lighthouse subsystem of the Crazyflie."""
+        return self._lighthouse
 
     @property
     def localization(self) -> Localization:

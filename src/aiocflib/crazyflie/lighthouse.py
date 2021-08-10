@@ -2,6 +2,11 @@ from dataclasses import dataclass
 from struct import Struct
 from typing import Any, ClassVar, Dict, List, Tuple, Type, cast
 
+from aiocflib.crtp.crtpstack import MemoryType
+
+from .crazyflie import Crazyflie
+from .mem import MemoryHandler
+
 __all__ = ("LighthouseBsGeometry",)
 
 
@@ -306,3 +311,81 @@ class LighthouseBsCalibration:
             "sweeps": tuple(sweep.to_json() for sweep in self.sweeps),
             "uid": self.uid,
         }
+
+
+class Lighthouse:
+    """Class representing the Lighthouse subsystem of a Crazyflie instance."""
+
+    CALIB_START_ADDR: ClassVar[int] = 0x1000
+    GEO_START_ADDR: ClassVar[int] = 0
+    PAGE_SIZE: ClassVar[int] = 0x100
+
+    _crazyflie: Crazyflie
+    _number_of_base_stations: int
+
+    def __init__(self, crazyflie: Crazyflie, *, number_of_base_stations: int = 2):
+        """Constructor.
+
+        Parameters:
+            crazyflie: the Crazyflie instance
+        """
+        self._crazyflie = crazyflie
+        self._number_of_base_stations = number_of_base_stations
+
+    async def get_calibration(self) -> Dict[int, LighthouseBsCalibration]:
+        """Returns the calibration object of the Crazyflie."""
+        result: Dict[int, LighthouseBsCalibration] = {}
+        mem = await self._get_memory()
+        for i in range(self._number_of_base_stations):
+            data = await mem.read(
+                self.CALIB_START_ADDR + i * self.PAGE_SIZE,
+                LighthouseBsCalibration.size_in_bytes,
+            )
+            calibration = LighthouseBsCalibration.from_bytes(data)
+            if calibration.valid:
+                result[i] = calibration
+        return result
+
+    async def get_geometry(self) -> Dict[int, LighthouseBsGeometry]:
+        """Returns the calibration object of the Crazyflie."""
+        result: Dict[int, LighthouseBsGeometry] = {}
+        mem = await self._get_memory()
+        for i in range(self._number_of_base_stations):
+            data = await mem.read(
+                self.GEO_START_ADDR + i * self.PAGE_SIZE,
+                LighthouseBsGeometry.size_in_bytes,
+            )
+            geometry = LighthouseBsGeometry.from_bytes(data)
+            if geometry.valid:
+                result[i] = geometry
+        return result
+
+    async def _get_memory(self) -> MemoryHandler:
+        """Returns the memory handler object of the Lighthouse memory."""
+        return await self._crazyflie.mem.find(MemoryType.LIGHTHOUSE)
+
+
+async def test():
+    from pprint import pprint
+
+    uri = "radio+log://0/80/2M/E7E7E7E701"
+    async with Crazyflie(uri) as cf:
+        calibration = await cf.lighthouse.get_calibration()
+        print("Calibration:")
+        pprint(calibration)
+        print("")
+
+        geom = await cf.lighthouse.get_geometry()
+        print("Geometry:")
+        pprint(geom)
+
+
+if __name__ == "__main__":
+    from aiocflib.crtp import init_drivers
+    import trio
+
+    init_drivers()
+    try:
+        trio.run(test)
+    except KeyboardInterrupt:
+        pass
