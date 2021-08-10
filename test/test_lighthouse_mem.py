@@ -28,6 +28,11 @@ def calibration(sweep):
 
 
 class TestLighthouseBsGeometry:
+    def test_invalid(self):
+        geom = LighthouseBsGeometry()
+        assert not geom.valid
+        assert all(x == 0 for x in geom.to_bytes())
+
     def test_to_from_json(self, geometry):
         geom2 = LighthouseBsGeometry.from_json(geometry.to_json())
         assert geometry == geom2
@@ -51,6 +56,10 @@ class TestLighthouseBsGeometry:
 
 
 class TestLighthouseCalibrationSweep:
+    def test_invalid(self):
+        sweep = LighthouseCalibrationSweep()
+        assert all(x == 0 for x in sweep.to_bytes())
+
     def test_to_from_json(self, sweep):
         sweep2 = LighthouseCalibrationSweep.from_json(sweep.to_json())
         assert sweep2 == sweep
@@ -76,6 +85,11 @@ class TestLighthouseCalibrationSweep:
 
 
 class TestLighthouseBsCalibration:
+    def test_invalid(self):
+        calib = LighthouseBsCalibration()
+        assert not calib.valid
+        assert all(x == 0 for x in calib.to_bytes())
+
     def test_to_from_json(self, calibration):
         calib2 = LighthouseBsCalibration.from_json(calibration.to_json())
         assert calib2 == calibration

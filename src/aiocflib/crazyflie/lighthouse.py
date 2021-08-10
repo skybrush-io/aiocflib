@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from errno import EIO
 from struct import Struct
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, cast
+from typing import Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Type, cast
 
 from aiocflib.crtp.crtpstack import MemoryType
 
@@ -222,7 +223,9 @@ class LighthouseCalibrationSweep:
 class LighthouseBsCalibration:
     """Container for calibration data of one Lighthouse base station."""
 
-    sweeps: Tuple[LighthouseCalibrationSweep, LighthouseCalibrationSweep]
+    sweeps: Tuple[LighthouseCalibrationSweep, LighthouseCalibrationSweep] = field(
+        default=(LighthouseCalibrationSweep(), LighthouseCalibrationSweep())
+    )
     uid: int = 0
     valid: bool = False
 
@@ -335,6 +338,69 @@ class Lighthouse:
         self._mem = None
         self.number_of_base_stations = number_of_base_stations
 
+    async def clear_all(self) -> None:
+        """Clears the calibration and geometry data of all base stations on
+        the Crazyflie.
+        """
+        await self.clear_calibrations()
+        await self.clear_geometries()
+
+    async def clear_calibration(self, index: int) -> None:
+        """Clears the calibration data of a single base station on the Crazyflie."""
+        await self.set_calibration(index, LighthouseBsCalibration())
+
+    async def clear_calibrations(self, indices: Optional[Iterable[int]] = None) -> None:
+        """Clears the calibration data of multiple base stations on the Crazyflie.
+
+        Parameters:
+            indices: the indices of the base stations to clear; `None` means to
+                clear all base stations.
+        """
+        if indices is None:
+            ignore_errors = True
+            indices = range(self.number_of_base_stations)
+        else:
+            ignore_errors = False
+
+        for index in indices:
+            try:
+                await self.clear_calibration(index)
+            except IOError as ex:
+                if ex.errno == EIO and ignore_errors:
+                    # Probably just an invalid base station ID
+                    continue
+                else:
+                    raise
+
+    async def clear_geometry(self, index: int) -> None:
+        """Clears the geometry data of a single base station on the Crazyflie."""
+        await self.set_geometry(index, LighthouseBsGeometry())
+
+    async def clear_geometries(
+        self, indices: Optional[Iterable[int]] = None, *, ignore_errors: bool = False
+    ) -> None:
+        """Clears the geometry data of multiple base stations on the Crazyflie.
+
+        Parameters:
+            indices: the indices of the base stations to clear; `None` means to
+                clear all base stations.
+        """
+        if indices is None:
+            ignore_errors = True
+            indices = range(self.number_of_base_stations)
+        else:
+            ignore_errors = False
+
+        for index in indices:
+            try:
+                await self.clear_geometry(index)
+            except IOError as ex:
+                if ex.errno == EIO and ignore_errors:
+                    # Probably just an invalid base station ID
+                    continue
+                else:
+                    raise
+
     async def get_calibration(self, index: int) -> Optional[LighthouseBsCalibration]:
         """Retrieves the calibration data of a single base station from the
         Crazyflie.
@@ -347,10 +413,18 @@ class Lighthouse:
             station index.
         """
         mem = await self._get_memory()
-        data = await mem.read(
-            self._get_address_of_bs_calibration(index),
-            LighthouseBsCalibration.size_in_bytes,
-        )
+        try:
+            data = await mem.read(
+                self._get_address_of_bs_calibration(index),
+                LighthouseBsCalibration.size_in_bytes,
+            )
+        except IOError as ex:
+            if ex.errno == EIO:
+                # This is okay, probably the base station index is invalid
+                return None
+            else:
+                raise
+
         calibration = LighthouseBsCalibration.from_bytes(data)
         return calibration if calibration.valid else None
 
@@ -373,10 +447,18 @@ class Lighthouse:
             not valid for the given base station index.
         """
         mem = await self._get_memory()
-        data = await mem.read(
-            self._get_address_of_bs_geometry(index),
-            LighthouseBsGeometry.size_in_bytes,
-        )
+        try:
+            data = await mem.read(
+                self._get_address_of_bs_geometry(index),
+                LighthouseBsGeometry.size_in_bytes,
+            )
+        except IOError as ex:
+            if ex.errno == EIO:
+                # This is okay, probably the base station index is invalid
+                return None
+            else:
+                raise
+
         geometry = LighthouseBsGeometry.from_bytes(data)
         return geometry if geometry.valid else None
 
@@ -388,6 +470,12 @@ class Lighthouse:
             if geometry:
                 result[i] = geometry
         return result
+
+    async def persist(self) -> None:
+        """Copies the current calibration and geometry data on the Crazyflie to
+        persistent storage so it gets loaded the next time the Crazyflie boots.
+        """
+        await self._crazyflie.localization.persist_lighthouse_data()
 
     async def set_calibration(
         self,
@@ -479,6 +567,19 @@ async def test():
         geom = await cf.lighthouse.get_geometries()
         print("Geometry:")
         pprint(geom)
+
+        await cf.lighthouse.clear_all()
+
+        calibration = await cf.lighthouse.get_calibrations()
+        print("Calibration:")
+        pprint(calibration)
+        print("")
+
+        geom = await cf.lighthouse.get_geometries()
+        print("Geometry:")
+        pprint(geom)
+
+        await cf.lighthouse.persist()
 
 
 if __name__ == "__main__":

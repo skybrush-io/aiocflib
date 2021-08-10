@@ -153,9 +153,10 @@ class MemoryHandlerBase(MemoryHandler):
                 chunks.append(chunk)
             else:
                 raise IOError(
+                    status,
                     "Read request returned error code {0} ({1})".format(
                         status, error_to_string(status)
-                    )
+                    ),
                 )
         return b"".join(chunks)
 
@@ -174,9 +175,10 @@ class MemoryHandlerBase(MemoryHandler):
             status = await self._write_chunk(addr + start, data[start : (start + size)])
             if status:
                 raise IOError(
+                    status,
                     "Write request returned error code {0} ({1})".format(
                         status, error_to_string(status)
-                    )
+                    ),
                 )
 
     async def _read_chunk(self, addr: int, length: int) -> Tuple[bytes, int]:
