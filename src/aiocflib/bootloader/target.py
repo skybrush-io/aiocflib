@@ -368,7 +368,7 @@ class BootloaderTarget:
 
         num_pages = int(ceil(size / self.page_size))
 
-        # Note that we use a timeout of two seconds here and we don't re-send
+        # Note that we use a timeout of 2.5 seconds here and we don't re-send
         # this packet. This is intentional; sometimes the flash request takes
         # more than one second, and the STM32 bootloader has a problem with
         # re-sent flash requests.
@@ -378,7 +378,7 @@ class BootloaderTarget:
             ),
             data=self._write_command_params_struct.pack(0, start, num_pages),
             timeout=2.5,
-            attempts=1,
+            attempts=3,
         )
 
         if len(result) < 2:
