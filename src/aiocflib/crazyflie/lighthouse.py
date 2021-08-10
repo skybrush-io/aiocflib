@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from struct import Struct
-from typing import Any, ClassVar, Dict, List, Tuple, Type, cast
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, cast
 
 from aiocflib.crtp.crtpstack import MemoryType
 
@@ -321,7 +321,9 @@ class Lighthouse:
     PAGE_SIZE: ClassVar[int] = 0x100
 
     _crazyflie: Crazyflie
-    _number_of_base_stations: int
+    _mem: Optional[MemoryHandler]
+
+    number_of_base_stations: int
 
     def __init__(self, crazyflie: Crazyflie, *, number_of_base_stations: int = 2):
         """Constructor.
@@ -330,39 +332,136 @@ class Lighthouse:
             crazyflie: the Crazyflie instance
         """
         self._crazyflie = crazyflie
-        self._number_of_base_stations = number_of_base_stations
+        self._mem = None
+        self.number_of_base_stations = number_of_base_stations
 
-    async def get_calibration(self) -> Dict[int, LighthouseBsCalibration]:
-        """Returns the calibration object of the Crazyflie."""
-        result: Dict[int, LighthouseBsCalibration] = {}
+    async def get_calibration(self, index: int) -> Optional[LighthouseBsCalibration]:
+        """Retrieves the calibration data of a single base station from the
+        Crazyflie.
+
+        Parameters:
+            index: the index of the base station
+
+        Returns: the calibration data of a single base station from the Crazyflie,
+            or `None` if the calibration data is not valid for the given base
+            station index.
+        """
         mem = await self._get_memory()
-        for i in range(self._number_of_base_stations):
-            data = await mem.read(
-                self.CALIB_START_ADDR + i * self.PAGE_SIZE,
-                LighthouseBsCalibration.size_in_bytes,
-            )
-            calibration = LighthouseBsCalibration.from_bytes(data)
-            if calibration.valid:
+        data = await mem.read(
+            self._get_address_of_bs_calibration(index),
+            LighthouseBsCalibration.size_in_bytes,
+        )
+        calibration = LighthouseBsCalibration.from_bytes(data)
+        return calibration if calibration.valid else None
+
+    async def get_calibrations(self) -> Dict[int, LighthouseBsCalibration]:
+        """Returns the calibration data of all the base stations from the Crazyflie."""
+        result: Dict[int, LighthouseBsCalibration] = {}
+        for i in range(self.number_of_base_stations):
+            calibration = await self.get_calibration(i)
+            if calibration:
                 result[i] = calibration
         return result
 
-    async def get_geometry(self) -> Dict[int, LighthouseBsGeometry]:
-        """Returns the calibration object of the Crazyflie."""
-        result: Dict[int, LighthouseBsGeometry] = {}
+    async def get_geometry(self, index: int) -> Optional[LighthouseBsGeometry]:
+        """Retrieves the geometry of a single base station from the Crazyflie.
+
+        Parameters:
+            index: the index of the base station
+
+        Returns: the geometry of the base station or `None` if the geometry is
+            not valid for the given base station index.
+        """
         mem = await self._get_memory()
-        for i in range(self._number_of_base_stations):
-            data = await mem.read(
-                self.GEO_START_ADDR + i * self.PAGE_SIZE,
-                LighthouseBsGeometry.size_in_bytes,
-            )
-            geometry = LighthouseBsGeometry.from_bytes(data)
-            if geometry.valid:
+        data = await mem.read(
+            self._get_address_of_bs_geometry(index),
+            LighthouseBsGeometry.size_in_bytes,
+        )
+        geometry = LighthouseBsGeometry.from_bytes(data)
+        return geometry if geometry.valid else None
+
+    async def get_geometries(self) -> Dict[int, LighthouseBsGeometry]:
+        """Returns the geometries of all the base stations from the Crazyflie."""
+        result: Dict[int, LighthouseBsGeometry] = {}
+        for i in range(self.number_of_base_stations):
+            geometry = await self.get_geometry(i)
+            if geometry:
                 result[i] = geometry
         return result
 
+    async def set_calibration(
+        self,
+        index: int,
+        calibration: LighthouseBsCalibration,
+    ) -> None:
+        """Sets the calibration data of the base station with the given index.
+
+        Note that this function does _not_ persist the calibration data on the
+        Crazyflie into permanent memory. Call `persist()` to make sure that the
+        changes are permanent.
+
+        Parameters:
+            index: the index of the base station
+            calibration: the calibration data to set on the Crazyflie
+        """
+        mem = await self._get_memory()
+        await mem.write(
+            self._get_address_of_bs_calibration(index), calibration.to_bytes()
+        )
+
+    async def set_calibrations(self, data: Dict[int, LighthouseBsCalibration]) -> None:
+        """Sets the calibration data of multiple base stations.
+
+        Parameters:
+            data: a dictionary mapping base station IDs to calibration data
+        """
+        for index, calibration in data.items():
+            await self.set_calibration(index, calibration)
+
+    async def set_geometry(
+        self,
+        index: int,
+        geometry: LighthouseBsGeometry,
+    ) -> None:
+        """Sets the geometry object of the base station with the given index.
+
+        Note that this function does _not_ persist the geometry data on the
+        Crazyflie into permanent memory. Call `persist()` to make sure that the
+        changes are permanent.
+
+        Parameters:
+            index: the index of the base station
+            geometry: the geometry data to set on the Crazyflie
+        """
+        mem = await self._get_memory()
+        await mem.write(self._get_address_of_bs_geometry(index), geometry.to_bytes())
+
+    async def set_geometries(self, data: Dict[int, LighthouseBsGeometry]) -> None:
+        """Sets the geometry data of multiple base stations.
+
+        Parameters:
+            data: a dictionary mapping base station IDs to calibration data
+        """
+        for index, geometry in data.items():
+            await self.set_geometry(index, geometry)
+
+    def _get_address_of_bs_calibration(self, index: int) -> int:
+        """Returns the address of the calibration data of the base station with
+        the given index.
+        """
+        return self.CALIB_START_ADDR + index * self.PAGE_SIZE
+
+    def _get_address_of_bs_geometry(self, index: int) -> int:
+        """Returns the address of the geometry data of the base station with
+        the given index.
+        """
+        return self.GEO_START_ADDR + index * self.PAGE_SIZE
+
     async def _get_memory(self) -> MemoryHandler:
         """Returns the memory handler object of the Lighthouse memory."""
-        return await self._crazyflie.mem.find(MemoryType.LIGHTHOUSE)
+        if self._mem is None:
+            self._mem = await self._crazyflie.mem.find(MemoryType.LIGHTHOUSE)
+        return self._mem
 
 
 async def test():
@@ -370,12 +469,14 @@ async def test():
 
     uri = "radio+log://0/80/2M/E7E7E7E701"
     async with Crazyflie(uri) as cf:
-        calibration = await cf.lighthouse.get_calibration()
+        cf.lighthouse.number_of_base_stations = 16
+
+        calibration = await cf.lighthouse.get_calibrations()
         print("Calibration:")
         pprint(calibration)
         print("")
 
-        geom = await cf.lighthouse.get_geometry()
+        geom = await cf.lighthouse.get_geometries()
         print("Geometry:")
         pprint(geom)
 
