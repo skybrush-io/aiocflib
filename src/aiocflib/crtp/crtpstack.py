@@ -8,7 +8,17 @@ from contextlib import asynccontextmanager, contextmanager
 from enum import IntEnum
 from functools import partial
 from inspect import iscoroutinefunction
-from typing import Awaitable, Callable, Iterable, List, Optional, Tuple, Union
+from typing import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Union,
+)
 
 from aiocflib.utils.concurrency import AwaitableValue
 
@@ -25,7 +35,7 @@ __all__ = (
 
 
 #: Mapping from CRTP port names to short three-letter identifiers
-_crtp_port_codes = [
+_crtp_port_codes: List[str] = [
     "CON",
     "P01",
     "PRM",
@@ -66,7 +76,7 @@ class CRTPPort(IntEnum):
     LINK_CONTROL = 0x0F
 
     @property
-    def code(self):
+    def code(self) -> str:
         return _crtp_port_codes[int(self)]
 
 
@@ -89,7 +99,7 @@ class LinkControlChannel(IntEnum):
 CRTPCommandLike = Union[int, bytes, Iterable[Union[int, bytes]]]
 
 #: Type alias for objects that can be converted into the data of a CRTP packet
-CRTPDataLike = Union[array, bytearray, bytes, str, List[int], Tuple[int]]
+CRTPDataLike = Union[str, Sequence[int]]
 
 #: Type alias for objects that can be converted into a CRTP port
 CRTPPortLike = Union[int, CRTPPort]
@@ -105,18 +115,19 @@ class MemoryType(IntEnum):
     TRAJECTORY = 0x12
     LOCO2 = 0x13
     LIGHTHOUSE = 0x14
-    MEMORY_TESTER = 0x15
+    TESTER = 0x15
     SD_CARD = 0x16
-    LED_MEMORY = 0x17
+    LED_SEQUENCE = 0x17
     APP = 0x18
+    DECK = 0x19
 
     @property
-    def description(self):
+    def description(self) -> str:
         """Human-readable description of the memory type."""
         return _memory_type_descriptions.get(int(self), "Unknown")
 
 
-_memory_type_descriptions = {
+_memory_type_descriptions: Dict[int, str] = {
     MemoryType.I2C: "I2C",
     MemoryType.ONE_WIRE: "1-wire",
     MemoryType.LED: "LED driver",
@@ -124,8 +135,11 @@ _memory_type_descriptions = {
     MemoryType.TRAJECTORY: "Trajectory",
     MemoryType.LOCO2: "Loco positioning 2",
     MemoryType.LIGHTHOUSE: "Lighthouse positioning",
-    MemoryType.MEMORY_TESTER: "Memory tester",
+    MemoryType.TESTER: "Memory tester",
     MemoryType.SD_CARD: "SD card",
+    MemoryType.LED_SEQUENCE: "LED sequence",
+    MemoryType.APP: "Application",
+    MemoryType.DECK: "Deck",
 }
 
 
@@ -214,7 +228,7 @@ class CRTPPacket:
         return self._data
 
     @data.setter
-    def data(self, value: CRTPDataLike) -> None:
+    def data(self, value) -> None:
         """Set the packet data"""
         if isinstance(value, bytes):
             self._data = value
@@ -252,7 +266,8 @@ class CRTPPacket:
         return CRTPPort((self._header & 0xF0) >> 4)
 
     @port.setter
-    def port(self, value: Union[CRTPPort, int]) -> None:
+    def port(self, value) -> None:
+        value = int(value)
         self._header = (self._header & 0x0F) | ((value << 4) & 0xF0)
 
     def to_bytes(self, safelink_bits: int = 12) -> bytes:
@@ -295,7 +310,7 @@ class CRTPDispatcher:
     @asynccontextmanager
     async def create_packet_queue(
         self, port: Optional[CRTPPortLike] = None, *, queue_size: int = 0
-    ) -> ObjectReceiveStream:
+    ) -> AsyncIterator[ObjectReceiveStream]:
         """Context manager that creates a queue that will yield incoming
         CRTP packets coming from the given port.
 
@@ -388,16 +403,16 @@ class CRTPDispatcher:
             an awaitable value that resolves to the first CRTP packet matching
             the port number and the predicate
         """
-        value = AwaitableValue()
+        value: AwaitableValue[CRTPPacket] = AwaitableValue()
 
         if predicate:
 
             def matcher(packet: CRTPPacket) -> None:
-                if predicate(packet):
+                if predicate(packet):  # type: ignore
                     value.set(packet)
 
         else:
-            matcher = value.set
+            matcher = value.set  # type: ignore
 
         with self.registered(matcher, port=port):
             yield value
