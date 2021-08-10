@@ -95,6 +95,18 @@ class TOCCache(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
+    async def has(self, hash: bytes, namespace: Optional[Namespace] = None) -> bool:
+        """Returns whether the table-of-contents object contains an item with
+        the given hash.
+
+        Parameters:
+            hash: the hash code to look up
+            namespace: the namespace that the hash value should be looked up
+                in. Useful if the same TOC cache is used to store different
+                types of TOC items.
+        """
+        raise NotImplementedError
+
     def get_key(self) -> Optional[str]:
         """Returns a short string identifier that uniquely identifies this
         cache, or `None` if no such key can be derived.
@@ -212,6 +224,10 @@ class FilesystemBasedTOCCache(TOCCache):
     a filesystem in a given folder.
     """
 
+    _key: Optional[Path]
+    _read_only: bool
+    _path: Optional[Path]
+
     def __init__(self, read_only: bool = False):
         """Constructor.
 
@@ -222,13 +238,13 @@ class FilesystemBasedTOCCache(TOCCache):
         self._read_only = bool(read_only)
         self._key = None
 
-    def _configure(self, uri):
+    def _configure(self, uri: str) -> None:
         self.path = uri
 
     def get_key(self) -> Optional[str]:
         if self._key is None:
             self._key = self.path.resolve() if self.path else None
-        return self._key
+        return str(self._key)
 
     @property
     def path(self) -> Path:
@@ -237,7 +253,7 @@ class FilesystemBasedTOCCache(TOCCache):
         return self._path
 
     @path.setter
-    def path(self, value: Path) -> None:
+    def path(self, value) -> None:
         if self._path is not None:
             raise ValueError("TOC cache is already configured")
 
@@ -302,6 +318,7 @@ class FilesystemBasedTOCCache(TOCCache):
                 if length is None or len(length) < 2:
                     break
 
+                assert isinstance(length, bytes)
                 length = length[0] + (length[1] << 8)
                 data = await fp.read(length)
                 if len(data) < length:
@@ -387,7 +404,7 @@ class NamespacedTOCCacheWrapper(TOCCache):
         if namespace is None:
             return self._namespace
         else:
-            return self._separator.join(self._namespace, namespace)
+            return self._separator.join((self._namespace, namespace))
 
 
 #: Dictionary that maps TOCCache classes to dictionaries that map cache keys to their locks
@@ -395,8 +412,8 @@ _cache_locks = defaultdict(lambda: defaultdict(Lock))
 
 
 @asynccontextmanager
-async def _locked_cache(cache: TOCCache, key_suffix: Optional[str] = None):
-    key = cache.get_key()
+async def _locked_cache(cache: Optional[TOCCache], key_suffix: Optional[str] = None):
+    key = cache.get_key() if cache is not None else None
     if key is None:
         yield
     else:
@@ -427,7 +444,7 @@ async def fetch_table_of_contents_gracefully(
             # Try to fetch the parameters from the cache based on the hash
             if cache:
                 items = await cache.find(hash)
-                result = [from_bytes(data, id=id) for id, data in enumerate(items)]
+                result = [from_bytes(data, id) for id, data in enumerate(items)]
         except Exception:
             pass
 

@@ -15,7 +15,9 @@ from outcome import capture
 from queue import Full, Queue
 from sys import exc_info
 from typing import (
+    cast,
     Any,
+    Awaitable,
     Callable,
     Generic,
     Iterable,
@@ -91,6 +93,8 @@ class DaemonTaskGroup(TaskGroup):
     to leave the context (instead of waiting for the child tasks to finish).
     """
 
+    _task_group: TaskGroup
+
     def __init__(self):
         self._task_group = create_task_group()
         self._spawner = None
@@ -106,6 +110,8 @@ class DaemonTaskGroup(TaskGroup):
         return bool(await self._task_group.__aexit__(exc_type, exc_value, tb))
 
     def start_soon(self, func, *args, **kwds):
+        if self._spawner is None:
+            raise RuntimeError("DaemonTaskGroup is not running yet")
         return self._spawner.start_soon(func, *args, **kwds)
 
     async def start(self, func, *args, **kwds):
@@ -113,26 +119,21 @@ class DaemonTaskGroup(TaskGroup):
         self.start_soon(partial(func, notify_started=on_opened.set), *args, **kwds)
         await on_opened.wait()
 
-    async def _run(self, scope, func, *args, **kwds):
-        try:
-            async with scope:
-                return await func(*args, **kwds)
-        finally:
-            self._cancel_scopes.remove(scope)
-
 
 create_daemon_task_group = DaemonTaskGroup
 
 
-async def _gather_execute(func: Callable[..., T], args: Any, result: List, index: int):
+async def _gather_execute(
+    func: Callable[..., Awaitable[T]], args: Any, result: List[T], index: int
+) -> None:
     result[index] = await func(*args)
 
 
 async def _gather_execute_limited(
-    limiter: Optional[CapacityLimiter],
-    func: Callable[..., T],
+    limiter: CapacityLimiter,
+    func: Callable[..., Awaitable[T]],
     args: Any,
-    result: List,
+    result: List[T],
     index: int,
 ):
     async with limiter:
@@ -142,16 +143,16 @@ async def _gather_execute_limited(
 async def gather(
     funcs: Iterable[Union[Callable[[], T], Tuple[Callable[..., T], ...]]],
     limiter: Optional[Union[CapacityLimiter, int]] = None,
-):
+) -> List[T]:
     to_execute = [
         (func, ()) if callable(func) else (func[0], func[1:]) for func in funcs
     ]
-    result = []
+    result: List[Optional[T]] = []
 
     if isinstance(limiter, int):
         limiter = CapacityLimiter(limiter)
 
-    run = (
+    run: Callable[..., Awaitable[Any]] = (
         _gather_execute
         if limiter is None
         else partial(_gather_execute_limited, limiter)
@@ -165,7 +166,8 @@ async def gather(
             else:
                 result.append(func(*args))
 
-    return result
+    # At this point all None instances from result should be gone
+    return cast(List[T], result)
 
 
 class ObservableValue(Generic[T]):
@@ -264,7 +266,11 @@ class ThreadContext(Generic[T]):
     """
 
     #: Type alias for the target function of a ThreadContext
-    Target = Callable[[Queue, Callable[[], None]], None]
+    Target = Callable[[Queue, Callable[[Any], None]], None]
+
+    _queue: Optional[Queue]
+    _task_group: Optional[TaskGroup]
+    _value: Optional[AwaitableValue[T]]
 
     @classmethod
     def create_reader(
@@ -297,7 +303,7 @@ class ThreadContext(Generic[T]):
         def respond_from_reader(value: Any) -> None:
             from_thread.run(queue_to_caller.send, value)
 
-        def reader_thread(queue: Queue, on_started: Callable[[Any], None]):
+        def reader_thread(queue: Queue, on_started: Callable[[Any], None]) -> None:
             if setup:
                 setup()
 
@@ -402,9 +408,9 @@ class ThreadContext(Generic[T]):
                 invoked with no arguments. You may use it to pass your own
                 Queue_ subclass if needed.
         """
-        self._queue = None  # type: Optional[Queue]
-        self._task_group = None  # type: Optional[TaskGroup]
-        self._value = None  # type: Optional[AwaitableValue]
+        self._queue = None
+        self._task_group = None
+        self._value = None
 
         self._queue_factory = queue_factory
         self._target = target
@@ -415,7 +421,7 @@ class ThreadContext(Generic[T]):
         else:
             from_thread.run_sync(self._value.set, value)
 
-    async def __aenter__(self) -> T:
+    async def __aenter__(self) -> Callable[[T], None]:
         if self._task_group is not None:
             raise RuntimeError("thread is already running")
 
@@ -426,6 +432,7 @@ class ThreadContext(Generic[T]):
         await self._task_group.__aenter__()
 
         success = False
+        result: Optional[T] = None
         try:
             self._task_group.start_soon(
                 to_thread.run_sync,
@@ -440,7 +447,7 @@ class ThreadContext(Generic[T]):
                 await self._task_group.__aexit__(*exc_info())
                 self._task_group = None
 
-        return result if result is not None else self._queue.put_nowait
+        return result if result is not None else self._queue.put_nowait  # type: ignore
 
     async def __aexit__(self, exc_type, exc_value, tb) -> bool:
         if self._queue:

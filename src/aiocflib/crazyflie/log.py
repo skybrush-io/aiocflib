@@ -879,14 +879,14 @@ class Log:
         """Creates a new log block with the given ID on the Crazyflie."""
         await self.validate()
         async with self._operation_lock:
-            status = await self._crazyflie.run_command(
+            response = await self._crazyflie.run_command(
                 port=CRTPPort.LOGGING,
                 channel=LoggingChannel.CONTROL,
                 command=(LoggingControlCommand.CREATE_BLOCK_V2, id),
                 data=block.to_bytes(),
             )
 
-        status = int(status[0])
+        status = int(response[0])
         if status:
             raise RuntimeError(
                 "Log block creation request returned error code {0} ({1})".format(
@@ -897,13 +897,13 @@ class Log:
     async def _delete_log_block_by_id(self, id: int) -> None:
         """Deletes the log block with the given ID from the Crazyflie."""
         async with self._operation_lock:
-            status = await self._crazyflie.run_command(
+            response = await self._crazyflie.run_command(
                 port=CRTPPort.LOGGING,
                 channel=LoggingChannel.CONTROL,
                 command=(LoggingControlCommand.DELETE_BLOCK, id),
             )
 
-        status = int(status[0])
+        status = int(response[0])
         if status:
             raise RuntimeError(
                 "Log block deletion request returned error code {0} ({1})".format(
@@ -959,14 +959,14 @@ class Log:
             raise ValueError("logging period must be between 0 and 2.55 seconds")
 
         async with self._operation_lock:
-            status = await self._crazyflie.run_command(
+            response = await self._crazyflie.run_command(
                 port=CRTPPort.LOGGING,
                 channel=LoggingChannel.CONTROL,
                 command=(LoggingControlCommand.START_LOGGING, id),
                 data=(period_byte,),
             )
 
-        status = int(status[0])
+        status = int(response[0])
         if status:
             raise RuntimeError(
                 "Log block start request returned error code {0} ({1})".format(
@@ -977,13 +977,13 @@ class Log:
     async def _stop_log_block_by_id(self, id: int) -> None:
         """Stops streaming messages from the log block with the given ID."""
         async with self._operation_lock:
-            status = await self._crazyflie.run_command(
+            response = await self._crazyflie.run_command(
                 port=CRTPPort.LOGGING,
                 channel=LoggingChannel.CONTROL,
                 command=(LoggingControlCommand.STOP_LOGGING, id),
             )
 
-        status = int(status[0])
+        status = int(response[0])
         if status:
             raise RuntimeError(
                 "Log block stop request returned error code {0} ({1})".format(

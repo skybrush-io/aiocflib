@@ -1,4 +1,4 @@
-from typing import Callable, Union
+from typing import Callable, List, Union
 
 __all__ = (
     "BackoffPollingStrategy",
@@ -192,6 +192,11 @@ class DefaultResendingStrategy:
 class PatientResendingStrategy:
     """More patient packet resending strategy for Crazyflie connections."""
 
+    _remaining: int
+    _attempts: int
+    _num_errors: int
+    _scheduled: List[float]
+
     def __init__(self, attempts: int = 50):
         """Constructor.
 
@@ -200,7 +205,7 @@ class PatientResendingStrategy:
         """
         self._remaining = self._attempts = 50
         self._num_errors = 0
-        self._schedule = [None, 0, 0, 0, 0, 0, 0.01, 0.01, 0.01, 0.01, 0.01, 0.02]
+        self._schedule = [0, 0, 0, 0, 0, 0, 0.01, 0.01, 0.01, 0.01, 0.01, 0.02]
 
     def __call__(self, ack: bool, data: bytes) -> ResendingStrategyResult:
         """Decides whether the packet should be resent.

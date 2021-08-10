@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from anyio import (
     create_memory_object_stream,
     move_on_after,
@@ -5,14 +7,13 @@ from anyio import (
     Event,
     WouldBlock,
 )
-from anyio.abc import Event
 from collections import namedtuple
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from functools import partial
 from operator import attrgetter
 from sys import exc_info
-from typing import Callable, Optional, Tuple, List
+from typing import Callable, Dict, Optional, Tuple, List
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.drivers.crazyradio import (
@@ -43,7 +44,7 @@ from .registry import register
 __all__ = ("RadioDriver",)
 
 
-_instances = {}
+_instances: Dict[int, "_SharedCrazyradioState"] = {}
 
 
 @dataclass
@@ -51,6 +52,7 @@ class _SharedCrazyradioState:
     radio: Optional[Crazyradio] = None
     instance: Optional[_CfRadioCommunicator] = None
     count: int = 0
+
     _initializing_event: Event = field(default_factory=Event)
     _destroying_event: Optional[Event] = None
 
@@ -74,6 +76,7 @@ class _SharedCrazyradioState:
         self.invalidated = True
 
     def start_destruction(self) -> Tuple[Crazyradio, Event]:
+        assert self.radio is not None
         assert self.count == 1
         assert self._destroying_event is None
 
@@ -87,6 +90,10 @@ class _SharedCrazyradioState:
 
     async def wait_until_initialized(self) -> None:
         await self._initializing_event.wait()
+
+    async def wait_until_destroyed(self) -> None:
+        if self._destroying_event:
+            await self._destroying_event.wait()
 
 
 @asynccontextmanager
@@ -118,7 +125,7 @@ async def SharedCrazyradio(index: int):
         # When using Trio, we are not allowed to start any additional cancel
         # scopes here, otherwise Trio will complain about a "corrupted cancel
         # scope stack".
-        state = _instances.get(index)
+        state = _instances[index]
         if state.count > 1:
             state.count -= 1
         elif state.count == 1:
@@ -395,7 +402,7 @@ class RadioDriver(CRTPDriver):
             list is returned for interfaces that do not support scanning
         """
         devices = await Crazyradio.detect_all()
-        results = await gather(
+        results: List[str] = await gather(
             (cls._scan_single_interface, device, address) for device in devices
         )
         return sum(results, [])

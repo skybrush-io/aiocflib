@@ -275,13 +275,13 @@ class Crazyflie(CRTPDevice):
         Returns:
             a new connection URI that can be used to re-connect to the bootloader
         """
-        new_address = await self._reboot(to_bootloader=True)
+        new_address_bytes = await self._reboot(to_bootloader=True)
 
         # Give some time for the outbound thread to send the packet
         await sleep(0.1)
 
         # Construct the new URI
-        new_address = hexlify(new_address).decode("ascii").upper()
+        new_address = hexlify(new_address_bytes).decode("ascii").upper()
         scheme, _, _ = self.uri.partition("://")
         if not scheme.startswith("radio"):
             scheme = "radio"

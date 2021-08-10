@@ -40,7 +40,7 @@ def ensure_not_all_zero_bytes(data: bytes) -> bytes:
     """
     if data and not any(x for x in data):
         if len(data) <= len(_sentinel):
-            return _sentinel[:data]
+            return _sentinel[: len(data)]
         else:
             result = _sentinel * (len(data) // len(_sentinel))
             result += _sentinel[: len(data) - len(result)]

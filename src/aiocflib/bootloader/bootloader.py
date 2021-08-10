@@ -3,7 +3,7 @@ from aiocflib.errors import NotFoundError
 from aiocflib.drivers.crazyradio import Crazyradio
 from aiocflib.utils.addressing import BootloaderAddressSpace
 from anyio import sleep
-from typing import List, Union
+from typing import List, Optional, Union
 
 from .target import BootloaderTarget, BootloaderTargetType
 from .types import BootloaderCommand, BootloaderProtocolVersion
@@ -25,6 +25,8 @@ class Bootloader(CRTPDevice):
         # Connection to the bootloader closes when the context is exited
     """
 
+    _targets: Optional[List[BootloaderTarget]]
+
     @classmethod
     async def detect_all(cls) -> List[str]:
         """Uses all connected Crazyradio dongles to scan for available Crazyflie
@@ -39,7 +41,7 @@ class Bootloader(CRTPDevice):
         """
         devices = await Crazyradio.detect_all()
 
-        results = []
+        results: List[str] = []
         for index, device in enumerate(devices):
             address_space = BootloaderAddressSpace(index=index)
             async with device as radio:
@@ -113,10 +115,9 @@ class Bootloader(CRTPDevice):
         Raises:
             NotFoundError: if there is no such bootloader target
         """
-        await self.validate()
-
         type = BootloaderTargetType.from_string(type)
-        for target in self._targets:
+        targets = await self.get_targets()
+        for target in targets:
             if target.id == type:
                 return target
         raise NotFoundError("no such bootloader target")
@@ -126,6 +127,7 @@ class Bootloader(CRTPDevice):
         from the bootloader if necessary.
         """
         await self.validate()
+        assert self._targets is not None
         return self._targets
 
     async def _reboot(self, to_firmware: bool = False) -> None:

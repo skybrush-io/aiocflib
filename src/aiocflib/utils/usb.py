@@ -23,7 +23,7 @@ USBDevice = Any
 
 #: Module-level variable to hold a mapping from unique USB device IDs to their
 #: locks that prevent concurrent access to these devices
-_locks = WeakValueDictionary()
+_locks: "WeakValueDictionary[str, Lock]" = WeakValueDictionary()
 
 try:
     import usb.core
@@ -63,12 +63,12 @@ def find_devices(vid: int, pid: int) -> List[USBDevice]:
     """
     if is_pyusb1:
         return list(
-            usb.core.find(idVendor=vid, idProduct=pid, find_all=1, backend=_backend)
+            usb.core.find(idVendor=vid, idProduct=pid, find_all=1, backend=_backend)  # type: ignore
         )
     else:
         return [
             device
-            for bus in usb.busses()
+            for bus in usb.busses()  # type: ignore
             for device in bus.devices
             if device.idVendor == vid and device.idProduct == pid
         ]
@@ -77,7 +77,7 @@ def find_devices(vid: int, pid: int) -> List[USBDevice]:
 def get_vendor_setup(handle, request, value, index, length, timeout=1000):
     if is_pyusb1:
         return handle.ctrl_transfer(
-            usb.TYPE_VENDOR | 0x80,
+            usb.TYPE_VENDOR | 0x80,  # type: ignore
             request,
             wValue=value,
             wIndex=index,
@@ -86,7 +86,7 @@ def get_vendor_setup(handle, request, value, index, length, timeout=1000):
         )
     else:
         return handle.controlMsg(
-            usb.TYPE_VENDOR | 0x80,
+            usb.TYPE_VENDOR | 0x80,  # type: ignore
             request,
             length,
             value=value,
@@ -115,7 +115,7 @@ def release_device(device: USBDevice):
 def send_vendor_setup(handle, request, value, index=0, data=(), timeout=1000):
     if is_pyusb1:
         handle.ctrl_transfer(
-            usb.TYPE_VENDOR,
+            usb.TYPE_VENDOR,  # type: ignore
             request,
             wValue=value,
             wIndex=index,
@@ -124,8 +124,13 @@ def send_vendor_setup(handle, request, value, index=0, data=(), timeout=1000):
         )
     else:
         handle.controlMsg(
-            usb.TYPE_VENDOR, request, data, value=value, index=index, timeout=timeout
+            usb.TYPE_VENDOR,  # type: ignore
+            request,
+            data,
+            value=value,
+            index=index,
+            timeout=timeout,
         )
 
 
-USBError = usb.core.USBError
+USBError = usb.core.USBError  # type: ignore

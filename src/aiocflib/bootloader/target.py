@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from anyio import open_file
 from enum import IntEnum
 from math import ceil
@@ -25,10 +27,11 @@ class BootloaderTargetType(IntEnum):
         return _target_descriptions.get(self, "Unknown")
 
     @classmethod
-    def from_string(cls, name: str):
+    def from_string(cls, name: Union[str, "BootloaderTargetType"]):
         if isinstance(name, cls):
             return name
 
+        assert isinstance(name, str)
         name = name.lower()
 
         for key, value in _target_descriptions.items():

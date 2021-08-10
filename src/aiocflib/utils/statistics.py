@@ -21,6 +21,7 @@ class SlidingWindowMean:
         else:
             self._sum += value
         self._data.append(value)
+        return self._sum
 
     @property
     def mean(self) -> float:
