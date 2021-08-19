@@ -20,7 +20,10 @@ class SetpointType(IntEnum):
     STOP = 0
     VELOCITY_WORLD = 1
     Z_DISTANCE = 2
+    CPPM = 3
+    ALTITUDE_HOLD = 4
     HOVER = 5
+    FULL_STATE = 6
     POSITION = 7
 
 
@@ -31,6 +34,7 @@ class Commander:
 
     _crazyflie: Crazyflie
 
+    _altitude_hold_setpoint_struct = Struct("<Bffff")
     _hover_setpoint_struct = Struct("<Bffff")
     _position_setpoint_struct = Struct("<Bffff")
     _rpyt_setpoint_struct = Struct("<fffH")
@@ -44,6 +48,25 @@ class Commander:
             crazyflie: the Crazyflie to which we need to send the messages
         """
         self._crazyflie = crazyflie
+
+    async def send_altitude_hold_setpoint(
+        self,
+        roll: float = 0.0,
+        pitch: float = 0.0,
+        yaw_rate: float = 0.0,
+        z_velocity: float = 0.0,
+    ) -> None:
+        """Sends an altitude hold setpoint to the Crazyflie; velocity is
+        specified along the Z axis, while the XY axes are controlled by roll
+        and pitch angles.
+
+        Roll and pitch are in degrees. Yaw rate is in degrees/s. Z velocity is
+        in m/s.
+        """
+        data = self._altitude_hold_setpoint_struct.pack(
+            SetpointType.ALTITUDE_HOLD, roll, pitch, yaw_rate, z_velocity
+        )
+        await self._crazyflie.send_packet(port=CRTPPort.GENERIC_COMMANDER, data=data)
 
     async def send_hover_setpoint(
         self,
