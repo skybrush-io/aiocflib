@@ -169,7 +169,7 @@ class ParameterSpecification(_ParameterSpecification):
         """
         return "{0.group}.{0.name}".format(self)
 
-    def parse_value(self, data: bytes):
+    def parse_value(self, data: bytes) -> Union[int, float]:
         """Parses the raw byte-level representation of a single value of this
         parameter, as received from the Crazyflie, and returns the corresponding
         Python value.
@@ -197,7 +197,7 @@ class Parameters:
     _cache: Optional[TOCCache]
     _crazyflie: Crazyflie
 
-    _values: Dict[str, float]
+    _values: Dict[str, Union[int, float]]
     _variables: List[ParameterSpecification]
     _variables_by_name: Dict[str, ParameterSpecification]
 
@@ -215,7 +215,7 @@ class Parameters:
         self._variables = None  # type: ignore
         self._variables_by_name = None  # type: ignore
 
-    async def get(self, name: str, fetch: bool = False):
+    async def get(self, name: str, fetch: bool = False) -> Union[int, float]:
         """Returns the current value of a parameter, given its fully-qualified
         name.
 
@@ -362,7 +362,7 @@ class Parameters:
         """
         return await self.set(name, 1)
 
-    async def validate(self):
+    async def validate(self) -> None:
         """Ensures that the basic information about the parameters of the
         Crazyflie are downloaded.
         """
@@ -372,7 +372,7 @@ class Parameters:
         self._variables, self._variables_by_name = await self._validate()
         self._values = {}
 
-    async def _fetch(self, name: str):
+    async def _fetch(self, name: str) -> Union[int, float]:
         """Furcefully fetch the current value of a parameter, given its
         fully-qualified name.
 

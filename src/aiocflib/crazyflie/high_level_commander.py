@@ -172,9 +172,10 @@ class HighLevelCommander:
             fetch: whether to forcefully fetch the current value of this
                 parameter from the drone even if we have a locally cached copy
         """
-        return await self._crazyflie.parameters.get(
+        value = await self._crazyflie.parameters.get(
             "commander.enHighLevel", fetch=fetch
         )
+        return bool(value)
 
     async def land(
         self,
