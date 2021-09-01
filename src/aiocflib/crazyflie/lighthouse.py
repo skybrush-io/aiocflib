@@ -601,6 +601,27 @@ class Lighthouse:
         for index, calibration in data.items():
             await self.set_calibration(index, calibration)
 
+    async def set_configuration(self, config: LighthouseConfiguration) -> None:
+        """Replaces the entire Lighthouse base station configuration with the
+        given object.
+
+        Note that this function does _not_ persist the geometry data on the
+        Crazyflie into permanent memory. Call `persist()` to make sure that the
+        changes are permanent.
+        """
+        if not config.valid:
+            raise RuntimeError("Configuration is invalid")
+
+        await self.clear_all()
+        await self._crazyflie.param.set(
+            "lighthouse.systemType", int(config.system_type)
+        )
+        for bs_id in config.valid_bs_ids:
+            await self.set_calibration(bs_id, config.calibrations[bs_id])
+            await self.set_geometry(bs_id, config.geometries[bs_id])
+        await self._crazyflie.param.set("lighthouse.bsCalibReset", 1)
+        await self.persist()
+
     async def set_geometry(
         self,
         index: int,
