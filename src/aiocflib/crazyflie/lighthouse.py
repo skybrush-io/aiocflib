@@ -1,14 +1,26 @@
 from dataclasses import dataclass, field
+from enum import IntEnum
 from errno import EIO
 from struct import Struct
-from typing import Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Type, cast
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    FrozenSet,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    cast,
+)
 
 from aiocflib.crtp.crtpstack import MemoryType
 
 from .crazyflie import Crazyflie
 from .mem import MemoryHandler
 
-__all__ = ("LighthouseBsGeometry",)
+__all__ = ("LighthouseBsCalibration", "LighthouseBsGeometry", "LighthouseConfiguration")
 
 
 Vector3D = Tuple[float, float, float]
@@ -316,6 +328,72 @@ class LighthouseBsCalibration:
         }
 
 
+class LighthouseSystemType(IntEnum):
+    """Enum representing the different Lighthouse system versions that we
+    support.
+    """
+
+    UNKNOWN = 0
+    V1 = 1
+    V2 = 2
+
+    def describe(self) -> str:
+        """Returns a human-readable description of the system type."""
+        if int(self) in (1, 2):
+            return f"Lighthouse v{int(self)}"
+        else:
+            return "unknown'"
+
+
+@dataclass(frozen=True)
+class LighthouseConfiguration:
+    """Data class that encapsulates the geometry _and_ calibration data of
+    all base stations in a Lighthouse system.
+    """
+
+    system_type: LighthouseSystemType = LighthouseSystemType.UNKNOWN
+    calibrations: Dict[int, LighthouseBsCalibration] = field(default_factory=dict)
+    geometries: Dict[int, LighthouseBsGeometry] = field(default_factory=dict)
+
+    @property
+    def bs_ids(self) -> FrozenSet[int]:
+        return frozenset(self.calibrations.keys()) | frozenset(self.geometries.keys())
+
+    @property
+    def valid_bs_ids(self) -> FrozenSet[int]:
+        return frozenset(
+            k for k, v in self.calibrations.items() if v.valid
+        ) & frozenset(k for k, v in self.geometries.items() if v.valid)
+
+    def to_json(self) -> Dict[str, Any]:
+        """Converts the Lighthouse configuration into a Python object that can
+        be written directly into a JSON or YAML file.
+        """
+        result = {
+            "version": "1",
+            "type": "lighthouse_system_configuration",
+            "calibs": {k: v.to_json() for k, v in self.calibrations.items()},
+            "geos": {k: v.to_json() for k, v in self.geometries.items()},
+        }
+        if self.system_type != LighthouseSystemType.UNKNOWN:
+            result["systemType"] = int(self.system_type)
+        return result
+
+    @property
+    def valid(self) -> bool:
+        """Returns whether the Lighthouse configuration is valid.
+
+        A configuration is valid if it has a valid system type, it has at least
+        one base station and all the calibrations and geometries are valid.
+        """
+        return (
+            self.system_type != LighthouseSystemType.UNKNOWN
+            and all(calib.valid for calib in self.calibrations.values())
+            and all(geo.valid for geo in self.geometries.values())
+            and len(set(self.calibrations.keys()) & set(self.geometries.keys())) > 0
+        )
+
+
 class Lighthouse:
     """Class representing the Lighthouse subsystem of a Crazyflie instance."""
 
@@ -437,6 +515,15 @@ class Lighthouse:
                 result[i] = calibration
         return result
 
+    async def get_configuration(self) -> LighthouseConfiguration:
+        """Returns the Lighthouse configuration of the Crazyflie."""
+        calib = await self.get_calibrations()
+        geos = await self.get_geometries()
+        system_type = await self.get_system_type()
+        return LighthouseConfiguration(
+            system_type=system_type, calibrations=calib, geometries=geos
+        )
+
     async def get_geometry(self, index: int) -> Optional[LighthouseBsGeometry]:
         """Retrieves the geometry of a single base station from the Crazyflie.
 
@@ -470,6 +557,14 @@ class Lighthouse:
             if geometry:
                 result[i] = geometry
         return result
+
+    async def get_system_type(self) -> LighthouseSystemType:
+        """Returns the configured Lighthouse system type of the Crazyflie."""
+        value = await self._crazyflie.param.get("lighthouse.systemType")
+        try:
+            return LighthouseSystemType(int(value))
+        except Exception:
+            return LighthouseSystemType.UNKNOWN
 
     async def persist(self) -> None:
         """Copies the current calibration and geometry data on the Crazyflie to
