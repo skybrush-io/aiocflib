@@ -227,7 +227,13 @@ class Parameters:
         Returns:
             the current value of the parameter (which may be a cached value)
         """
-        value = None if fetch else self._values.get(name)
+        value = (
+            None
+            if fetch
+            else self._values.get(name)
+            if self._values is not None
+            else None
+        )
         if value is None:
             value = self._values[name] = await self._fetch(name)
         return value
