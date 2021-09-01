@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from binascii import hexlify, unhexlify
 from collections.abc import Sequence
 from enum import IntEnum
-from typing import Dict, Union
+from typing import ClassVar, Dict, Union
 
 __all__ = (
     "AddressSpace",
@@ -225,6 +227,8 @@ class BootloaderAddressSpace(AddressSpace):
     could be listening.
     """
 
+    DEFAULT: ClassVar["BootloaderAddressSpace"]
+
     def __init__(self, index: int = 0, scheme: str = "radio"):
         """Constructor.
 
@@ -265,6 +269,8 @@ class RadioAddressSpace(AddressSpace):
 
         addresses = RadioAddressSpace.from_uri("radio://0/80/2M/E7E7E7E7")
     """
+
+    DEFAULT: ClassVar["RadioAddressSpace"]
 
     @classmethod
     def from_uri(cls, uri: str, length: int = 256):
