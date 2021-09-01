@@ -97,6 +97,16 @@ class MemoryHandler(metaclass=ABCMeta):
         return cls(element, owner=owner)  # type: ignore
 
     @abstractmethod
+    async def dump(self, strip: bool = False) -> bytes:
+        """Reads the entire contents of the memory and returns it as a bytes
+        object.
+
+        Parameters:
+            strip: whether to strip trailing zero bytes from the result
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     async def read(self, addr: int, length: int) -> bytes:
         """Reads a given number of bytes from the given address.
 
@@ -142,6 +152,10 @@ class MemoryHandlerBase(MemoryHandler):
         """
         self._crazyflie = owner
         self._element = element
+
+    async def dump(self, strip: bool = False) -> bytes:
+        result = await self.read(0, self.size)
+        return result.rstrip(b"\x00") if strip else result
 
     async def read(self, addr: int, length: int) -> bytes:
         chunks = []
