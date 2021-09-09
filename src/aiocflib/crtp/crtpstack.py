@@ -99,7 +99,7 @@ class LinkControlChannel(IntEnum):
 CRTPCommandLike = Union[int, bytes, Iterable[Union[int, bytes]]]
 
 #: Type alias for objects that can be converted into the data of a CRTP packet
-CRTPDataLike = Union[str, Sequence[int]]
+CRTPDataLike = Union[bytes, Sequence[int]]
 
 #: Type alias for objects that can be converted into a CRTP port
 CRTPPortLike = Union[int, CRTPPort]
@@ -155,8 +155,6 @@ class CRTPPacket:
             raise ValueError("data may not be empty")
         if isinstance(data, bytes):
             header = int(data[0])
-        elif isinstance(data, str):
-            header = ord(data[0])
         else:
             header = data[0]
         return cls(header=header, data=data[1:])

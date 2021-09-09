@@ -15,13 +15,23 @@ from .crtpstack import (
 from .drivers import CRTPDriver
 
 from aiocflib.errors import TimeoutError
-from aiocflib.utils.concurrency import create_daemon_task_group, TaskStartedNotifier
+from aiocflib.utils.concurrency import (
+    create_daemon_task_group,
+    DaemonTaskGroup,
+    TaskStartedNotifier,
+)
 
 __all__ = ("CRTPDevice",)
 
 
 class CRTPDevice:
     """Superclass for devices that use the CRTP protocol for communication."""
+
+    _dispatcher: CRTPDispatcher
+    _driver: Optional[CRTPDriver]
+    _exit_stack: Optional[AsyncExitStack]
+    _task_group: Optional[DaemonTaskGroup]
+    _uri: str
 
     def __init__(self, uri: str):
         """Constructor.
@@ -191,6 +201,9 @@ class CRTPDevice:
             matching_response, port=port
         ) as value:
             while attempts > 0:
+                # TODO(ntamas): self._driver may become `None` here if the
+                # connection is closed for any reason in another async task.
+                # This needs to be handled.
                 await self._driver.send_packet(packet)
                 if timeout > 0:
                     with move_on_after(timeout):
@@ -236,7 +249,9 @@ def _handle_data_argument(command: Optional[CRTPCommandLike] = None) -> bytes:
     """Helper function to handle the conversion of the `command` argument in
     `CRTPDevice.run_command()` to a `bytes` object.
     """
-    if isinstance(command, int):
+    if command is None:
+        return b""
+    elif isinstance(command, int):
         return bytes((command,))
     elif isinstance(command, bytes):
         return command
