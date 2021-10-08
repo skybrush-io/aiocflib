@@ -17,7 +17,7 @@ hexdump = "^3.3"
 colour = "^0.1.5"
 
 [tool.poetry.dev-dependencies]
-pytest = "^5.4.3"
+pytest = "^6.2.5"
 coverage = {extras = ["toml"], version = "^5.2"}
 pytest-cov = "^2.10.0"
 tox = "^3.17.1"
