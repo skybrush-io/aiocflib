@@ -64,6 +64,8 @@ class CfUsb:
     context blocks upon entering until the device becomes available.
     """
 
+    _handle: Optional[USBDevice]
+
     @classmethod
     async def detect_all(cls):
         """Creates a list of low-level driver objects by scanning the USB buses
@@ -135,7 +137,7 @@ class CfUsb:
         """
         return self._version
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "_CfUsbCommunicator":
         """Opens the driver object. This function must be called before you
         start using the driver.
 
@@ -213,6 +215,7 @@ class CfUsb:
 
         This function is executed in the worker thread.
         """
+        assert self._handle is not None
         try:
             if is_pyusb1:
                 return self._handle.read(0x81, 64, timeout=20)
@@ -242,6 +245,7 @@ class CfUsb:
         Raises:
             IOError: when the Crazyflie was disconnected
         """
+        assert self._handle is not None
         try:
             if is_pyusb1:
                 self._handle.write(endpoint=1, data=data, timeout=20)

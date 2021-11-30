@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from typing import AsyncContextManager, Iterable, Optional, Union
+from typing import AsyncIterator, Iterable, Optional, Union
 
 from aiocflib.drivers.crazyradio import RadioConfiguration
 from aiocflib.crtp.crtpstack import CRTPPacket, CRTPPortLike
@@ -60,7 +60,7 @@ class _Broadcaster:
 
 
 @asynccontextmanager
-async def Broadcaster(uri: str) -> AsyncContextManager[_Broadcaster]:
+async def Broadcaster(uri: str) -> AsyncIterator[_Broadcaster]:
     """Async context manager that creates an object that allows the user to
     send broadcast packets to the given radio URI.
 

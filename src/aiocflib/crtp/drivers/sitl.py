@@ -42,7 +42,7 @@ class SITLDriver(CRTPDriver):
         parts = urlparse(uri)
         host, _, port = parts.netloc.partition(":")
         host = host or "localhost"
-        port = port or 5432
+        port = int(port) or 5432
 
         async with SITL(host, port) as sitl:
             async with create_daemon_task_group() as task_group:

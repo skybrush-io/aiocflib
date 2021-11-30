@@ -2,7 +2,7 @@
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 from contextlib import asynccontextmanager
-from typing import List, Optional
+from typing import AsyncContextManager, List, Optional
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.utils.concurrency import ObservableValue
@@ -62,7 +62,7 @@ class CRTPDriver(metaclass=ABCMeta):
             yield driver
 
     @abstractmethod
-    async def _connected_to(self, uri: str):
+    def _connected_to(self, uri: str) -> AsyncContextManager[None]:
         """Connects the driver instance to a specified URI.
 
         This method is not public; use the `connected_to()` async context manager

@@ -14,6 +14,7 @@ from typing import (
     Callable,
     Dict,
     Iterable,
+    Iterator,
     List,
     Optional,
     Sequence,
@@ -392,7 +393,7 @@ class CRTPDispatcher:
         predicate: Optional[Callable[[CRTPPacket], bool]],
         *,
         port: Optional[CRTPPortLike] = None
-    ):
+    ) -> Iterator[AwaitableValue]:
         """Context manager that waits for a CRTP packet on the given port (or
         all ports) matching a given predicate while the execution is in the
         context.

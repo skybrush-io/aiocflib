@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from typing import List, Optional
+from typing import Any, List, Optional
 from urllib.parse import urlparse
 
 from aiocflib.crtp.crtpstack import CRTPPacket
@@ -20,6 +20,8 @@ class USBDriver(CRTPDriver):
     """CRTP driver that allows us to communicate with a Crazyflie that is
     connected directly via a USB cable.
     """
+
+    _device: Any
 
     @asynccontextmanager
     async def _connected_to(self, uri: str):
