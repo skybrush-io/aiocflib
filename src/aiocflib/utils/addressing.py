@@ -14,6 +14,7 @@ __all__ = (
     "DEFAULT_RADIO_BROADCAST_ADDRESS",
     "RadioAddressSpace",
     "USBAddressSpace",
+    "parse_radio_uri",
 )
 
 
