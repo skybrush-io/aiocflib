@@ -1,4 +1,5 @@
 from pytest import fixture, raises
+
 from aiocflib.crazyflie.lighthouse import (
     LighthouseBsCalibration,
     LighthouseBsGeometry,
