@@ -1,10 +1,11 @@
 """Classes related to accessing the memory subsystem of a Crazyflie."""
 
 from abc import abstractmethod, abstractproperty, ABCMeta
+from dataclasses import dataclass
 from enum import IntEnum
 from errno import ENODATA
 from struct import Struct, error as StructError
-from typing import Callable, List, NamedTuple, Optional, Tuple
+from typing import Callable, ClassVar, List, Optional, Tuple
 
 from aiocflib.crtp import CRTPPort, MemoryType
 from aiocflib.errors import error_to_string
@@ -36,17 +37,25 @@ class MemoryInfoCommand(IntEnum):
     GET_DETAILS = 2
 
 
-_MemoryElement = NamedTuple(
-    "_MemoryElement", [("index", int), ("type", int), ("size", int), ("address", int)]
-)
-
-
-class MemoryElement(_MemoryElement):
+@dataclass(frozen=True)
+class MemoryElement:
     """Class containing information about a single memory element on a
     Crazyflie.
     """
 
-    _struct = Struct("<BIQ")
+    index: int
+    """Index of the memory element."""
+
+    type: int
+    """Type identifier of the memory element."""
+
+    size: int
+    """Size of the memory element, in bytes."""
+
+    address: int
+    """Offset of the memory element in its address space."""
+
+    _struct: ClassVar[Struct] = Struct("<BIQ")
 
     @classmethod
     def from_bytes(cls, index: int, data: bytes):
