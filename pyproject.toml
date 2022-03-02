@@ -3,6 +3,7 @@ name = "aiocflib"
 version = "2.4.0"
 description = "asyncio-based API for Crazyflie drones"
 authors = ["Tamas Nepusz <tamas@collmot.com>"]
+license = "GPL-3.0-or-later"
 packages = [
     { include = "aiocflib", from = "src" }
 ]
@@ -25,10 +26,6 @@ trio = "^0.16.0"
 tqdm = "^4.48.0"
 
 [tool.poetry.extras]
-
-[[tool.poetry.source]]
-name = "collmot"
-url = "https://pypi.collmot.com/simple/"
 
 [tool.coverage.paths]
 source = ["src"]
