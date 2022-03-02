@@ -349,12 +349,6 @@ async def test():
         uri = uri.replace("://", "+log://")
 
     async with Crazyflie(uri, cache="/tmp/cfcache") as cf:
-        """
-        await cf.commander.send_setpoint(0, 0, 0, 20000)
-        await sleep(3)
-        await cf.commander.stop()
-        """
-
         print("Firmware version:", await cf.platform.get_firmware_version())
         print("Protocol version:", await cf.platform.get_protocol_version())
         print("Device type:", await cf.platform.get_device_type_name())
@@ -382,6 +376,28 @@ async def test():
             )
 
         await cf.led_ring.flash()
+
+        async with cf.parameters.set_and_restore("ring.effect", 6, 0):
+            persistence_state = await cf.parameters.get_persistence_state("ring.effect")
+            if persistence_state.is_stored:
+                await cf.parameters.clear_persisted_value("ring.effect")
+
+            persistence_state = await cf.parameters.get_persistence_state("ring.effect")
+            if persistence_state.is_stored:
+                raise RuntimeError("ring.effect should not be persisted")
+
+            await cf.parameters.persist("ring.effect")
+
+            persistence_state = await cf.parameters.get_persistence_state("ring.effect")
+            if not persistence_state.is_stored:
+                raise RuntimeError("ring.effect should be persisted now")
+            if persistence_state.stored_value != 6:
+                raise RuntimeError("ring.effect persisted value should be 6")
+
+            await cf.parameters.clear_persisted_value("ring.effect")
+            persistence_state = await cf.parameters.get_persistence_state("ring.effect")
+            if persistence_state.is_stored:
+                raise RuntimeError("ring.effect should not be persisted")
 
         """
         session = cf.log.create_session()

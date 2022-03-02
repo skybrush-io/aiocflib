@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from enum import IntEnum
+from errno import ENOENT
 from struct import Struct, error as StructError
-from typing import cast, Dict, List, NamedTuple, Optional, Tuple, Union
+from typing import cast, Dict, List, Optional, Tuple, Union
 
 from aiocflib.crtp import CRTPPort
 from aiocflib.errors import error_to_string
@@ -49,12 +51,12 @@ class ParameterCommand(IntEnum):
 
     SET_BY_NAME = 0
     VALUE_UPDATED = 1
+    GET_EXTENDED_TYPE = 2
+    PERSISTENT_STORE = 3
+    PERSISTENT_GET_STATE = 4
+    PERSISTENT_CLEAR = 5
+    GET_DEFAULT_VALUE = 6
 
-
-_ParameterSpecification = NamedTuple(
-    "_ParameterSpecification",
-    [("id", int), ("type", int), ("group", str), ("name", str), ("read_only", bool)],
-)
 
 #: Dictionary mapping integer type codes to their C types, Python structs and
 #: aliases
@@ -135,15 +137,36 @@ ParameterTypeLike = Union[str, int, ParameterType]
 _type_names = dict((alias, type) for type in ParameterType for alias in type.aliases)
 
 
-class ParameterSpecification(_ParameterSpecification):
+@dataclass(frozen=True)
+class ParameterSpecification:
     """Class representing the specification of a single parameter of the
-    Crazyflie."""
+    Crazyflie.
+    """
+
+    id: int
+    """The numeric identifier of the parameter."""
+
+    type: int
+    """The type of the parameter; typically one of the values from ParameterType_"""
+
+    group: str
+    """Name of the group that the parameter is a part of."""
+
+    name: str
+    """Name of the parameter within its group."""
+
+    read_only: bool
+    """Whether the parameter is read-only."""
+
+    has_extended_info: bool
+    """Whether the parameter has corresponding extended information."""
 
     @classmethod
     def from_bytes(cls, data: bytes, id: int):
         try:
             type = data[0] & 0x0F
             read_only = bool(data[0] & 0x40)
+            has_extended_info = bool(data[0] & 0x10)
             group, name, *rest = data[1:].split(b"\x00")
             return cls(
                 id=id,
@@ -151,6 +174,7 @@ class ParameterSpecification(_ParameterSpecification):
                 group=group.decode("ascii"),
                 name=name.decode("ascii"),
                 read_only=read_only,
+                has_extended_info=has_extended_info,
             )
         except Exception:
             raise ValueError("invalid parameter description") from None
@@ -162,12 +186,19 @@ class ParameterSpecification(_ParameterSpecification):
         return _type_properties[self.type][1].pack(value)
 
     @property
+    def encoded_length(self) -> int:
+        """Returns the number of bytes that will be used to encode a parameter
+        of this type.
+        """
+        return _type_properties[self.type][1].size
+
+    @property
     def full_name(self) -> str:
         """Returns the fully-qualified name of the parameter, which is
         the concatenation of the group and the name of the parameter, separated
         by a dot.
         """
-        return "{0.group}.{0.name}".format(self)
+        return f"{self.group}.{self.name}"
 
     def parse_value(self, data: bytes) -> Union[int, float]:
         """Parses the raw byte-level representation of a single value of this
@@ -177,7 +208,11 @@ class ParameterSpecification(_ParameterSpecification):
         return _type_properties[self.type][1].unpack(data)[0]
 
     def to_bytes(self) -> bytes:
-        header = (int(self.type) & 0x0F) + (0x40 if self.read_only else 0)
+        header = (
+            (int(self.type) & 0x0F)
+            + (0x40 if self.read_only else 0)
+            + (0x10 if self.has_extended_info else 0)
+        )
 
         parts = []
         parts.append(bytes((header,)))
@@ -187,6 +222,26 @@ class ParameterSpecification(_ParameterSpecification):
         parts.append(b"\x00")
 
         return b"".join(parts)
+
+
+@dataclass
+class PersistentParamState:
+    """Class representing the state of a persisted parameter on the Crazyflie."""
+
+    default_value: float
+    """The default value of the parameter in the Crazyflie firmware."""
+
+    stored_value: Optional[float]
+    """The value of the parameter stored in the permanent storage of the
+    Crazyflie; `None` if the parameter is not persisted.
+    """
+
+    @property
+    def is_stored(self) -> bool:
+        """Whether the permanent storage on the Crazyflie has a value associated
+        to this parameter.
+        """
+        return self.stored_value is not None
 
 
 class Parameters:
@@ -215,6 +270,32 @@ class Parameters:
         self._variables = None  # type: ignore
         self._variables_by_name = None  # type: ignore
 
+    async def clear_persisted_value(self, name: str) -> None:
+        """Clears the persisted value of a parameter, given its fully-qualified
+        name.
+
+        Parameters:
+            name: the fully-qualified name of the parameter
+        """
+        await self.validate()
+
+        parameter = self._variables_by_name[name]
+        index = parameter.id
+
+        response = await self._crazyflie.run_command(
+            port=CRTPPort.PARAMETERS,
+            channel=ParameterChannel.MISC,
+            command=(ParameterCommand.PERSISTENT_CLEAR, index & 0xFF, index >> 8),
+        )
+
+        if len(response) < 1:
+            raise ValueError("invalid response for clearing a persisted parameter")
+
+        if response[0]:
+            raise RuntimeError(
+                f"failed to clear persisted value of parameter {name}; code = {response[0]}"
+            )
+
     async def get(self, name: str, fetch: bool = False) -> Union[int, float]:
         """Returns the current value of a parameter, given its fully-qualified
         name.
@@ -237,6 +318,101 @@ class Parameters:
         if value is None:
             value = self._values[name] = await self._fetch(name)
         return value
+
+    async def get_default(self, name: str) -> Union[int, float]:
+        """Returns the default value of a parameter, given its fully-qualified
+        name.
+
+        Parameters:
+            name: the fully-qualified name of the parameter
+
+        Returns:
+            the default value of the parameter
+        """
+        await self.validate()
+
+        parameter = self._variables_by_name[name]
+        if parameter.read_only:
+            raise RuntimeError("read-only parameters have no default value")
+
+        index = parameter.id
+        response = await self._crazyflie.run_command(
+            port=CRTPPort.PARAMETERS,
+            channel=ParameterChannel.MISC,
+            command=(ParameterCommand.GET_DEFAULT_VALUE, index & 0xFF, index >> 8),
+        )
+
+        if not response:
+            raise IndexError("parameter index out of range")
+        if len(response) < 1:
+            raise ValueError("invalid response for parameter query")
+        if response[0]:
+            if response[0] == ENOENT:
+                raise RuntimeError(
+                    f"parameter {name} does not exist or has no default value"
+                )
+            else:
+                raise RuntimeError(
+                    f"error while retrieving default value of parameter {name}"
+                )
+        if len(response) < 2:
+            raise ValueError("invalid response for parameter query")
+        return parameter.parse_value(response[1:])
+
+    async def get_persistence_state(self, name: str) -> PersistentParamState:
+        """Returns the persistence state of a parameter, given its
+        fully-qualified name.
+
+        Parameters:
+            name: the fully-qualified name of the parameter
+
+        Returns:
+            an object storing whether the parameter is persisted, and if so,
+            what is its default and persisted value
+        """
+        await self.validate()
+
+        parameter = self._variables_by_name[name]
+        index = parameter.id
+        response = await self._crazyflie.run_command(
+            port=CRTPPort.PARAMETERS,
+            channel=ParameterChannel.MISC,
+            command=(ParameterCommand.PERSISTENT_GET_STATE, index & 0xFF, index >> 8),
+        )
+
+        if not response:
+            raise IndexError("parameter index out of range")
+        if len(response) < 1:
+            raise ValueError("invalid response for parameter persistence state query")
+        if len(response) == 1:
+            if response[0] == ENOENT:
+                raise RuntimeError(f"parameter {name} does not exist")
+            else:
+                raise RuntimeError(
+                    f"error {response[0]} while retrieving persistence state of parameter {name}"
+                )
+
+        is_persisted = bool(response[0])
+        num_bytes = parameter.encoded_length + 1
+        if is_persisted:
+            num_bytes += parameter.encoded_length
+
+        if len(response) < num_bytes:
+            raise ValueError("invalid response for parameter query (too short)")
+
+        default_value = parameter.parse_value(
+            response[1 : (parameter.encoded_length + 1)]
+        )
+        if is_persisted:
+            stored_value = parameter.parse_value(
+                response[(parameter.encoded_length + 1) :]
+            )
+        else:
+            stored_value = None
+
+        return PersistentParamState(
+            default_value=default_value, stored_value=stored_value
+        )
 
     async def has(self, name: str) -> bool:
         """Returns whether the parameter with the given name is known to the
@@ -266,6 +442,30 @@ class Parameters:
             True if the parameter is known to the Crazyflie, False otherwise
         """
         return name in self._variables_by_name
+
+    async def persist(self, name: str) -> None:
+        """Stores the current value of the given parameter in persistent
+        storage, given its fully-qualified name.
+
+        Parameters:
+            name: the fully-qualified name of the parameter
+        """
+        await self.validate()
+
+        parameter = self._variables_by_name[name]
+        index = parameter.id
+
+        response = await self._crazyflie.run_command(
+            port=CRTPPort.PARAMETERS,
+            channel=ParameterChannel.MISC,
+            command=(ParameterCommand.PERSISTENT_STORE, index & 0xFF, index >> 8),
+        )
+
+        if len(response) < 1:
+            raise ValueError("invalid response for persisting the value of a parameter")
+
+        if response[0]:
+            raise RuntimeError(f"failed to persist value of parameter {name}")
 
     async def set(self, name: str, value) -> None:
         """Sets the value of a parameter, given its fully-qualified name.
