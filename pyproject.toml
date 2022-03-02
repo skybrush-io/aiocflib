@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "aiocflib"
 version = "2.4.0"
-description = "asyncio-based API for Crazyflie drones"
+description = "Python async API for Crazyflie drones"
 authors = ["Tamas Nepusz <tamas@collmot.com>"]
 license = "GPL-3.0-or-later"
 packages = [
