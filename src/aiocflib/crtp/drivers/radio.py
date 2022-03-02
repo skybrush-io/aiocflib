@@ -7,9 +7,8 @@ from anyio import (
     Event,
     WouldBlock,
 )
-from collections import namedtuple
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import partial
 from operator import attrgetter
 from sys import exc_info
@@ -145,7 +144,10 @@ RadioDriverPreset = Tuple[
 ]
 
 
-_EnabledAcquired = namedtuple("_EnabledAcquired", "enabled acquired")
+@dataclass
+class _EnabledAcquired:
+    enabled: bool
+    acquired: bool
 
 
 class _SafeLinkState:
@@ -174,7 +176,7 @@ class _SafeLinkState:
         """
         if self.enabled:
             value = self._enabled_acquired.value
-            await self._enabled_acquired.set(value._replace(enabled=False))
+            await self._enabled_acquired.set(replace(value, enabled=False))
 
     @property
     def enabled(self) -> bool:
@@ -198,7 +200,7 @@ class _SafeLinkState:
         """Enables the safe link mode on the Crazyflie."""
         if not self.enabled:
             value = self._enabled_acquired.value
-            await self._enabled_acquired.set(value._replace(enabled=True))
+            await self._enabled_acquired.set(replace(value, enabled=True))
 
     def encode(self, packet: CRTPPacket) -> bytes:
         """Encodes the given CRTP packet, incorporating the safe link status
@@ -225,7 +227,7 @@ class _SafeLinkState:
             self._up, self._down = 8, 4
 
         state = self._enabled_acquired.value
-        await self._enabled_acquired.set(state._replace(acquired=value))
+        await self._enabled_acquired.set(replace(state, acquired=value))
 
     def update(self, response: Acknowledgment) -> None:
         """Processes an acknowledgment received from the peer."""
