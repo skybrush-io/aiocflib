@@ -13,16 +13,16 @@ python = "^3.7"
 anyio = "^3.2.1"
 outcome = "^1.0.1"
 pyusb = "^1.0.2"
-colorama = "^0.4.3"
+colorama = ">=0.4.3"
 hexdump = "^3.3"
-colour = "^0.1.5"
+colour = ">=0.1.5"
 
 [tool.poetry.dev-dependencies]
-pytest = "^6.2.5"
+pytest = "^7.1.1"
 coverage = {extras = ["toml"], version = "^6.0"}
 pytest-cov = "^3.0.0"
 tox = "^3.17.1"
-trio = "^0.16.0"
+trio = ">=0.20.0"
 tqdm = "^4.48.0"
 
 [tool.poetry.extras]
