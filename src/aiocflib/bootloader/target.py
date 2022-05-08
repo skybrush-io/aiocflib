@@ -178,7 +178,7 @@ class BootloaderTarget:
         address: int = 0,
         length: int = -1,
         *,
-        on_progress: Optional[ProgressHandler] = None
+        on_progress: Optional[ProgressHandler] = None,
     ) -> bytes:
         """Reads the given number of bytes from the given address of the flash
         memory of the target.
@@ -250,7 +250,7 @@ class BootloaderTarget:
         address: int,
         data: bytes,
         *,
-        on_progress: Optional[ProgressHandler] = None
+        on_progress: Optional[ProgressHandler] = None,
     ) -> None:
         """Writes some data at the given address into the flash memory of the
         target.
@@ -282,7 +282,7 @@ class BootloaderTarget:
         self,
         firmware: Union[bytes, str],
         *,
-        on_progress: Optional[ProgressHandler] = None
+        on_progress: Optional[ProgressHandler] = None,
     ) -> None:
         """Writes the given data to the firmware area of the flash memory of
         the target.
@@ -307,7 +307,7 @@ class BootloaderTarget:
         data: bytes,
         *,
         validate: bool = False,
-        on_progress: Optional[ProgressHandler] = None
+        on_progress: Optional[ProgressHandler] = None,
     ) -> None:
         """Fills the upload buffer on the target with the given data.
 
