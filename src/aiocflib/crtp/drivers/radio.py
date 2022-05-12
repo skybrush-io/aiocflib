@@ -445,8 +445,8 @@ class RadioDriver(CRTPDriver):
         """Worker task that ensures that the radio is in safe link mode when it
         should be in safe link mode.
         """
-        async for enabled, acquired in self._safe_link_state.observe():
-            if enabled and not acquired:
+        async for state in self._safe_link_state.observe():
+            if state.enabled and not state.acquired:
                 success = False
                 while not success:
                     async with radio.configure(self._configuration):
