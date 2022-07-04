@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 async def broadcast_external_position_packed(
-    broadcaster: _Broadcaster, items: Sequence[Tuple[int, Tuple[float, float, float]]]
+    broadcaster: "_Broadcaster", items: Sequence[Tuple[int, Tuple[float, float, float]]]
 ) -> None:
     """Broadcasts a packet containing external position information for multiple
     Crazyflies using the given broadcaster.
@@ -35,7 +35,7 @@ async def broadcast_external_position_packed(
 
 
 async def broadcast_external_pose_packed(
-    broadcaster: _Broadcaster,
+    broadcaster: "_Broadcaster",
     items: Sequence[Tuple[int, Tuple[float, float, float], QuaternionXYZW]],
 ) -> None:
     """Broadcasts a packet containing external pose (position + attitude)
@@ -57,7 +57,7 @@ async def broadcast_external_pose_packed(
     )
 
 
-async def broadcast_emergency_stop(broadcaster: _Broadcaster) -> None:
+async def broadcast_emergency_stop(broadcaster: "_Broadcaster") -> None:
     """Broadcasts an emergency stop packet for multiple Crazyflies using the
     given broadcaster.
 
