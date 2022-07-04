@@ -2,9 +2,10 @@
 
 from enum import IntEnum
 from struct import Struct
-from typing import ClassVar, Iterable, Optional, Sequence, Union
+from typing import ClassVar, Iterable, Optional, Sequence, Tuple, Union
 
 from aiocflib.crtp import CRTPPort
+from aiocflib.utils.quaternion import compress_unit_quaternion, QuaternionXYZW
 
 from .crazyflie import Crazyflie
 
@@ -51,10 +52,63 @@ class Localization:
     _crazyflie: Crazyflie
 
     _external_position_struct: ClassVar[Struct] = Struct("<fff")
+    _external_position_packed_item_struct: ClassVar[Struct] = Struct("<Bhhh")
     _external_pose_struct: ClassVar[Struct] = Struct("<Bfffffff")
+    _external_pose_packed_item_struct: ClassVar[Struct] = Struct("<BhhhL")
     _lpp_short_packet_struct: ClassVar[Struct] = Struct("<BB")
     _lighthouse_angle_struct: ClassVar[Struct] = Struct("<Bfhhhfhhh")
     _lighthouse_persist_struct: ClassVar[Struct] = Struct("<HH")
+
+    @classmethod
+    def encode_external_position_packed(
+        cls, items: Sequence[Tuple[int, Tuple[float, float, float]]]
+    ) -> bytes:
+        """Encodes the payload of a "packed external position" packet that
+        contains position information for multiple Crazyflie drones.
+
+        The packet is intended to be broadcast to all Crazyflies in a network
+        using the ``send_packet()`` method of a `Broadcaster` object.
+
+        Parameters:
+            items: a sequence of pairs containing a numeric Crazyflie ID
+                (the last byte of its radio address) and a 3D coordinate.
+                Coordinates must be less than ~32.7 meters in absolute value.
+                At most four items fit into a single Crazyflie CRTP packet.
+        """
+        return b"".join(
+            cls._external_position_packed_item_struct.pack(
+                id, int(x * 1000), int(y * 1000), int(z * 1000)
+            )
+            for id, (x, y, z) in items
+        )
+
+    @classmethod
+    def encode_external_pose_packed(
+        cls, items: Sequence[Tuple[int, Tuple[float, float, float], QuaternionXYZW]]
+    ) -> bytes:
+        """Encodes the payload of a "packed external pose" packet that
+        contains position and attitude information for multiple Crazyflie drones.
+
+        The packet is intended to be broadcast to all Crazyflies in a network
+        using the ``send_packet()`` method of a `Broadcaster` object.
+
+        Parameters:
+            items: a sequence of triplets containing a numeric Crazyflie ID
+                (the last byte of its radio address), a 3D coordinate and a
+                4D quaternion in XYZW order. Coordinates must be less than ~32.7
+                meters in absolute value. At most two items fit into a single
+                Crazyflie CRTP packet.
+        """
+        return b"".join(
+            cls._external_pose_packed_item_struct.pack(
+                id,
+                int(x * 1000),
+                int(y * 1000),
+                int(z * 1000),
+                compress_unit_quaternion(quat),
+            )
+            for id, (x, y, z), quat in items
+        )
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
