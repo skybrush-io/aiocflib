@@ -177,7 +177,7 @@ class CRTPPacket:
     def __init__(
         self,
         header: Optional[int] = None,
-        data: CRTPDataLike = None,
+        data: Optional[CRTPDataLike] = None,
         *,
         port: Optional[CRTPPortLike] = None,
         channel: int = 0

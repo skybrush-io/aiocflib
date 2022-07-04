@@ -149,7 +149,7 @@ class MemoryHandler(metaclass=ABCMeta):
 class MemoryHandlerBase(MemoryHandler):
     """Base implementation of a memory handler."""
 
-    _addressing_struct = Struct("<BI")
+    _addressing_struct: ClassVar[Struct] = Struct("<BI")
 
     def __init__(self, element: MemoryElement, owner: Crazyflie):
         """Constructor.

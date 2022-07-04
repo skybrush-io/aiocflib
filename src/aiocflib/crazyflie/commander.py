@@ -4,6 +4,7 @@ messages to a Crazyflie.
 
 from enum import IntEnum
 from struct import Struct
+from typing import ClassVar
 
 from aiocflib.crtp import CRTPPort
 
@@ -34,12 +35,12 @@ class Commander:
 
     _crazyflie: Crazyflie
 
-    _altitude_hold_setpoint_struct = Struct("<Bffff")
-    _hover_setpoint_struct = Struct("<Bffff")
-    _position_setpoint_struct = Struct("<Bffff")
-    _rpyt_setpoint_struct = Struct("<fffH")
-    _velocity_world_setpoint_struct = Struct("<Bffff")
-    _z_distance_setpoint_struct = Struct("<Bffff")
+    _altitude_hold_setpoint_struct: ClassVar[Struct] = Struct("<Bffff")
+    _hover_setpoint_struct: ClassVar[Struct] = Struct("<Bffff")
+    _position_setpoint_struct: ClassVar[Struct] = Struct("<Bffff")
+    _rpyt_setpoint_struct: ClassVar[Struct] = Struct("<fffH")
+    _velocity_world_setpoint_struct: ClassVar[Struct] = Struct("<Bffff")
+    _z_distance_setpoint_struct: ClassVar[Struct] = Struct("<Bffff")
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.

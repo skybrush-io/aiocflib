@@ -2,7 +2,7 @@
 
 from enum import IntEnum
 from struct import Struct
-from typing import Iterable, Optional, Sequence, Union
+from typing import ClassVar, Iterable, Optional, Sequence, Union
 
 from aiocflib.crtp import CRTPPort
 
@@ -50,11 +50,11 @@ class Localization:
 
     _crazyflie: Crazyflie
 
-    _external_position_struct = Struct("<fff")
-    _external_pose_struct = Struct("<Bfffffff")
-    _lpp_short_packet_struct = Struct("<BB")
-    _lighthouse_angle_struct = Struct("<Bfhhhfhhh")
-    _lighthouse_persist_struct = Struct("<HH")
+    _external_position_struct: ClassVar[Struct] = Struct("<fff")
+    _external_pose_struct: ClassVar[Struct] = Struct("<Bfffffff")
+    _lpp_short_packet_struct: ClassVar[Struct] = Struct("<BB")
+    _lighthouse_angle_struct: ClassVar[Struct] = Struct("<Bfhhhfhhh")
+    _lighthouse_persist_struct: ClassVar[Struct] = Struct("<HH")
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.

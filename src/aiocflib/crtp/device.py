@@ -146,7 +146,7 @@ class CRTPDevice:
         port: CRTPPortLike,
         channel: int = 0,
         command: Optional[CRTPCommandLike] = None,
-        data: CRTPDataLike = None,
+        data: Optional[CRTPDataLike] = None,
         timeout: float = 0.2,
         attempts: int = 3,
     ) -> bytes:
@@ -180,15 +180,18 @@ class CRTPDevice:
             the data section of the response packet
         """
         if command is not None:
-            command = _handle_data_argument(command)
+            encoded_command = _handle_data_argument(command)
             packet = CRTPPacket(port=port, channel=channel)
-            request = (command + bytes(data)) if data else command
+            request = (encoded_command + bytes(data)) if data else encoded_command
             packet.data = request
 
             def matching_response(packet: CRTPPacket) -> bool:
-                return packet.channel == channel and packet.data.startswith(command)
+                return packet.channel == channel and packet.data.startswith(
+                    encoded_command
+                )
 
         else:
+            encoded_command = b""
             packet = CRTPPacket(port=port, channel=channel, data=data)
 
             def matching_response(packet: CRTPPacket) -> bool:
@@ -223,7 +226,7 @@ class CRTPDevice:
             raise TimeoutError()
 
         response = response.data
-        return response[len(command) :] if command else response
+        return response[len(encoded_command) :] if encoded_command else response
 
     async def send_packet(
         self,
