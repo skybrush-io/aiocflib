@@ -17,7 +17,7 @@ colorama = ">=0.4.3"
 hexdump = "^3.3"
 colour = ">=0.1.5"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 pytest = "^7.1.1"
 coverage = {extras = ["toml"], version = "^6.0"}
 pytest-cov = "^3.0.0"
