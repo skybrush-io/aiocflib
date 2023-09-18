@@ -850,7 +850,9 @@ class _CfRadioCommunicator:
                 try:
                     return await sender(target, *args, **kwds)
                 except Full:
-                    raise IOError("Request queue to radio outbound thread is full")
+                    raise IOError(
+                        "Request queue to radio outbound thread is full"
+                    ) from None
 
             return proxy
 
@@ -887,7 +889,9 @@ class _CfRadioCommunicator:
             try:
                 await self._sender(self._radio._configure, configuration)
             except Full:
-                raise IOError("Request queue to radio outbound thread is full")
+                raise IOError(
+                    "Request queue to radio outbound thread is full"
+                ) from None
             yield
 
 

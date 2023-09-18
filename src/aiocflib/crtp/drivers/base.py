@@ -44,7 +44,9 @@ class CRTPDriver(metaclass=ABCMeta):
         try:
             driver_factory = find_driver(scheme)
         except KeyError:
-            raise WrongURIType("Unknown CRTP driver URI: {0!r}".format(scheme))
+            raise WrongURIType(
+                "Unknown CRTP driver URI: {0!r}".format(scheme)
+            ) from None
 
         driver = driver_factory(*args, **kwds)
         driver.uri = uri
@@ -55,7 +57,7 @@ class CRTPDriver(metaclass=ABCMeta):
             except KeyError:
                 raise WrongURIType(
                     "Unknown middleware in URI: {0!r}".format(middleware_name)
-                )
+                ) from None
             driver = middleware(driver)
 
         async with driver._connected_to(uri):
@@ -105,7 +107,7 @@ class CRTPDriver(metaclass=ABCMeta):
         """Returns a human-readable name of the interface."""
         raise NotImplementedError
 
-    async def notify_rebooted(self) -> None:
+    async def notify_rebooted(self) -> None:  # noqa: B027
         """Notifies the driver that the underlying Crazyflie device has been
         rebooted. The drivers may respond to this request by scheduling some
         setup operations to perform on the link again in an attempt to restore
@@ -152,7 +154,7 @@ class CRTPDriver(metaclass=ABCMeta):
     def uri(self, value: str) -> None:
         self._uri = value
 
-    async def use_safe_link(self) -> None:
+    async def use_safe_link(self) -> None:  # noqa: B027
         """Notifies the driver that the caller wishes to use a safe link where
         it does not have to worry about packet loss.
 

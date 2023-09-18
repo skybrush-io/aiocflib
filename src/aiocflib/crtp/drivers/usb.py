@@ -30,7 +30,7 @@ class USBDriver(CRTPDriver):
         try:
             index = int(parts.netloc)
         except ValueError:
-            raise WrongURIType("Invalid USB URI: {0!r}".format(uri))
+            raise WrongURIType("Invalid USB URI: {0!r}".format(uri)) from None
 
         if index < 0:
             raise WrongURIType("USB port index must be non-negative")

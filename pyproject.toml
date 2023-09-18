@@ -4,13 +4,11 @@ version = "2.6.0"
 description = "Python async API for Crazyflie drones"
 authors = ["Tamas Nepusz <tamas@collmot.com>"]
 license = "GPL-3.0-or-later"
-packages = [
-    { include = "aiocflib", from = "src" }
-]
+packages = [{ include = "aiocflib", from = "src" }]
 
 [tool.poetry.dependencies]
-python = "^3.7"
-anyio = "^3.2.1"
+python = "^3.8"
+anyio = ">=3.2.1,<5"
 outcome = "^1.0.1"
 pyusb = "^1.0.2"
 colorama = ">=0.4.3"
@@ -19,10 +17,10 @@ colour = ">=0.1.5"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.1.1"
-coverage = {extras = ["toml"], version = "^6.0"}
-pytest-cov = "^3.0.0"
-tox = "^3.17.1"
-trio = ">=0.20.0"
+coverage = { extras = ["toml"], version = "^7.3" }
+pytest-cov = "^4.1.0"
+tox = "^4.0.0"
+trio = ">=0.22.0"
 tqdm = "^4.48.0"
 
 [tool.poetry.extras]
@@ -37,6 +35,11 @@ source = ["src"]
 [tool.coverage.report]
 show_missing = true
 
+[tool.ruff]
+ignore = ["B905", "C901", "E402", "E501"]
+line-length = 80
+select = ["B", "C", "E", "F", "W"]
+
 [build-system]
-requires = ["poetry>=0.12"]
+requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.masonry.api"

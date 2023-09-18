@@ -115,7 +115,7 @@ def parse_radio_uri(
         try:
             index = int(index)
         except ValueError:
-            raise ValueError("Invalid radio index: {0!r}".format(index))
+            raise ValueError("Invalid radio index: {0!r}".format(index)) from None
     else:
         index = 0
 
@@ -125,7 +125,7 @@ def parse_radio_uri(
         try:
             channel = int(channel)
         except ValueError:
-            raise ValueError("Invalid channel index: {0!r}".format(channel))
+            raise ValueError("Invalid channel index: {0!r}".format(channel)) from None
         if channel < 0 or channel > 125:
             raise ValueError("Invalid channel index: {0!r}".format(channel))
     else:
@@ -137,7 +137,7 @@ def parse_radio_uri(
         try:
             data_rate = CrazyradioDataRate.from_string(data_rate)
         except ValueError:
-            raise ValueError("Invalid data rate: {0!r}".format(data_rate))
+            raise ValueError("Invalid data rate: {0!r}".format(data_rate)) from None
     else:
         data_rate = CrazyradioDataRate.DR_2MPS
 
@@ -155,13 +155,13 @@ def parse_radio_uri(
     if path:
         raise ValueError("Excess parts at the end of the path")
 
-    return dict(
-        address=address,
-        channel=channel,
-        data_rate=data_rate,
-        index=index,
-        scheme=scheme,
-    )
+    return {
+        "address": address,
+        "channel": channel,
+        "data_rate": data_rate,
+        "index": index,
+        "scheme": scheme,
+    }
 
 
 def to_radio_address(

@@ -148,7 +148,7 @@ class VariableType(IntEnum):
 VariableTypeLike = Union[str, int, VariableType]
 
 #: Dictionary mapping string type aliases to types
-_type_names = dict((alias, type) for type in VariableType for alias in type.aliases)
+_type_names = {alias: type for type in VariableType for alias in type.aliases}
 
 
 @dataclass(frozen=True)
@@ -376,7 +376,7 @@ class LogBlock:
         try:
             spec = toc[name]
         except KeyError:
-            raise KeyError("no such variable in log TOC: {0!r}".format(name))
+            raise KeyError("no such variable in log TOC: {0!r}".format(name)) from None
 
         if type is None:
             type = spec.type
@@ -412,7 +412,11 @@ class LogBlock:
             frequency: the logging frequency, in Hertz. Takes precedence over
                 `period` if both are given
         """
-        start_args = dict(period=period, period_msec=period_msec, frequency=frequency)
+        start_args = {
+            "period": period,
+            "period_msec": period_msec,
+            "frequency": frequency,
+        }
         async with self.submitted(allow_multi=True):
             async with self.started(**start_args):
                 async for packet in self._owner.data_packets():
@@ -948,7 +952,7 @@ class Log:
         try:
             length, hash, _, _ = Struct("<HIBB").unpack(response)
         except StructError:
-            raise ValueError("invalid logging TOC info response")
+            raise ValueError("invalid logging TOC info response") from None
 
         return length, hash
 

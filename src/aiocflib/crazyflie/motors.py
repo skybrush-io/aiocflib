@@ -46,7 +46,7 @@ class Motors:
             indices = (1, 2, 3, 4)
 
         async with cf.parameters.set_and_restore("motorPowerSet.enable", 1, 0):
-            for index, motor_index in enumerate(indices):
+            for index, _motor_index in enumerate(indices):
                 param_name = f"motorPowerSet.m{index + 1}"
                 if index > 0:
                     await sleep(delay)

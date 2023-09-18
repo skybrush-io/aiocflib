@@ -37,7 +37,7 @@ async def run_test():
                     if len(packet) < size:
                         packet += b"\x00" * (size - len(packet))
                     with timing() as t:
-                        for i in range(5000):
+                        for _i in range(5000):
                             await radio.send_and_receive_bytes(packet)
                     row.append(t.elapsed / 5)
             row = "\t".join(map(str, row))

@@ -251,8 +251,8 @@ class CfUsb:
                 self._handle.write(endpoint=1, data=data, timeout=20)
             else:
                 self._handle.bulkWrite(1, data, 20)
-        except USBError:
-            raise IOError("Error while sending packet")
+        except USBError as ex:
+            raise IOError("Error while sending packet") from ex
 
     def _teardown_device(self, exc_type, exc_value, tb):
         """Tears down the connection to the USB device when the worker thread
@@ -309,7 +309,7 @@ class _CfUsbCommunicator:
         try:
             return await self._sender(data)
         except Full:
-            raise IOError("Request queue to USB outbound thread is full")
+            raise IOError("Request queue to USB outbound thread is full") from None
 
     async def receive_bytes(self) -> bytes:
         """Receives some bytes from the connected Crazyflie via the USB port.

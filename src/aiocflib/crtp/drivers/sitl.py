@@ -1,6 +1,5 @@
 from anyio import create_memory_object_stream, move_on_after, WouldBlock
 from contextlib import asynccontextmanager
-from typing import Optional
 from urllib.parse import urlparse
 
 from aiocflib.crtp.crtpstack import CRTPPacket

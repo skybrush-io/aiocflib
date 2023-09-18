@@ -28,7 +28,7 @@ def import_cflinkcpp():
 
         return cflinkcpp
     except ImportError:
-        raise RuntimeError(
+        raise RuntimeError(  # noqa: B904
             "You need to install the 'cflinkcpp' module to use the native C++-based radio driver"
         )
 

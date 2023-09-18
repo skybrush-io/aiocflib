@@ -134,7 +134,7 @@ class ParameterType(IntEnum):
 ParameterTypeLike = Union[str, int, ParameterType]
 
 #: Dictionary mapping string type aliases to types
-_type_names = dict((alias, type) for type in ParameterType for alias in type.aliases)
+_type_names = {alias: type for type in ParameterType for alias in type.aliases}
 
 
 @dataclass(frozen=True)
@@ -644,7 +644,7 @@ class Parameters:
         try:
             return cast(Tuple[int, int], Struct("<HI").unpack(response))
         except StructError:
-            raise ValueError("invalid parameter TOC info response")
+            raise ValueError("invalid parameter TOC info response") from None
 
     async def _validate(self):
         """Downloads the basic information about the parameters of the

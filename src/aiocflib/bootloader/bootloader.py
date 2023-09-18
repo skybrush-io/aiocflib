@@ -65,7 +65,7 @@ class Bootloader(CRTPDevice):
         """
         devices = await Crazyradio.detect_all()
 
-        for index, device in enumerate(devices):
+        for index, _device in enumerate(devices):
             address_space = BootloaderAddressSpace(index=index)
             for uri in address_space:
                 found = await cls.is_responding_at(uri, tries=tries)
@@ -175,7 +175,7 @@ class Bootloader(CRTPDevice):
         The bootloader responds only to packets sent on the CRTP link control
         port, channel 3.
         """
-        new_kwds = dict(timeout=1, attempts=5)
+        new_kwds = {"timeout": 1, "attempts": 5}
         new_kwds.update(kwds)
         return await self.run_command(
             port=CRTPPort.LINK_CONTROL,

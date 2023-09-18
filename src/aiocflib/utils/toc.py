@@ -56,14 +56,14 @@ class TOCCache(metaclass=ABCMeta):
             try:
                 factory = TOCCacheRegistry.find(scheme)
             except KeyError:
-                raise KeyError("no such TOC cache type: {0!r}".format(scheme))
+                raise KeyError("no such TOC cache type: {0!r}".format(scheme)) from None
 
             cache = factory()
             cache._configure(rest)
 
         return cache
 
-    def _configure(self, uri: str) -> None:
+    def _configure(self, uri: str) -> None:  # noqa: B027
         """Configures the cache instance from the given URI specification.
 
         This method is not public; use the `TOCCache.create()` constructor to
