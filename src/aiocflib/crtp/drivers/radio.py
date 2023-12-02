@@ -69,7 +69,7 @@ class _SharedCrazyradioState:
         self.radio = radio
         self.instance = instance
 
-        await self._initializing_event.set()
+        self._initializing_event.set()
 
     def invalidate(self) -> None:
         self.invalidated = True
@@ -133,7 +133,7 @@ async def SharedCrazyradio(index: int):
                 await radio.__aexit__(*exc_info())
             finally:
                 _instances.pop(index)
-            await event.set()
+            event.set()
         else:
             raise RuntimeError("Corrupted radio reference counter")
 
