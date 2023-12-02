@@ -106,7 +106,7 @@ class DaemonTaskGroup(TaskGroup):
     async def __aexit__(self, exc_type, exc_value, tb) -> bool:
         self._spawner = None
 
-        await self._task_group.cancel_scope.cancel()
+        self._task_group.cancel_scope.cancel()
         return bool(await self._task_group.__aexit__(exc_type, exc_value, tb))
 
     def start_soon(self, func, *args, **kwds):
