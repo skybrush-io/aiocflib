@@ -62,8 +62,12 @@ class SITLDriver(CRTPDriver):
             self.apply_preset("default")
 
         # TODO(ntamas): what if the in_queue is full?
-        self._in_queue_tx, self._in_queue_rx = create_memory_object_stream(256)
-        self._out_queue_tx, self._out_queue_rx = create_memory_object_stream(1)
+        self._in_queue_tx, self._in_queue_rx = create_memory_object_stream[CRTPPacket](
+            256
+        )
+        self._out_queue_tx, self._out_queue_rx = create_memory_object_stream[
+            CRTPPacket
+        ](1)
 
     def apply_preset(self, name: str) -> None:
         """Applies a preset strategy to the given connection to control how

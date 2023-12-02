@@ -322,7 +322,7 @@ class CRTPDispatcher:
             a readable stream in which the dispatcher will place all packets
             that match the given port (or all ports if no port is specified)
         """
-        tx_queue, rx_queue = create_memory_object_stream(queue_size)
+        tx_queue, rx_queue = create_memory_object_stream[CRTPPacket](queue_size)
         async with tx_queue:
             with self.registered(tx_queue.send, port=port):
                 yield rx_queue
