@@ -9,16 +9,18 @@ from anyio import (
     to_thread,
 )
 from anyio.abc import TaskGroup
+from contextlib import contextmanager
 from functools import partial
 from inspect import iscoroutinefunction
 from outcome import capture
 from queue import Full, Queue
-from sys import exc_info
+from sys import exc_info, version_info
 from typing import (
     cast,
     Any,
     Awaitable,
     Callable,
+    Generator,
     Generic,
     Iterable,
     List,
@@ -40,6 +42,29 @@ __all__ = (
 T = TypeVar("T")
 
 TaskStartedNotifier = Callable[[], None]
+
+has_exceptiongroups = True
+if version_info < (3, 11):
+    try:
+        from exceptiongroup import BaseExceptionGroup
+    except ImportError:
+        has_exceptiongroups = False
+
+
+@contextmanager
+def collapse_excgroups() -> Generator[None, None, None]:
+    """Context manager that collapses exception groups holding a single
+    exception into the exception itself. Used to work around compatibility
+    differences between AnyIO 3 and 4.
+    """
+    try:
+        yield
+    except BaseException as exc:
+        if has_exceptiongroups:
+            while isinstance(exc, BaseExceptionGroup) and len(exc.exceptions) == 1:
+                exc = exc.exceptions[0]
+
+        raise exc from None
 
 
 class aclosing:
@@ -107,7 +132,8 @@ class DaemonTaskGroup(TaskGroup):
         self._spawner = None
 
         self._task_group.cancel_scope.cancel()
-        return bool(await self._task_group.__aexit__(exc_type, exc_value, tb))
+        with collapse_excgroups():
+            return bool(await self._task_group.__aexit__(exc_type, exc_value, tb))
 
     def start_soon(self, func, *args, **kwds):
         if self._spawner is None:
@@ -457,9 +483,10 @@ class ThreadContext(Generic[T]):
         try:
             if self._task_group:
                 try:
-                    return bool(
-                        await self._task_group.__aexit__(exc_type, exc_value, tb)
-                    )
+                    with collapse_excgroups():
+                        return bool(
+                            await self._task_group.__aexit__(exc_type, exc_value, tb)
+                        )
                 finally:
                     self._task_group = None
             else:
