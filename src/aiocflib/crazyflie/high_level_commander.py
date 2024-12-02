@@ -1,5 +1,4 @@
-"""Classes related to sending high-level navigation commands to a Crazyflie.
-"""
+"""Classes related to sending high-level navigation commands to a Crazyflie."""
 
 from contextlib import asynccontextmanager
 from enum import IntEnum

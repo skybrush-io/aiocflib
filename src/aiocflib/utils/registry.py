@@ -40,12 +40,10 @@ class Registry(Generic[T]):
                 raise
 
     @overload
-    def register(self, key: str) -> Callable[[T], T]:
-        ...
+    def register(self, key: str) -> Callable[[T], T]: ...
 
     @overload
-    def register(self, key: str, value: T) -> T:
-        ...
+    def register(self, key: str, value: T) -> T: ...
 
     def register(
         self, key: str, value: Optional[T] = None

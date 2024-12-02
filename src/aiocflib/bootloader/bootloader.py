@@ -180,7 +180,7 @@ class Bootloader(CRTPDevice):
         return await self.run_command(
             port=CRTPPort.LINK_CONTROL,
             channel=LinkControlChannel.BOOTLOADER,
-            **new_kwds
+            **new_kwds,
         )
 
     async def send_bootloader_packet(self, data, **kwds) -> None:
@@ -195,7 +195,7 @@ class Bootloader(CRTPDevice):
             port=CRTPPort.LINK_CONTROL,
             channel=LinkControlChannel.BOOTLOADER,
             data=data,
-            **kwds
+            **kwds,
         )
 
     async def validate(self) -> None:

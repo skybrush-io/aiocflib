@@ -180,7 +180,7 @@ class CRTPPacket:
         data: Optional[CRTPDataLike] = None,
         *,
         port: Optional[CRTPPortLike] = None,
-        channel: int = 0
+        channel: int = 0,
     ):
         """Constructor.
 
@@ -392,7 +392,7 @@ class CRTPDispatcher:
         self,
         predicate: Optional[Callable[[CRTPPacket], bool]],
         *,
-        port: Optional[CRTPPortLike] = None
+        port: Optional[CRTPPortLike] = None,
     ) -> Iterator[AwaitableValue]:
         """Context manager that waits for a CRTP packet on the given port (or
         all ports) matching a given predicate while the execution is in the
