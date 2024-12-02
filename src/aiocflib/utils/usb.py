@@ -14,6 +14,7 @@ __all__ = (
     "is_pyusb1",
     "release_device",
     "send_vendor_setup",
+    "use_libusb_package",
     "USBDevice",
     "USBError",
 )
@@ -131,6 +132,20 @@ def send_vendor_setup(handle, request, value, index=0, data=(), timeout=1000):
             index=index,
             timeout=timeout,
         )
+
+
+def use_libusb_package():
+    """Helper function to force the usage of `libusb1` from the `libusb-package`
+    Python module. Requires `libusb-package` to be installed in the current
+    Python environment.
+    """
+    import libusb_package
+    import usb.backend.libusb1
+
+    global _backend, is_pyusb1
+
+    _backend = usb.backend.libusb1.get_backend(find_library=libusb_package.find_library)
+    is_pyusb1 = True
 
 
 USBError = usb.core.USBError  # type: ignore
