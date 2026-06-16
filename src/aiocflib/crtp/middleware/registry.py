@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import TypeAlias
 
 from aiocflib.crtp.drivers.base import CRTPDriver
 from aiocflib.utils.registry import Registry
@@ -6,7 +7,7 @@ from aiocflib.utils.registry import Registry
 __all__ = ("MiddlewareRegistry", "find", "register")
 
 #: Type specification for CRTP driver middleware
-Middleware = Callable[[CRTPDriver], CRTPDriver]
+Middleware: TypeAlias = Callable[[CRTPDriver], CRTPDriver]
 
 #: Mapping that maps names to the corresponding middleware classes
 MiddlewareRegistry = Registry()  # type: Registry[Middleware]

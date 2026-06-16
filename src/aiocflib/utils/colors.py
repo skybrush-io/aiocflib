@@ -1,13 +1,12 @@
 """Functions and classes related to color handling."""
 
 from colour import Color as ColorBase
-from typing import Union
 
 __all__ = ("Color", "ColorLike", "to_color")
 
 
 #: Typing for objects that can be converted into an RGB color
-ColorLike = Union[str, tuple[float, float, float]]
+ColorLike = str | tuple[float, float, float]
 
 
 class Color(ColorBase):

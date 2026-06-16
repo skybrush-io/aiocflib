@@ -6,8 +6,9 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from enum import IntEnum
 from errno import ENOENT
-from struct import Struct, error as StructError
-from typing import cast, Union
+from struct import Struct
+from struct import error as StructError
+from typing import TypeAlias, cast
 
 from aiocflib.crtp import CRTPPort
 from aiocflib.errors import error_to_string
@@ -131,7 +132,7 @@ class ParameterType(IntEnum):
 
 
 #: Type specification for objects that can be converted into a parameter type
-ParameterTypeLike = Union[str, int, ParameterType]
+ParameterTypeLike: TypeAlias = str | int | ParameterType
 
 #: Dictionary mapping string type aliases to types
 _type_names = {alias: type for type in ParameterType for alias in type.aliases}

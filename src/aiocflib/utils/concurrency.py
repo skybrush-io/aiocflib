@@ -1,5 +1,19 @@
 """Utility functions related to concurrency management."""
 
+from collections.abc import Awaitable, Callable, Generator, Iterable
+from contextlib import contextmanager
+from functools import partial
+from inspect import iscoroutinefunction
+from queue import Full, Queue
+from sys import exc_info, version_info
+from typing import (
+    Any,
+    Generic,
+    TypeAlias,
+    TypeVar,
+    cast,
+)
+
 from anyio import (
     CapacityLimiter,
     Condition,
@@ -9,19 +23,7 @@ from anyio import (
     to_thread,
 )
 from anyio.abc import TaskGroup
-from contextlib import contextmanager
-from functools import partial
-from inspect import iscoroutinefunction
 from outcome import capture
-from queue import Full, Queue
-from sys import exc_info, version_info
-from typing import (
-    cast,
-    Any,
-    Generic,
-    TypeVar,
-)
-from collections.abc import Awaitable, Callable, Generator, Iterable
 
 __all__ = (
     "AwaitableValue",
@@ -285,7 +287,7 @@ class ThreadContext(Generic[T]):
     """
 
     #: Type alias for the target function of a ThreadContext
-    Target = Callable[[Queue, Callable[[Any], None]], None]
+    Target: TypeAlias = Callable[[Queue, Callable[[Any], None]], None]
 
     _queue: Queue | None
     _task_group: TaskGroup | None

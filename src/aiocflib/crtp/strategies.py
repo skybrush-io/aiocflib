@@ -1,5 +1,5 @@
-from typing import Union
 from collections.abc import Callable
+from typing import TypeAlias
 
 __all__ = (
     "BackoffPollingStrategy",
@@ -14,13 +14,13 @@ __all__ = (
 
 
 #: Type specification for polling strategies
-PollingStrategy = Callable[[bytes, bytes], float]
+PollingStrategy: TypeAlias = Callable[[bytes, bytes], float]
 
 #: Type specification for result objects of a resending strategy
-ResendingStrategyResult = Union[str, float]
+ResendingStrategyResult: TypeAlias = str | float
 
 #: Type specification for resending strategies
-ResendingStrategy = Callable[[bool, bytes], ResendingStrategyResult]
+ResendingStrategy: TypeAlias = Callable[[bool, bytes], ResendingStrategyResult]
 
 
 class DefaultPollingStrategy:

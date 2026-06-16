@@ -3,7 +3,7 @@ from __future__ import annotations
 from binascii import hexlify, unhexlify
 from collections.abc import Sequence
 from enum import IntEnum
-from typing import ClassVar, Union
+from typing import ClassVar, TypeAlias
 
 __all__ = (
     "AddressSpace",
@@ -19,10 +19,10 @@ __all__ = (
 
 
 #: Type alias for Crazyradio addresses
-CrazyradioAddress = bytes
+CrazyradioAddress: TypeAlias = bytes
 
 #: Type alias for objects that can be converted into Crazyradio addresses
-CrazyradioAddressLike = Union[int, bytes, str]
+CrazyradioAddressLike: TypeAlias = int | bytes | str
 
 #: The default Crazyradio address
 DEFAULT_RADIO_ADDRESS = b"\xe7\xe7\xe7\xe7\xe7"  # type: CrazyradioAddress

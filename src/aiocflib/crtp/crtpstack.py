@@ -1,16 +1,7 @@
 """Classes for modeling and handling CRTP packets."""
 
-from anyio import create_memory_object_stream
-from anyio.abc import ObjectReceiveStream
 from array import array
 from collections import defaultdict
-from contextlib import asynccontextmanager, contextmanager
-from enum import IntEnum
-from functools import partial
-from inspect import iscoroutinefunction
-from typing import (
-    Union,
-)
 from collections.abc import (
     AsyncIterator,
     Awaitable,
@@ -19,6 +10,14 @@ from collections.abc import (
     Iterator,
     Sequence,
 )
+from contextlib import asynccontextmanager, contextmanager
+from enum import IntEnum
+from functools import partial
+from inspect import iscoroutinefunction
+from typing import TypeAlias
+
+from anyio import create_memory_object_stream
+from anyio.abc import ObjectReceiveStream
 
 from aiocflib.utils.concurrency import AwaitableValue
 
@@ -96,13 +95,13 @@ class LinkControlChannel(IntEnum):
 
 
 #: Type alias for objects that can be convered into a CRTP command byte
-CRTPCommandLike = Union[int, bytes, Iterable[Union[int, bytes]]]
+CRTPCommandLike: TypeAlias = int | bytes | Iterable[int | bytes]
 
 #: Type alias for objects that can be converted into the data of a CRTP packet
-CRTPDataLike = Union[bytes, Sequence[int]]
+CRTPDataLike: TypeAlias = bytes | Sequence[int]
 
 #: Type alias for objects that can be converted into a CRTP port
-CRTPPortLike = Union[int, CRTPPort]
+CRTPPortLike: TypeAlias = int | CRTPPort
 
 
 class MemoryType(IntEnum):
@@ -286,9 +285,9 @@ class CRTPPacket:
 
 
 #: Type alias for functions that can handle CRTP packets
-CRTPPacketHandler = Union[
-    Callable[[CRTPPacket], None], Callable[[CRTPPacket], Awaitable[None]]
-]
+CRTPPacketHandler: TypeAlias = (
+    Callable[[CRTPPacket], None] | Callable[[CRTPPacket], Awaitable[None]]
+)
 
 
 class CRTPDispatcher:

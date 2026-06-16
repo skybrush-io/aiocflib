@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import TypeAlias
 
 from aiocflib.utils.registry import Registry
 
@@ -8,7 +9,7 @@ __all__ = ("DriverRegistry", "find", "register")
 
 
 #: Type specification for CRTP driver factories
-CRTPDriverFactory = Callable[[], CRTPDriver]
+CRTPDriverFactory: TypeAlias = Callable[[], CRTPDriver]
 
 #: Mapping that maps names to the corresponding CRTPDriver classes
 DriverRegistry = Registry()  # type: Registry[CRTPDriverFactory]

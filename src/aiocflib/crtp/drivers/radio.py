@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-from anyio import (
-    create_memory_object_stream,
-    move_on_after,
-    sleep,
-    Event,
-    WouldBlock,
-)
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
 from functools import partial
 from operator import attrgetter
 from sys import exc_info
-from collections.abc import Callable
+from typing import TypeAlias
+
+from anyio import (
+    Event,
+    WouldBlock,
+    create_memory_object_stream,
+    move_on_after,
+    sleep,
+)
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.drivers.crazyradio import (
@@ -23,7 +25,7 @@ from aiocflib.drivers.crazyradio import (
     _CfRadioCommunicator,
 )
 from aiocflib.utils.addressing import parse_radio_uri
-from aiocflib.utils.concurrency import create_daemon_task_group, gather, ObservableValue
+from aiocflib.utils.concurrency import ObservableValue, create_daemon_task_group, gather
 from aiocflib.utils.statistics import SlidingWindowMean
 
 from ..exceptions import WrongURIType
@@ -36,7 +38,6 @@ from ..strategies import (
     PollingStrategy,
     ResendingStrategy,
 )
-
 from .base import CRTPDriver
 from .registry import register
 
@@ -139,7 +140,7 @@ async def SharedCrazyradio(index: int):
 
 
 #: Type specification for radio driver presets
-RadioDriverPreset = tuple[
+RadioDriverPreset: TypeAlias = tuple[
     Callable[[PollingStrategy], None], Callable[[ResendingStrategy], None]
 ]
 

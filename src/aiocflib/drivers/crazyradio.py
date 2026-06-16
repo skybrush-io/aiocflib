@@ -1,35 +1,38 @@
 """Asynchronous USB driver for the Crazyradio USB dongle."""
 
+from array import array
+from binascii import hexlify
+from collections.abc import Iterable
+from contextlib import AsyncExitStack, asynccontextmanager
+from enum import IntEnum
+from functools import total_ordering, wraps
+from sys import exc_info
+from typing import TypeAlias
+
+from anyio import Lock, to_thread
+
+from aiocflib.errors import NotFoundError
+from aiocflib.utils.addressing import (
+    DEFAULT_RADIO_ADDRESS as DEFAULT_ADDRESS,
+)
+from aiocflib.utils.addressing import (
+    CrazyradioAddress,
+    CrazyradioAddressLike,
+    CrazyradioDataRate,
+    parse_radio_uri,
+    to_radio_address,
+)
+from aiocflib.utils.concurrency import Full, ThreadContext
 from aiocflib.utils.usb import (
+    USBDevice,
+    USBError,
     claim_device,
     find_devices,
     get_vendor_setup,
     is_pyusb1,
     release_device,
     send_vendor_setup,
-    USBDevice,
-    USBError,
 )
-from anyio import Lock, to_thread
-from array import array
-from binascii import hexlify
-from contextlib import asynccontextmanager, AsyncExitStack
-from enum import IntEnum
-from functools import total_ordering, wraps
-from sys import exc_info
-from typing import Union
-from collections.abc import Iterable
-
-from aiocflib.utils.addressing import (
-    CrazyradioAddress,
-    CrazyradioAddressLike,
-    CrazyradioDataRate,
-    DEFAULT_RADIO_ADDRESS as DEFAULT_ADDRESS,
-    parse_radio_uri,
-    to_radio_address,
-)
-from aiocflib.utils.concurrency import Full, ThreadContext
-from aiocflib.errors import NotFoundError
 
 __author__ = "CollMot Robotics Ltd"
 __all__ = ("Crazyradio", "DEFAULT_ADDRESS")
@@ -292,7 +295,7 @@ class RadioConfiguration:
 
 
 #: Type specification for objects that can be converted into a RadioConfiguration
-RadioConfigurationLike = Union[RadioConfiguration, str]
+RadioConfigurationLike: TypeAlias = RadioConfiguration | str
 
 
 class Crazyradio:

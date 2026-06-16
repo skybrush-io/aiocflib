@@ -1,18 +1,20 @@
 """Classes related to accessing the logging subsystem of a Crazyflie."""
 
-from anyio import Lock
-from contextlib import asynccontextmanager, AsyncExitStack
+from collections.abc import AsyncIterable, Awaitable, Callable, Iterable, Iterator
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from enum import IntEnum
 from functools import partial
 from itertools import count, zip_longest
-from struct import Struct, error as StructError
+from struct import Struct
+from struct import error as StructError
 from typing import (
     Any,
     Optional,
-    Union,
+    TypeAlias,
 )
-from collections.abc import AsyncIterable, Awaitable, Callable, Iterable, Iterator
+
+from anyio import Lock
 
 from aiocflib.crtp import CRTPPacket, CRTPPort
 from aiocflib.errors import error_to_string
@@ -138,7 +140,7 @@ class VariableType(IntEnum):
 
 
 #: Type specification for objects that can be converted into a log variable type
-VariableTypeLike = Union[str, int, VariableType]
+VariableTypeLike: TypeAlias = str | int | VariableType
 
 #: Dictionary mapping string type aliases to types
 _type_names = {alias: type for type in VariableType for alias in type.aliases}
@@ -269,7 +271,7 @@ class LogMessage:
 
 
 #: Type specification for log message handlers in a log session
-LogMessageHandler = Callable[[LogMessage], Union[None, Awaitable[None]]]
+LogMessageHandler: TypeAlias = Callable[[LogMessage], Awaitable[None] | None]
 
 
 def _process_period_and_frequency(

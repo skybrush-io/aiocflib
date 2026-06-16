@@ -1,7 +1,8 @@
 """Enumeration types related to the bootloader of the Crazyflie."""
 
-from enum import IntEnum
 from collections.abc import Callable
+from enum import IntEnum
+from typing import TypeAlias
 
 __all__ = ("BootloaderProtocolVersion",)
 
@@ -61,4 +62,4 @@ _bootloader_protocol_descriptions = {
 
 
 #: Type alias for progress handler functions in BootloaderTarget_
-ProgressHandler = Callable[[float], None]
+ProgressHandler: TypeAlias = Callable[[float], None]

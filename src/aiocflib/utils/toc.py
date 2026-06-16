@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
 from struct import Struct
-from typing import TypeVar, Union
+from typing import TypeAlias, TypeVar, Union
 
 from anyio import Lock, open_file
 
@@ -20,13 +20,13 @@ __all__ = ("TOCCache",)
 
 
 #: Type alias for items stored in a TOC cache
-TOCItem = bytes
+TOCItem: TypeAlias = bytes
 
 #: Type alias for TOC namespaces
-Namespace = str
+Namespace: TypeAlias = str
 
 #: Type alias for objects from which we can create a TOC cache instance
-TOCCacheLike = Union[None, str, Path, "TOCCache"]
+TOCCacheLike: TypeAlias = Union[None, str, Path, "TOCCache"]
 
 
 class TOCCache(ABC):
@@ -154,7 +154,7 @@ class TOCCache(ABC):
 
 
 #: Type alias for factory functions that can create a TOC cache instance
-TOCCacheFactory = Callable[[], TOCCache]
+TOCCacheFactory: TypeAlias = Callable[[], TOCCache]
 
 #: Mapping that maps names to the corresponding TOCCache classes
 TOCCacheRegistry = Registry()  # type: Registry[TOCCacheFactory]
