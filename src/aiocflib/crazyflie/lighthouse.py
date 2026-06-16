@@ -669,7 +669,10 @@ class Lighthouse:
 
 
 async def test():
+    from aiocflib.utils.usb import use_libusb_package
     from pprint import pprint
+
+    use_libusb_package()
 
     uri = "radio+log://0/80/2M/E7E7E7E701"
     async with Crazyflie(uri) as cf:
