@@ -37,6 +37,7 @@ class MemoryInfoCommand(IntEnum):
 
     GET_NUMBER_OF_MEMORIES = 1
     GET_DETAILS = 2
+    ERASE = 3
 
 
 @dataclass(frozen=True)
@@ -118,6 +119,11 @@ class MemoryHandler(ABC):
         ...
 
     @abstractmethod
+    async def erase(self) -> None:
+        """Erases the contents of the memory."""
+        ...
+
+    @abstractmethod
     async def read(self, addr: int, length: int) -> bytes:
         """Reads a given number of bytes from the given address.
 
@@ -154,6 +160,7 @@ class MemoryHandlerBase(MemoryHandler):
     """Base implementation of a memory handler."""
 
     _addressing_struct: ClassVar[Struct] = Struct("<BI")
+    _erasing_struct: ClassVar[Struct] = Struct("<BB")
 
     def __init__(self, element: MemoryElement, owner: Crazyflie):
         """Constructor.
@@ -169,6 +176,20 @@ class MemoryHandlerBase(MemoryHandler):
     async def dump(self, strip: bool = False) -> bytes:
         result = await self.read(0, self.size)
         return result.rstrip(b"\x00") if strip else result
+
+    async def erase(self) -> None:
+        response = await self._crazyflie.run_command(
+            port=CRTPPort.MEMORY,
+            channel=MemoryChannel.INFO,
+            command=(MemoryInfoCommand.ERASE, self._element.index),
+        )
+        status = int(response[0]) if response else ENODATA
+        if status:
+            raise RuntimeError(
+                "Erase request returned error code {} ({})".format(
+                    status, error_to_string(status)
+                )
+            )
 
     async def read(self, addr: int, length: int) -> bytes:
         chunks = []
@@ -296,7 +317,7 @@ class Memory:
         Parameters:
             type: the type of the memory element to look for
 
-        Yields:
+        Returns:
             handler objects for all memory elements that have the given type.
             The handler objects can be used to read from and write to the
             corresponding memory element.
