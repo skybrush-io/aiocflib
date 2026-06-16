@@ -1,6 +1,6 @@
 """Interface specificaton for asynchronous CRTP driver implementations."""
 
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from typing import AsyncContextManager
 
@@ -13,7 +13,7 @@ __author__ = "CollMot Robotics Ltd"
 __all__ = ("CRTPDriver",)
 
 
-class CRTPDriver(metaclass=ABCMeta):
+class CRTPDriver(ABC):
     """Interface specificaton for asynchronous CRTP driver implementations.
 
     All asynchronous CRTP driver implementations must inherit from this class.
@@ -32,8 +32,8 @@ class CRTPDriver(metaclass=ABCMeta):
         Additional positional and keyword arguments are forwarded to the
         driver factory determined from the URI scheme.
         """
-        from .registry import find as find_driver
         from ..middleware.registry import find as find_middleware
+        from .registry import find as find_driver
 
         scheme, sep, rest = uri.partition("://")
         if not sep:
@@ -81,9 +81,10 @@ class CRTPDriver(metaclass=ABCMeta):
             the context is entered and that closes the connection when the
             context is exited
         """
-        raise NotImplementedError
+        ...
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def is_safe(self) -> bool:
         """Returns whether this link is safe.
 
@@ -91,19 +92,21 @@ class CRTPDriver(metaclass=ABCMeta):
         eventually gets delivered to the peer, _or_ that the link gets closed
         if the delivery fails.
         """
-        raise NotImplementedError
+        ...
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def link_quality(self) -> ObservableValue[float]:
         """Observable measurement of link quality, as a float between 0 (no
         link) and 1 (perfect link).
         """
-        raise NotImplementedError
+        ...
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def name(self) -> str:
         """Returns a human-readable name of the interface."""
-        raise NotImplementedError
+        ...
 
     async def notify_rebooted(self) -> None:  # noqa: B027
         """Notifies the driver that the underlying Crazyflie device has been
@@ -120,7 +123,7 @@ class CRTPDriver(metaclass=ABCMeta):
         Returns:
             the next CRTP packet that was received
         """
-        raise NotImplementedError
+        ...
 
     @classmethod
     async def scan_interfaces(cls) -> list[str]:
@@ -141,7 +144,7 @@ class CRTPDriver(metaclass=ABCMeta):
         Parameters:
             packet: the packet to send
         """
-        raise NotImplementedError
+        ...
 
     @property
     def uri(self) -> str | None:

@@ -1,12 +1,13 @@
 """Classes related to accessing the memory subsystem of a Crazyflie."""
 
-from abc import abstractmethod, abstractproperty, ABCMeta
+from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import IntEnum
 from errno import ENODATA
-from struct import Struct, error as StructError
+from struct import Struct
+from struct import error as StructError
 from typing import ClassVar
-from collections.abc import Callable
 
 from aiocflib.crtp import CRTPPort, MemoryType
 from aiocflib.errors import error_to_string
@@ -82,7 +83,7 @@ _memory_handler_registry: Registry[
 ] = Registry()
 
 
-class MemoryHandler(metaclass=ABCMeta):
+class MemoryHandler(ABC):
     """Interface specification for memory handlers that know how to read and
     write a certain type of memory.
     """
@@ -114,7 +115,7 @@ class MemoryHandler(metaclass=ABCMeta):
         Parameters:
             strip: whether to strip trailing zero bytes from the result
         """
-        raise NotImplementedError
+        ...
 
     @abstractmethod
     async def read(self, addr: int, length: int) -> bytes:
@@ -124,17 +125,19 @@ class MemoryHandler(metaclass=ABCMeta):
             addr: the address to read from
             length: the number of bytes to read
         """
-        raise NotImplementedError
+        ...
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def size(self) -> int:
         """Returns the size of the memory that this handler handles."""
-        raise NotImplementedError
+        ...
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def type(self) -> int:
         """Returns the type of the memory that this handler handles."""
-        raise NotImplementedError
+        ...
 
     @abstractmethod
     async def write(self, addr: int, data: bytes) -> None:
@@ -144,7 +147,7 @@ class MemoryHandler(metaclass=ABCMeta):
             addr: the address to read from
             length: the number of bytes to read
         """
-        raise NotImplementedError
+        ...
 
 
 class MemoryHandlerBase(MemoryHandler):

@@ -2,16 +2,17 @@
 and log table-of-contents entries from a Crazyflie.
 """
 
-from abc import abstractmethod, ABCMeta
-from anyio import Lock, open_file
+from abc import ABC, abstractmethod
 from binascii import hexlify
 from collections import defaultdict
+from collections.abc import Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
 from struct import Struct
-from typing import Union, TypeVar
-from collections.abc import Awaitable, Callable, Iterable
+from typing import TypeVar, Union
+
+from anyio import Lock, open_file
 
 from aiocflib.utils.registry import Registry
 
@@ -28,7 +29,7 @@ Namespace = str
 TOCCacheLike = Union[None, str, Path, "TOCCache"]
 
 
-class TOCCache(metaclass=ABCMeta):
+class TOCCache(ABC):
     """Interface specification for table-of-contents caches."""
 
     @classmethod
@@ -79,6 +80,7 @@ class TOCCache(metaclass=ABCMeta):
         """
         pass
 
+    @abstractmethod
     async def find(
         self, hash: bytes, namespace: Namespace | None = None
     ) -> Iterable[TOCItem]:
@@ -94,8 +96,9 @@ class TOCCache(metaclass=ABCMeta):
             KeyError: if no cached table-of-contents entries exist for the
                 given hash value
         """
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     async def has(self, hash: bytes, namespace: Namespace | None = None) -> bool:
         """Returns whether the table-of-contents object contains an item with
         the given hash.
@@ -106,7 +109,7 @@ class TOCCache(metaclass=ABCMeta):
                 in. Useful if the same TOC cache is used to store different
                 types of TOC items.
         """
-        raise NotImplementedError
+        ...
 
     def get_key(self) -> str | None:
         """Returns a short string identifier that uniquely identifies this
@@ -147,7 +150,7 @@ class TOCCache(metaclass=ABCMeta):
                 types of TOC items.
 
         """
-        raise NotImplementedError
+        ...
 
 
 #: Type alias for factory functions that can create a TOC cache instance
