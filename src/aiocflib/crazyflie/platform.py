@@ -26,6 +26,8 @@ class PlatformCommand(IntEnum):
     """
 
     SET_CONTINUOUS_WAVE = 0
+    REQUEST_ARM_DISARM = 1  # deprecated, included for completeness
+    REQUEST_RECOVER = 2  # deprecated, included for completeness
 
 
 class VersionCommand(IntEnum):
