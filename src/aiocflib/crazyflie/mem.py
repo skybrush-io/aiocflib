@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from enum import IntEnum
 from errno import ENODATA
 from struct import Struct, error as StructError
-from typing import Callable, ClassVar, List, Optional, Tuple
+from typing import ClassVar
+from collections.abc import Callable
 
 from aiocflib.crtp import CRTPPort, MemoryType
 from aiocflib.errors import error_to_string
@@ -175,9 +176,9 @@ class MemoryHandlerBase(MemoryHandler):
             if status == 0:
                 chunks.append(chunk)
             else:
-                raise IOError(
+                raise OSError(
                     status,
-                    "Read request returned error code {0} ({1})".format(
+                    "Read request returned error code {} ({})".format(
                         status, error_to_string(status)
                     ),
                 )
@@ -197,14 +198,14 @@ class MemoryHandlerBase(MemoryHandler):
         ):
             status = await self._write_chunk(addr + start, data[start : (start + size)])
             if status:
-                raise IOError(
+                raise OSError(
                     status,
-                    "Write request returned error code {0} ({1})".format(
+                    "Write request returned error code {} ({})".format(
                         status, error_to_string(status)
                     ),
                 )
 
-    async def _read_chunk(self, addr: int, length: int) -> Tuple[bytes, int]:
+    async def _read_chunk(self, addr: int, length: int) -> tuple[bytes, int]:
         """Reads a chunk of data that fits into a single packet, starting
         from the given address.
 
@@ -254,7 +255,7 @@ class Memory:
     """
 
     _crazyflie: Crazyflie
-    _handlers: Optional[List[MemoryHandler]]
+    _handlers: list[MemoryHandler] | None
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
@@ -284,9 +285,9 @@ class Memory:
         for handler in self._handlers:
             if handler.type == type:
                 return handler
-        raise ValueError("no memory matching type {0!r}".format(type))
+        raise ValueError(f"no memory matching type {type!r}")
 
-    async def find_all(self, type: MemoryType) -> List[MemoryHandler]:
+    async def find_all(self, type: MemoryType) -> list[MemoryHandler]:
         """Finds all memory elements with the given type.
 
         Parameters:
@@ -415,7 +416,7 @@ class Memory:
         )
         return response[0]
 
-    async def _validate(self) -> List[MemoryHandler]:
+    async def _validate(self) -> list[MemoryHandler]:
         """Downloads the basic information about the memories on the Crazyflie."""
         num_memories = await self._get_number_of_memories()
         memories = [await self._get_memory_details(i) for i in range(num_memories)]

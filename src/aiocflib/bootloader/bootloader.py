@@ -3,7 +3,6 @@ from aiocflib.errors import NotFoundError
 from aiocflib.drivers.crazyradio import Crazyradio
 from aiocflib.utils.addressing import BootloaderAddressSpace
 from anyio import sleep
-from typing import List, Optional, Union
 
 from .target import BootloaderTarget, BootloaderTargetType
 from .types import BootloaderCommand, BootloaderProtocolVersion
@@ -25,10 +24,10 @@ class Bootloader(CRTPDevice):
         # Connection to the bootloader closes when the context is exited
     """
 
-    _targets: Optional[List[BootloaderTarget]]
+    _targets: list[BootloaderTarget] | None
 
     @classmethod
-    async def detect_all(cls) -> List[str]:
+    async def detect_all(cls) -> list[str]:
         """Uses all connected Crazyradio dongles to scan for available Crazyflie
         quadcopters that are in bootloader mode, and returns a list with
         appropriate connection URIs that could be used to connect to them.
@@ -41,7 +40,7 @@ class Bootloader(CRTPDevice):
         """
         devices = await Crazyradio.detect_all()
 
-        results: List[str] = []
+        results: list[str] = []
         for index, device in enumerate(devices):
             address_space = BootloaderAddressSpace(index=index)
             async with device as radio:
@@ -107,9 +106,7 @@ class Bootloader(CRTPDevice):
 
         self._targets = None
 
-    async def find_target(
-        self, type: Union[BootloaderTargetType, str]
-    ) -> BootloaderTarget:
+    async def find_target(self, type: BootloaderTargetType | str) -> BootloaderTarget:
         """Finds the first bootloader target of the given type.
 
         Raises:
@@ -122,7 +119,7 @@ class Bootloader(CRTPDevice):
                 return target
         raise NotFoundError("no such bootloader target")
 
-    async def get_targets(self) -> List[BootloaderTarget]:
+    async def get_targets(self) -> list[BootloaderTarget]:
         """Returns information about the possible bootloader targets. Loads it
         from the bootloader if necessary.
         """
@@ -213,7 +210,7 @@ class Bootloader(CRTPDevice):
         )
         return BootloaderTarget.from_bytes(self, target_type, response)
 
-    async def _get_targets(self) -> List[BootloaderTarget]:
+    async def _get_targets(self) -> list[BootloaderTarget]:
         """Loads information about the possible bootloader targets from the
         bootloader.
         """

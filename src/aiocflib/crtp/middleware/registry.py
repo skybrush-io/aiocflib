@@ -1,4 +1,4 @@
-from typing import Callable
+from collections.abc import Callable
 
 from aiocflib.crtp.drivers.base import CRTPDriver
 from aiocflib.utils.registry import Registry

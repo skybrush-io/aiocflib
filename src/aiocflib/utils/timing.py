@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import Callable
+from collections.abc import Callable
 from time import time
 
 __all__ = ("timing",)

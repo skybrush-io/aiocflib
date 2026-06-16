@@ -2,7 +2,8 @@
 
 from enum import IntEnum
 from struct import Struct
-from typing import ClassVar, Iterable, Optional, Sequence, Tuple, Union
+from typing import ClassVar
+from collections.abc import Iterable, Sequence
 
 from aiocflib.crtp import CRTPPort
 from aiocflib.utils.quaternion import compress_unit_quaternion, QuaternionXYZW
@@ -61,7 +62,7 @@ class Localization:
 
     @classmethod
     def encode_external_position_packed(
-        cls, items: Sequence[Tuple[int, Tuple[float, float, float]]]
+        cls, items: Sequence[tuple[int, tuple[float, float, float]]]
     ) -> bytes:
         """Encodes the payload of a "packed external position" packet that
         contains position information for multiple Crazyflie drones.
@@ -84,7 +85,7 @@ class Localization:
 
     @classmethod
     def encode_external_pose_packed(
-        cls, items: Sequence[Tuple[int, Tuple[float, float, float], QuaternionXYZW]]
+        cls, items: Sequence[tuple[int, tuple[float, float, float], QuaternionXYZW]]
     ) -> bytes:
         """Encodes the payload of a "packed external pose" packet that
         contains position and attitude information for multiple Crazyflie drones.
@@ -121,7 +122,7 @@ class Localization:
 
     async def _send_packet(
         self,
-        data: Union[int, bytes],
+        data: int | bytes,
         channel: LocalizationChannel = LocalizationChannel.GENERIC,
     ) -> None:
         await self._crazyflie.send_packet(
@@ -130,9 +131,9 @@ class Localization:
 
     async def send_external_position(
         self,
-        x: Union[float, Sequence[float]],
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | Sequence[float],
+        y: float | None = None,
+        z: float | None = None,
     ) -> None:
         """Sends position information originating from an external positioning
         system into the Crazyflie.
@@ -211,8 +212,8 @@ class Localization:
 
     async def persist_lighthouse_data(
         self,
-        geo_list: Optional[Iterable[int]] = None,
-        calib_list: Optional[Iterable[int]] = None,
+        geo_list: Iterable[int] | None = None,
+        calib_list: Iterable[int] | None = None,
     ) -> bool:
         """Instructs the Crazyflie to persist the currently estimated geometry
         and calibration data of the Lighthouse subsystem into permanent storage.

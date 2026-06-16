@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from anyio import sleep
 from binascii import hexlify
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from aiocflib.bootloader.types import BootloaderCommand
 from aiocflib.bootloader.target import BootloaderTargetType
@@ -74,7 +74,7 @@ class Crazyflie(CRTPDevice):
 
         return False
 
-    def __init__(self, uri: str, cache: Optional[TOCCacheLike] = None):
+    def __init__(self, uri: str, cache: TOCCacheLike | None = None):
         """Constructor.
 
         Creates a Crazyflie_ instance from a URI specification.
@@ -113,7 +113,7 @@ class Crazyflie(CRTPDevice):
         self._parameters = Parameters(self)
         self._platform = Platform(self)
 
-    def _get_cache_for(self, namespace: str) -> Optional[TOCCache]:
+    def _get_cache_for(self, namespace: str) -> TOCCache | None:
         """Returns a namespaced TOC cache instance to be used by submodules
         for caching data, or `None` if the Crazyflie instance was constructed
         without a cache.
@@ -285,7 +285,7 @@ class Crazyflie(CRTPDevice):
         scheme, _, _ = self.uri.partition("://")
         if not scheme.startswith("radio"):
             scheme = "radio"
-        return "{0}://0/0/2M/{1}".format(scheme, new_address)
+        return f"{scheme}://0/0/2M/{new_address}"
 
     async def resume(self) -> None:
         """Sends a packet to the Crazyflie that wakes up its main processor

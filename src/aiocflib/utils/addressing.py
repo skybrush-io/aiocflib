@@ -3,7 +3,7 @@ from __future__ import annotations
 from binascii import hexlify, unhexlify
 from collections.abc import Sequence
 from enum import IntEnum
-from typing import ClassVar, Dict, Union
+from typing import ClassVar, Union
 
 __all__ = (
     "AddressSpace",
@@ -68,7 +68,7 @@ def parse_radio_uri(
     uri: str,
     allow_prefix: bool = False,
     default_address: CrazyradioAddress = DEFAULT_RADIO_ADDRESS,
-) -> Dict:
+) -> dict:
     """Parses a Crazyflie radio URI and returns a dictionary containing the
     parsed parts.
 
@@ -115,7 +115,7 @@ def parse_radio_uri(
         try:
             index = int(index)
         except ValueError:
-            raise ValueError("Invalid radio index: {0!r}".format(index)) from None
+            raise ValueError(f"Invalid radio index: {index!r}") from None
     else:
         index = 0
 
@@ -125,9 +125,9 @@ def parse_radio_uri(
         try:
             channel = int(channel)
         except ValueError:
-            raise ValueError("Invalid channel index: {0!r}".format(channel)) from None
+            raise ValueError(f"Invalid channel index: {channel!r}") from None
         if channel < 0 or channel > 125:
-            raise ValueError("Invalid channel index: {0!r}".format(channel))
+            raise ValueError(f"Invalid channel index: {channel!r}")
     else:
         channel = 2
 
@@ -137,7 +137,7 @@ def parse_radio_uri(
         try:
             data_rate = CrazyradioDataRate.from_string(data_rate)
         except ValueError:
-            raise ValueError("Invalid data rate: {0!r}".format(data_rate)) from None
+            raise ValueError(f"Invalid data rate: {data_rate!r}") from None
     else:
         data_rate = CrazyradioDataRate.DR_2MPS
 
@@ -147,7 +147,7 @@ def parse_radio_uri(
         try:
             address = to_radio_address(address, allow_prefix=allow_prefix)
         except Exception as ex:
-            raise ValueError("Invalid address: {0!r}".format(address)) from ex
+            raise ValueError(f"Invalid address: {address!r}") from ex
     else:
         address = default_address
 
@@ -211,7 +211,7 @@ def to_radio_address(
     raise TypeError(
         "expected a bytes object of length 5, a hexadecimal string of "
         "length 10 or an integer between 0 and 255, inclusive, "
-        "got {0!r}".format(address)
+        "got {!r}".format(address)
     )
 
 
@@ -228,7 +228,7 @@ class BootloaderAddressSpace(AddressSpace):
     could be listening.
     """
 
-    DEFAULT: ClassVar["BootloaderAddressSpace"]
+    DEFAULT: ClassVar[BootloaderAddressSpace]
 
     def __init__(self, index: int = 0, scheme: str = "radio"):
         """Constructor.
@@ -240,9 +240,7 @@ class BootloaderAddressSpace(AddressSpace):
                 space
         """
         self._index = int(index)
-        self._items = [
-            "{0}://{1}/{2}".format(scheme, index, channel) for channel in (0, 110)
-        ]
+        self._items = [f"{scheme}://{index}/{channel}" for channel in (0, 110)]
 
     def __getitem__(self, index):
         return self._items[index]
@@ -271,7 +269,7 @@ class RadioAddressSpace(AddressSpace):
         addresses = RadioAddressSpace.from_uri("radio://0/80/2M/E7E7E7E7")
     """
 
-    DEFAULT: ClassVar["RadioAddressSpace"]
+    DEFAULT: ClassVar[RadioAddressSpace]
 
     @classmethod
     def from_uri(cls, uri: str, length: int = 256):
@@ -290,8 +288,8 @@ class RadioAddressSpace(AddressSpace):
         self,
         index: int = 0,
         channel: int = 80,
-        data_rate: Union[CrazyradioDataRate, str] = CrazyradioDataRate.DR_2MPS,
-        prefix: Union[bytes, str] = "E7E7E7E7",
+        data_rate: CrazyradioDataRate | str = CrazyradioDataRate.DR_2MPS,
+        prefix: bytes | str = "E7E7E7E7",
         length: int = 256,
         scheme: str = "radio",
     ):
@@ -319,7 +317,7 @@ class RadioAddressSpace(AddressSpace):
         self._length = max(0, int(length))
 
         self._base_address = int.from_bytes(self._prefix, byteorder="big")
-        self._uri_prefix = "{0}://{1}/{2}/{3}".format(
+        self._uri_prefix = "{}://{}/{}/{}".format(
             self._scheme, self._index, self._channel, str(self._data_rate)
         )
         self._uri_format = self._uri_prefix + "/{0}"
@@ -380,7 +378,7 @@ class USBAddressSpace(AddressSpace):
                 space
         """
         self._length = max(0, int(length))
-        self._format_str = "{0}://".format(scheme) + "{0}"
+        self._format_str = f"{scheme}://" + "{0}"
 
     def __getitem__(self, index: int) -> str:
         if index >= 0 and index < self._length:

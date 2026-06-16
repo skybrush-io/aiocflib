@@ -6,7 +6,6 @@ from anyio.streams.buffered import BufferedByteReceiveStream
 from array import array
 from contextlib import AsyncExitStack
 from functools import partial
-from typing import Optional
 
 
 __author__ = "CollMot Robotics Ltd"
@@ -61,9 +60,7 @@ class SITL:
         finally:
             self._exit_stack = None
 
-    async def _receive_bytes(
-        self, client: BufferedByteReceiveStream
-    ) -> Optional[array]:
+    async def _receive_bytes(self, client: BufferedByteReceiveStream) -> array | None:
         """Receives some data from the SITL connection in a synchronous manner.
 
         Parameters:

@@ -1,6 +1,6 @@
 """Classes related to handling console messages of a Crazyflie."""
 
-from typing import AsyncIterator, List
+from collections.abc import AsyncIterator
 
 from anyio import fail_after
 
@@ -45,7 +45,7 @@ class Console:
         if not partial_message_marker_bytes.endswith(b"\n"):
             partial_message_marker_bytes += b"\n"
 
-        parts: List[bytes] = []
+        parts: list[bytes] = []
         gen = self.packets()
 
         async with aclosing(gen):

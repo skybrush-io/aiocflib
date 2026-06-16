@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Iterable, Optional, Union
+from collections.abc import AsyncIterator, Iterable
 
 from aiocflib.drivers.crazyradio import RadioConfiguration
 from aiocflib.crtp.crtpstack import CRTPPacket, CRTPPortLike
@@ -36,7 +36,7 @@ class _Broadcaster:
         *,
         port: CRTPPortLike,
         channel: int = 0,
-        data: Optional[Union[int, bytes, Iterable[Union[int, bytes]]]] = None,
+        data: int | bytes | Iterable[int | bytes] | None = None,
     ) -> None:
         """Broadcasts a packet with the given CRTP port, channel and the given
         body.

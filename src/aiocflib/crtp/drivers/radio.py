@@ -12,7 +12,7 @@ from dataclasses import dataclass, field, replace
 from functools import partial
 from operator import attrgetter
 from sys import exc_info
-from typing import Callable, Dict, Optional, Tuple, List
+from collections.abc import Callable
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.drivers.crazyradio import (
@@ -43,17 +43,17 @@ from .registry import register
 __all__ = ("RadioDriver",)
 
 
-_instances: Dict[int, "_SharedCrazyradioState"] = {}
+_instances: dict[int, _SharedCrazyradioState] = {}
 
 
 @dataclass
 class _SharedCrazyradioState:
-    radio: Optional[Crazyradio] = None
-    instance: Optional[_CfRadioCommunicator] = None
+    radio: Crazyradio | None = None
+    instance: _CfRadioCommunicator | None = None
     count: int = 0
 
     _initializing_event: Event = field(default_factory=Event)
-    _destroying_event: Optional[Event] = None
+    _destroying_event: Event | None = None
 
     @property
     def destroying(self) -> bool:
@@ -74,7 +74,7 @@ class _SharedCrazyradioState:
     def invalidate(self) -> None:
         self.invalidated = True
 
-    def start_destruction(self) -> Tuple[Crazyradio, Event]:
+    def start_destruction(self) -> tuple[Crazyradio, Event]:
         assert self.radio is not None
         assert self.count == 1
         assert self._destroying_event is None
@@ -139,7 +139,7 @@ async def SharedCrazyradio(index: int):
 
 
 #: Type specification for radio driver presets
-RadioDriverPreset = Tuple[
+RadioDriverPreset = tuple[
     Callable[[PollingStrategy], None], Callable[[ResendingStrategy], None]
 ]
 
@@ -164,7 +164,7 @@ class _SafeLinkState:
         return self._enabled_acquired.value.acquired
 
     @property
-    def counter_bits(self) -> Tuple[int, int]:
+    def counter_bits(self) -> tuple[int, int]:
         """Returns the current state of the counter bits, for debugging purposes."""
         return self._up, self._down
 
@@ -313,7 +313,7 @@ class RadioDriver(CRTPDriver):
         ](1)
 
     @property
-    def address(self) -> Optional[CrazyradioAddress]:
+    def address(self) -> CrazyradioAddress | None:
         """The address that the driver will be configured for, or ``None`` if
         the driver has no URI.
         """
@@ -338,12 +338,12 @@ class RadioDriver(CRTPDriver):
         try:
             preset = self.PRESETS[name]
         except KeyError:
-            raise KeyError("no such preset: {0}".format(name)) from None
+            raise KeyError(f"no such preset: {name}") from None
 
         self.polling_strategy, self.resending_strategy = preset[0](), preset[1]()
 
     @property
-    def configuration(self) -> Optional[RadioConfiguration]:
+    def configuration(self) -> RadioConfiguration | None:
         """The address, channel and data rate that the driver is configured for,
         or ``None`` if the driver is not configured.
         """
@@ -393,8 +393,8 @@ class RadioDriver(CRTPDriver):
 
     @classmethod
     async def scan_interfaces(
-        cls, address: Optional[CrazyradioAddress] = None
-    ) -> List[str]:
+        cls, address: CrazyradioAddress | None = None
+    ) -> list[str]:
         """Scans all interfaces of this type for available Crazyflie quadcopters
         and returns a list with appropriate connection URIs that could be used
         to connect to them.
@@ -408,7 +408,7 @@ class RadioDriver(CRTPDriver):
             list is returned for interfaces that do not support scanning
         """
         devices = await Crazyradio.detect_all()
-        results: List[str] = await gather(
+        results: list[str] = await gather(
             (cls._scan_single_interface, device, address) for device in devices
         )
         return sum(results, [])
@@ -427,8 +427,8 @@ class RadioDriver(CRTPDriver):
 
     @classmethod
     async def _scan_single_interface(
-        cls, radio: Crazyradio, address: Optional[CrazyradioAddress] = None
-    ) -> List[str]:
+        cls, radio: Crazyradio, address: CrazyradioAddress | None = None
+    ) -> list[str]:
         """Scans a single interface for available Crazyflie quadcopters and
         returns a list with appropriate connection URIs that could be used
         to connect to them.
@@ -526,7 +526,7 @@ class RadioDriver(CRTPDriver):
                 pass
             elif action == "stop":
                 # Bail out -- too many packets lost
-                raise IOError("Too many packets lost")
+                raise OSError("Too many packets lost")
             elif action == 0:
                 # Resend immediately. If the packet that we are trying to send
                 # is a filler (null) packet, poll the outbound packet queue and

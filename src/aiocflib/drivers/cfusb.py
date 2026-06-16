@@ -4,7 +4,6 @@ from anyio import create_memory_object_stream, to_thread
 from anyio.streams.stapled import StapledObjectStream
 from contextlib import AsyncExitStack
 from functools import partial
-from typing import List, Optional
 
 import usb
 
@@ -29,7 +28,7 @@ USB_VID = 0x0483
 USB_PID = 0x5740
 
 
-def _find_devices() -> List[USBDevice]:
+def _find_devices() -> list[USBDevice]:
     """Returns a list of Crazyflie drones currently connected to the computer.
 
     This function uses `pyusb` functions directly, hence it will block the
@@ -64,7 +63,7 @@ class CfUsb:
     context blocks upon entering until the device becomes available.
     """
 
-    _handle: Optional[USBDevice]
+    _handle: USBDevice | None
 
     @classmethod
     async def detect_all(cls):
@@ -129,7 +128,7 @@ class CfUsb:
         self._use_crtp_to_usb = bool(value)
 
     @property
-    def version(self) -> Optional[float]:
+    def version(self) -> float | None:
         """Returns the version number of the associated device.
 
         This property returns a valid value only after you have connected to
@@ -179,9 +178,7 @@ class CfUsb:
             if cfg is None or cfg.bConfigurationValue != 1:
                 device.set_configuration(1)
             handle = device
-            version = float(
-                "{0:x}.{1:x}".format(device.bcdDevice >> 8, device.bcdDevice & 0x0FF)
-            )
+            version = float(f"{device.bcdDevice >> 8:x}.{device.bcdDevice & 0x0FF:x}")
         else:
             handle = device.open()
             handle.setConfiguration(1)
@@ -203,7 +200,7 @@ class CfUsb:
         except (USBError, ValueError):
             return usb.util.get_string(self._device, self._device.iSerialNumber)
 
-    def _receive_bytes(self) -> Optional[bytes]:
+    def _receive_bytes(self) -> bytes | None:
         """Receives some data from the USB connection in a synchronous manner.
 
         Returns:
@@ -227,7 +224,7 @@ class CfUsb:
                     # Normal, the read was empty
                     pass
                 else:
-                    raise IOError("Crazyflie disconnected")
+                    raise OSError("Crazyflie disconnected")
             except AttributeError:
                 # pyusb < 1.0 doesn't implement getting the underlying error
                 # number and it seems as if it's not possible to detect
@@ -252,7 +249,7 @@ class CfUsb:
             else:
                 self._handle.bulkWrite(1, data, 20)
         except USBError as ex:
-            raise IOError("Error while sending packet") from ex
+            raise OSError("Error while sending packet") from ex
 
     def _teardown_device(self, exc_type, exc_value, tb):
         """Tears down the connection to the USB device when the worker thread
@@ -309,7 +306,7 @@ class _CfUsbCommunicator:
         try:
             return await self._sender(data)
         except Full:
-            raise IOError("Request queue to USB outbound thread is full") from None
+            raise OSError("Request queue to USB outbound thread is full") from None
 
     async def receive_bytes(self) -> bytes:
         """Receives some bytes from the connected Crazyflie via the USB port.

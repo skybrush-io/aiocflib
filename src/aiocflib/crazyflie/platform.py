@@ -1,7 +1,7 @@
 """Classes related to handling platform service messages of a Crazyflie."""
 
 from enum import IntEnum
-from typing import Any, Dict, Optional
+from typing import Any
 
 from aiocflib.crtp import CRTPPort, LinkControlChannel
 
@@ -44,7 +44,7 @@ class Platform:
     """
 
     _crazyflie: Crazyflie
-    _cache: Dict[str, Any]
+    _cache: dict[str, Any]
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
@@ -58,7 +58,7 @@ class Platform:
         self._cache = {}
         # TODO(ntamas): clear cache when the Crazyflie disconnects
 
-    async def get_device_type_name(self) -> Optional[str]:
+    async def get_device_type_name(self) -> str | None:
         """Returns the device type name of the Crazyflie; `None` if the connected
         device is not a Crazyflie.
         """
@@ -66,7 +66,7 @@ class Platform:
             self._cache["device_type_name"] = await self._get_device_type_name()
         return self._cache["device_type_name"]
 
-    async def _get_device_type_name(self) -> Optional[str]:
+    async def _get_device_type_name(self) -> str | None:
         if await self.is_crazyflie():
             response = await self._crazyflie.run_command(
                 port=CRTPPort.PLATFORM,
@@ -77,7 +77,7 @@ class Platform:
         else:
             return None
 
-    async def get_firmware_revision(self) -> Optional[str]:
+    async def get_firmware_revision(self) -> str | None:
         """Returns the firmware revision of the Crazyflie; `None` if the connected
         device is not a Crazyflie.
         """
@@ -85,7 +85,7 @@ class Platform:
             self._cache["firmware_revision"] = await self._get_firmware_revision()
         return self._cache["firmware_revision"]
 
-    async def get_firmware_version(self) -> Optional[str]:
+    async def get_firmware_version(self) -> str | None:
         """Returns the firmware version of the Crazyflie; `None` if the connected
         device is not a Crazyflie.
         """
@@ -93,7 +93,7 @@ class Platform:
             self._cache["firmware_version"] = await self._get_firmware_version()
         return self._cache["firmware_version"]
 
-    async def _get_firmware_revision(self) -> Optional[str]:
+    async def _get_firmware_revision(self) -> str | None:
         if await self.is_crazyflie():
             rev0 = await self._crazyflie.param.get("firmware.revision0")
             rev1 = await self._crazyflie.param.get("firmware.revision1")
@@ -101,7 +101,7 @@ class Platform:
         else:
             return None
 
-    async def _get_firmware_version(self) -> Optional[str]:
+    async def _get_firmware_version(self) -> str | None:
         if await self.is_crazyflie():
             response = await self._crazyflie.run_command(
                 port=CRTPPort.PLATFORM,

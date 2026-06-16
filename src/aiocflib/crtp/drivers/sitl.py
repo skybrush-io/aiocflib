@@ -79,7 +79,7 @@ class SITLDriver(CRTPDriver):
         try:
             preset = self.PRESETS[name]
         except KeyError:
-            raise KeyError("no such preset: {0}".format(name)) from None
+            raise KeyError(f"no such preset: {name}") from None
 
         self.polling_strategy = preset[0]()
 

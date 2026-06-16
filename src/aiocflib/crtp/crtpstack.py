@@ -9,16 +9,15 @@ from enum import IntEnum
 from functools import partial
 from inspect import iscoroutinefunction
 from typing import (
+    Union,
+)
+from collections.abc import (
     AsyncIterator,
     Awaitable,
     Callable,
-    Dict,
     Iterable,
     Iterator,
-    List,
-    Optional,
     Sequence,
-    Union,
 )
 
 from aiocflib.utils.concurrency import AwaitableValue
@@ -36,7 +35,7 @@ __all__ = (
 
 
 #: Mapping from CRTP port names to short three-letter identifiers
-_crtp_port_codes: List[str] = [
+_crtp_port_codes: list[str] = [
     "CON",
     "P01",
     "PRM",
@@ -128,7 +127,7 @@ class MemoryType(IntEnum):
         return _memory_type_descriptions.get(int(self), "Unknown")
 
 
-_memory_type_descriptions: Dict[int, str] = {
+_memory_type_descriptions: dict[int, str] = {
     MemoryType.I2C: "I2C",
     MemoryType.ONE_WIRE: "1-wire",
     MemoryType.LED: "LED driver",
@@ -176,10 +175,10 @@ class CRTPPacket:
 
     def __init__(
         self,
-        header: Optional[int] = None,
-        data: Optional[CRTPDataLike] = None,
+        header: int | None = None,
+        data: CRTPDataLike | None = None,
         *,
-        port: Optional[CRTPPortLike] = None,
+        port: CRTPPortLike | None = None,
         channel: int = 0,
     ):
         """Constructor.
@@ -193,7 +192,7 @@ class CRTPPacket:
             channel: when `port` is not `None`, and `header` is `None`,
                 specifies the CRTP channel of the packet
         """
-        self._data = bytes()
+        self._data = b""
         self._header = 0
 
         if header is not None:
@@ -215,7 +214,7 @@ class CRTPPacket:
         self._header = (self._header & 0xFC) | (value & 0x03)
 
     @property
-    def command(self) -> Optional[int]:
+    def command(self) -> int | None:
         """Returns the first byte of the data block of the CRTP packet. This
         byte is sometimes used as a command byte in some CRTP packets.
         """
@@ -236,7 +235,7 @@ class CRTPPacket:
         elif isinstance(value, (array, bytearray, list, tuple)):
             self._data = bytes(value)
         elif value is None:
-            self._data = bytes()
+            self._data = b""
         else:
             raise TypeError(
                 "Data must be None, bytes, bytearray, string, list or tuple,"
@@ -283,7 +282,7 @@ class CRTPPacket:
 
     def __str__(self):
         """Returns a human-readable string representation of the packet."""
-        return "{0}:{1} {2}".format(self.port, self.channel, tuple(self.data))
+        return f"{self.port}:{self.channel} {tuple(self.data)}"
 
 
 #: Type alias for functions that can handle CRTP packets
@@ -308,7 +307,7 @@ class CRTPDispatcher:
 
     @asynccontextmanager
     async def create_packet_queue(
-        self, port: Optional[CRTPPortLike] = None, *, queue_size: int = 0
+        self, port: CRTPPortLike | None = None, *, queue_size: int = 0
     ) -> AsyncIterator[ObjectReceiveStream]:
         """Context manager that creates a queue that will yield incoming
         CRTP packets coming from the given port.
@@ -349,7 +348,7 @@ class CRTPDispatcher:
             await handler(packet)
 
     def register(
-        self, handler: CRTPPacketHandler, *, port: Optional[CRTPPortLike] = None
+        self, handler: CRTPPacketHandler, *, port: CRTPPortLike | None = None
     ) -> Callable[[], None]:
         """Registers a handler to call for each incoming CRTP packet matching a
         given port.
@@ -375,7 +374,7 @@ class CRTPDispatcher:
 
     @contextmanager
     def registered(
-        self, handler: CRTPPacketHandler, *, port: Optional[CRTPPortLike] = None
+        self, handler: CRTPPacketHandler, *, port: CRTPPortLike | None = None
     ):
         """Context manager that registers a given packet handler for a CRTP
         port when the context is entered and deregisters the handler when the
@@ -390,9 +389,9 @@ class CRTPDispatcher:
     @contextmanager
     def wait_for_next_packet(
         self,
-        predicate: Optional[Callable[[CRTPPacket], bool]],
+        predicate: Callable[[CRTPPacket], bool] | None,
         *,
-        port: Optional[CRTPPortLike] = None,
+        port: CRTPPortLike | None = None,
     ) -> Iterator[AwaitableValue]:
         """Context manager that waits for a CRTP packet on the given port (or
         all ports) matching a given predicate while the execution is in the

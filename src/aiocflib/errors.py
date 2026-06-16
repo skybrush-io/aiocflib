@@ -1,5 +1,4 @@
 from os import strerror
-from typing import Optional, Union
 
 __all__ = ("error_to_string",)
 
@@ -23,12 +22,12 @@ class CRTPCommandError(RuntimeError):
     a Crazyflie) returned an error code.
     """
 
-    def __init__(self, message: Optional[str] = None, code: int = 0):
+    def __init__(self, message: str | None = None, code: int = 0):
         message = message or f"CRTP command returned error {code}"
         super().__init__(message)
 
 
-def error_to_string(value: Union[int, bytes]) -> str:
+def error_to_string(value: int | bytes) -> str:
     """Converts a Crazyflie error code returned in some CRTP packets to its
     human-readable description.
 

@@ -1,4 +1,5 @@
-from typing import Callable, List, Union
+from typing import Union
+from collections.abc import Callable
 
 __all__ = (
     "BackoffPollingStrategy",
@@ -195,7 +196,7 @@ class PatientResendingStrategy:
     _remaining: int
     _attempts: int
     _num_errors: int
-    _scheduled: List[float]
+    _scheduled: list[float]
 
     def __init__(self, attempts: int = 50):
         """Constructor.

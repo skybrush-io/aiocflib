@@ -10,7 +10,8 @@ from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
 from struct import Struct
-from typing import Awaitable, Callable, Iterable, Optional, Union, Tuple, TypeVar
+from typing import Union, TypeVar
+from collections.abc import Awaitable, Callable, Iterable
 
 from aiocflib.utils.registry import Registry
 
@@ -56,7 +57,7 @@ class TOCCache(metaclass=ABCMeta):
             try:
                 factory = TOCCacheRegistry.find(scheme)
             except KeyError:
-                raise KeyError("no such TOC cache type: {0!r}".format(scheme)) from None
+                raise KeyError(f"no such TOC cache type: {scheme!r}") from None
 
             cache = factory()
             cache._configure(rest)
@@ -79,7 +80,7 @@ class TOCCache(metaclass=ABCMeta):
         pass
 
     async def find(
-        self, hash: bytes, namespace: Optional[Namespace] = None
+        self, hash: bytes, namespace: Namespace | None = None
     ) -> Iterable[TOCItem]:
         """Looks up a cached table-of-contents by its hash value.
 
@@ -95,7 +96,7 @@ class TOCCache(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    async def has(self, hash: bytes, namespace: Optional[Namespace] = None) -> bool:
+    async def has(self, hash: bytes, namespace: Namespace | None = None) -> bool:
         """Returns whether the table-of-contents object contains an item with
         the given hash.
 
@@ -107,7 +108,7 @@ class TOCCache(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def get_key(self) -> Optional[str]:
+    def get_key(self) -> str | None:
         """Returns a short string identifier that uniquely identifies this
         cache, or `None` if no such key can be derived.
 
@@ -134,7 +135,7 @@ class TOCCache(metaclass=ABCMeta):
         self,
         hash: bytes,
         items: Iterable[TOCItem],
-        namespace: Optional[Namespace] = None,
+        namespace: Namespace | None = None,
     ) -> None:
         """Stores a list of table-of-contents entries under the given hash code.
 
@@ -161,21 +162,21 @@ class NullTOCCache(TOCCache):
     """Null TOC cache that does nothing."""
 
     async def find(
-        self, hash: bytes, namespace: Optional[Namespace] = None
+        self, hash: bytes, namespace: Namespace | None = None
     ) -> Iterable[TOCItem]:
-        raise KeyError("no such hash: {0!r}".format(hash))
+        raise KeyError(f"no such hash: {hash!r}")
 
-    async def has(self, hash: bytes, namespace: Optional[Namespace] = None) -> bool:
+    async def has(self, hash: bytes, namespace: Namespace | None = None) -> bool:
         return False
 
-    def get_key(self) -> Optional[str]:
+    def get_key(self) -> str | None:
         return "null"
 
     async def store(
         self,
         hash: bytes,
         items: Iterable[TOCItem],
-        namespace: Optional[Namespace] = None,
+        namespace: Namespace | None = None,
     ) -> None:
         pass
 
@@ -191,18 +192,18 @@ class InMemoryTOCCache(TOCCache):
         self._namespaces = defaultdict(dict)
 
     async def find(
-        self, hash: bytes, namespace: Optional[Namespace] = None
+        self, hash: bytes, namespace: Namespace | None = None
     ) -> Iterable[TOCItem]:
         items = self._namespaces.get(namespace)
         if not items:
-            raise KeyError("no such namespace: {0!r}".format(namespace))
+            raise KeyError(f"no such namespace: {namespace!r}")
 
         try:
             return items[hash]
         except KeyError:
-            raise KeyError("no such hash: {0!r}".format(hash)) from None
+            raise KeyError(f"no such hash: {hash!r}") from None
 
-    async def has(self, hash: bytes, namespace: Optional[Namespace] = None) -> bool:
+    async def has(self, hash: bytes, namespace: Namespace | None = None) -> bool:
         try:
             await self.find(hash, namespace)
             return True
@@ -213,7 +214,7 @@ class InMemoryTOCCache(TOCCache):
         self,
         hash: bytes,
         items: Iterable[TOCItem],
-        namespace: Optional[Namespace] = None,
+        namespace: Namespace | None = None,
     ) -> None:
         self._namespaces[namespace][hash] = tuple(items)
 
@@ -224,9 +225,9 @@ class FilesystemBasedTOCCache(TOCCache):
     a filesystem in a given folder.
     """
 
-    _key: Optional[Path]
+    _key: Path | None
     _read_only: bool
-    _path: Optional[Path]
+    _path: Path | None
 
     def __init__(self, read_only: bool = False):
         """Constructor.
@@ -241,7 +242,7 @@ class FilesystemBasedTOCCache(TOCCache):
     def _configure(self, uri: str) -> None:
         self.path = uri
 
-    def get_key(self) -> Optional[str]:
+    def get_key(self) -> str | None:
         if self._key is None:
             self._key = self.path.resolve() if self.path else None
         return str(self._key)
@@ -260,14 +261,12 @@ class FilesystemBasedTOCCache(TOCCache):
         self._path = Path(value)
         self._key = None
 
-    def _path_for_hash(
-        self, hash: bytes, namespace: Optional[Namespace] = None
-    ) -> Path:
+    def _path_for_hash(self, hash: bytes, namespace: Namespace | None = None) -> Path:
         """Sanitizes the given hash so it can be used in a filesystem path."""
         path = self._path_for_namespace(namespace)
-        return path / "{0}.bin".format(hexlify(hash).decode("ascii").lower())
+        return path / "{}.bin".format(hexlify(hash).decode("ascii").lower())
 
-    def _path_for_namespace(self, namespace: Optional[Namespace] = None) -> Path:
+    def _path_for_namespace(self, namespace: Namespace | None = None) -> Path:
         """Returns the path corresponding to the given namespace on the filesystem."""
         if self._path is None:
             raise ValueError("TOC cache is not configured yet")
@@ -294,24 +293,22 @@ class FilesystemBasedTOCCache(TOCCache):
         )
 
     async def find(
-        self, hash: bytes, namespace: Optional[Namespace] = None
+        self, hash: bytes, namespace: Namespace | None = None
     ) -> Iterable[TOCItem]:
         path = self._path_for_hash(hash, namespace)
         if not path.exists() or not path.is_file():
-            raise KeyError(
-                "no such namespace or hash: {0!r} / {1!r}".format(namespace, hash)
-            )
+            raise KeyError(f"no such namespace or hash: {namespace!r} / {hash!r}")
 
         result = []
 
         async with await open_file(str(path), "rb") as fp:
             data = await fp.read(1)
             if not data:
-                raise IOError("unexpected end of file")
+                raise OSError("unexpected end of file")
 
             version = data[0]
             if version != 1:
-                raise IOError("only version 1 TOC files are supported")
+                raise OSError("only version 1 TOC files are supported")
 
             while True:
                 length = await fp.read(2)
@@ -322,13 +319,13 @@ class FilesystemBasedTOCCache(TOCCache):
                 length = length[0] + (length[1] << 8)
                 data = await fp.read(length)
                 if len(data) < length:
-                    raise IOError("unexpected end of file")
+                    raise OSError("unexpected end of file")
 
                 result.append(data)
 
         return result
 
-    async def has(self, hash: bytes, namespace: Optional[Namespace] = None) -> bool:
+    async def has(self, hash: bytes, namespace: Namespace | None = None) -> bool:
         path = self._path_for_hash(hash, namespace)
         return path.exists() and path.is_file()
 
@@ -336,7 +333,7 @@ class FilesystemBasedTOCCache(TOCCache):
         self,
         hash: bytes,
         items: Iterable[TOCItem],
-        namespace: Optional[Namespace] = None,
+        namespace: Namespace | None = None,
     ) -> None:
         if self._read_only:
             return
@@ -352,7 +349,7 @@ class FilesystemBasedTOCCache(TOCCache):
                 for item in items:
                     length = len(item)
                     if length > 65535:
-                        raise IOError("exceeded maximum item length")
+                        raise OSError("exceeded maximum item length")
 
                     await fp.write(bytes((length & 0xFF, length >> 8)))
                     await fp.write(item)
@@ -378,29 +375,29 @@ class NamespacedTOCCacheWrapper(TOCCache):
         self._separator = sep
 
     async def find(
-        self, hash: bytes, namespace: Optional[Namespace] = None
+        self, hash: bytes, namespace: Namespace | None = None
     ) -> Iterable[TOCItem]:
         return await self._wrapped.find(hash, self._remap(namespace))
 
-    def get_key(self) -> Optional[str]:
+    def get_key(self) -> str | None:
         if self._wrapped is not None and self._namespace:
             root_key = self._wrapped.get_key()
             return f"{root_key}{self._separator}{self._namespace}"
         else:
             return None
 
-    async def has(self, hash: bytes, namespace: Optional[Namespace] = None) -> bool:
+    async def has(self, hash: bytes, namespace: Namespace | None = None) -> bool:
         return await self._wrapped.has(hash, self._remap(namespace))
 
     async def store(
         self,
         hash: bytes,
         items: Iterable[TOCItem],
-        namespace: Optional[Namespace] = None,
+        namespace: Namespace | None = None,
     ) -> None:
         return await self._wrapped.store(hash, items, self._remap(namespace))
 
-    def _remap(self, namespace: Optional[Namespace]) -> Namespace:
+    def _remap(self, namespace: Namespace | None) -> Namespace:
         if namespace is None:
             return self._namespace
         else:
@@ -412,7 +409,7 @@ _cache_locks = defaultdict(lambda: defaultdict(Lock))
 
 
 @asynccontextmanager
-async def _locked_cache(cache: Optional[TOCCache], key_suffix: Optional[str] = None):
+async def _locked_cache(cache: TOCCache | None, key_suffix: str | None = None):
     key = cache.get_key() if cache is not None else None
     if key is None:
         yield
@@ -429,8 +426,8 @@ T = TypeVar("T")
 
 
 async def fetch_table_of_contents_gracefully(
-    cache: Optional[TOCCache],
-    info_func: Callable[[], Awaitable[Tuple[int, int]]],
+    cache: TOCCache | None,
+    info_func: Callable[[], Awaitable[tuple[int, int]]],
     single_item_fetcher_func: Callable[[int], Awaitable[T]],
     from_bytes: Callable[[bytes, int], T],
     to_bytes: Callable[[T], bytes],

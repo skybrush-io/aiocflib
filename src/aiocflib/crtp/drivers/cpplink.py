@@ -3,7 +3,8 @@ from __future__ import annotations
 from anyio import to_thread
 
 from contextlib import asynccontextmanager
-from typing import Callable, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
+from collections.abc import Callable
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.utils.addressing import CrazyradioAddress, parse_radio_uri
@@ -46,8 +47,8 @@ class CppRadioDriver(CRTPDriver):
             last packet if it failed or whether we should drop the connection
     """
 
-    _connection: "cflinkcpp.Connection"
-    _packet_factory: Callable[[], "cflinkcpp.Packet"]
+    _connection: cflinkcpp.Connection
+    _packet_factory: Callable[[], cflinkcpp.Packet]
 
     @asynccontextmanager
     async def _connected_to(self, uri: str):
@@ -80,7 +81,7 @@ class CppRadioDriver(CRTPDriver):
         self._packet_factory = None  # type: ignore
 
     @property
-    def address(self) -> Optional[CrazyradioAddress]:
+    def address(self) -> CrazyradioAddress | None:
         """The address that the driver will be configured for, or ``None`` if
         the driver has no URI.
         """
@@ -141,8 +142,8 @@ class CppRadioDriver(CRTPDriver):
 
     @classmethod
     async def scan_interfaces(
-        cls, address: Optional[CrazyradioAddress] = None
-    ) -> List[str]:
+        cls, address: CrazyradioAddress | None = None
+    ) -> list[str]:
         """Scans all interfaces of this type for available Crazyflie quadcopters
         and returns a list with appropriate connection URIs that could be used
         to connect to them.

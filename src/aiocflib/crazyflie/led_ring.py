@@ -5,7 +5,7 @@ Crazyflie.
 from anyio import sleep
 from contextlib import asynccontextmanager
 from enum import IntEnum
-from typing import AsyncIterator, Optional, Union
+from collections.abc import AsyncIterator
 
 from aiocflib.utils.colors import ColorLike, to_color
 
@@ -54,7 +54,7 @@ class LEDRing:
         """
         await self._crazyflie.parameters.set("system.highlight", 1)
 
-    async def get_effect(self) -> Union[LEDRingEffect, int]:
+    async def get_effect(self) -> LEDRingEffect | int:
         """Returns the current effect code of the LED ring.
 
         Returns:
@@ -93,7 +93,7 @@ class LEDRing:
 
     @asynccontextmanager
     async def set_effect_and_restore(
-        self, effect: LEDRingEffect, old_effect: Optional[LEDRingEffect] = None
+        self, effect: LEDRingEffect, old_effect: LEDRingEffect | None = None
     ) -> AsyncIterator[None]:
         """Context manager that sets the LED ring effect to the given light
         effect when entering the context and restores it when exiting the context.

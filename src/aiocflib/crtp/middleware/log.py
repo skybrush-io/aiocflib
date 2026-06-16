@@ -52,7 +52,7 @@ class LoggingMiddleware(MiddlewareBase):
             code = port.code
         except Exception:
             code = str(port)
-        return "{0:3}:{1}".format(code, channel)
+        return f"{code:3}:{channel}"
 
     @staticmethod
     def _has_command_byte(packet: CRTPPacket) -> bool:
@@ -116,7 +116,7 @@ class LoggingMiddleware(MiddlewareBase):
 
         if isinstance(driver, USBDriver):
             index = driver.index
-            abbreviation = "usb{0}".format(index if index is not None else "?")
+            abbreviation = "usb{}".format(index if index is not None else "?")
         elif isinstance(driver, RadioDriver):
             address = driver.address
             abbreviation = dump(address[-2:], sep="") if address else "rdio"
@@ -129,7 +129,7 @@ class LoggingMiddleware(MiddlewareBase):
             abbreviation = "????"
 
         abbreviation = Fore.MAGENTA + abbreviation + Style.RESET_ALL
-        self._abbreviation = "{0:4}".format(abbreviation)
+        self._abbreviation = f"{abbreviation:4}"
 
     def _report_null_packets(self) -> None:
         """Reports on the console that a certain number of null packets have
@@ -140,7 +140,7 @@ class LoggingMiddleware(MiddlewareBase):
         """
         if self._num_null_packets == 1:
             print(
-                "{0} {1} {2}Null packet{3}".format(
+                "{} {} {}Null packet{}".format(
                     self._abbreviation,
                     self._in if self.is_safe else self._unsafe_in,
                     Style.DIM,
@@ -149,7 +149,7 @@ class LoggingMiddleware(MiddlewareBase):
             )
         elif self._num_null_packets > 1:
             print(
-                "{0} {1} {2}{3} null packets{4}".format(
+                "{} {} {}{} null packets{}".format(
                     self._abbreviation,
                     self._in if self.is_safe else self._unsafe_in,
                     Style.DIM,
@@ -172,7 +172,7 @@ class LoggingMiddleware(MiddlewareBase):
                 data = Fore.YELLOW + UNDERLINED + data[:2] + Style.RESET_ALL + data[2:]
             type = Fore.GREEN + self._format_type(packet) + Style.RESET_ALL
             print(
-                "{0} {1} {2} {3}".format(
+                "{} {} {} {}".format(
                     self._abbreviation,
                     self._in if self.is_safe else self._unsafe_in,
                     type,
@@ -190,7 +190,7 @@ class LoggingMiddleware(MiddlewareBase):
         if self._has_command_byte(packet):
             data = Fore.YELLOW + UNDERLINED + data[:2] + Style.RESET_ALL + data[2:]
         print(
-            "{0} {1} {2} {3}".format(
+            "{} {} {} {}".format(
                 self._abbreviation,
                 self._out if self.is_safe else self._unsafe_out,
                 type,

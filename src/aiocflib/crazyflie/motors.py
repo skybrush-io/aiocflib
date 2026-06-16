@@ -1,7 +1,7 @@
 """Classes related to sending motor-related commands to a Crazyflie."""
 
 from anyio import sleep
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 from .crazyflie import Crazyflie
 
@@ -24,7 +24,7 @@ class Motors:
 
     async def test(
         self,
-        indices: Optional[Iterable[int]] = None,
+        indices: Iterable[int] | None = None,
         power: int = 20000,
         duration: float = 1,
         delay: float = 1,

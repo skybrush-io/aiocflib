@@ -17,7 +17,8 @@ from contextlib import asynccontextmanager, AsyncExitStack
 from enum import IntEnum
 from functools import total_ordering, wraps
 from sys import exc_info
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import Union
+from collections.abc import Iterable
 
 from aiocflib.utils.addressing import (
     CrazyradioAddress,
@@ -65,7 +66,7 @@ class CrazyradioPower(IntEnum):
     P_0DBM = 3
 
 
-def _find_devices(serial: Optional[str] = None) -> List[USBDevice]:
+def _find_devices(serial: str | None = None) -> list[USBDevice]:
     """Returns a list of Crazyradio dongles currently connected to the computer.
 
     This function uses `pyusb` functions directly, hence it will block the
@@ -85,7 +86,7 @@ def _find_devices(serial: Optional[str] = None) -> List[USBDevice]:
     return candidates
 
 
-def get_serials() -> Tuple[str]:
+def get_serials() -> tuple[str]:
     """Returns the serial numbers of all the connected Crazyradio dongles.
 
     Returns:
@@ -179,8 +180,8 @@ class RadioConfiguration:
     def __init__(
         self,
         *,
-        address: Optional[CrazyradioAddressLike] = None,
-        channel: Optional[int] = None,
+        address: CrazyradioAddressLike | None = None,
+        channel: int | None = None,
         data_rate: CrazyradioDataRate = CrazyradioDataRate.DR_2MPS,
         scheme: str = "radio",
     ):
@@ -202,12 +203,12 @@ class RadioConfiguration:
         self._scheme = str(scheme)
 
     @property
-    def address(self) -> Optional[CrazyradioAddress]:
+    def address(self) -> CrazyradioAddress | None:
         """The address to use when sending packets."""
         return self._address
 
     @property
-    def channel(self) -> Optional[int]:
+    def channel(self) -> int | None:
         """The channel to use when sending packets."""
         return self._channel
 
@@ -233,10 +234,10 @@ class RadioConfiguration:
 
     def replace(
         self,
-        address: Optional[CrazyradioAddressLike] = None,
-        data_rate: Optional[CrazyradioDataRate] = None,
-        channel: Optional[int] = None,
-        scheme: Optional[str] = None,
+        address: CrazyradioAddressLike | None = None,
+        data_rate: CrazyradioDataRate | None = None,
+        channel: int | None = None,
+        scheme: str | None = None,
     ):
         """Replaces the address, the data rate and/or the channel in the
         configuration object and returns a new configuration object.
@@ -252,7 +253,7 @@ class RadioConfiguration:
         """Converts the radio configuration to a string URI that can be
         passed to a CRTPDevice_ constructor.
         """
-        parts = ["{0}://{1}".format(self.scheme, index)]
+        parts = [f"{self.scheme}://{index}"]
         if self.channel is not None:
             parts.append(str(self.channel))
             if self.data_rate is not None:
@@ -384,7 +385,7 @@ class Crazyradio:
         self._exit_stack = None  # type: Optional[AsyncExitStack]
 
     @property
-    def version(self) -> Optional[float]:
+    def version(self) -> float | None:
         """Returns the version number of the associated device.
 
         This property returns a valid value only after you have connected to
@@ -439,9 +440,7 @@ class Crazyradio:
             if cfg is None or cfg.bConfigurationValue != 1:
                 device.set_configuration(1)
             handle = device
-            version = float(
-                "{0:x}.{1:x}".format(device.bcdDevice >> 8, device.bcdDevice & 0x0FF)
-            )
+            version = float(f"{device.bcdDevice >> 8:x}.{device.bcdDevice & 0x0FF:x}")
         else:
             handle = device.open()
             handle.setConfiguration(1)
@@ -588,7 +587,7 @@ class Crazyradio:
             channel: the channel on which subsequent packets will be sent
         """
         if channel < 0 or channel > 125:
-            raise ValueError("Invalid channel: {0}".format(channel))
+            raise ValueError(f"Invalid channel: {channel}")
         if channel != self._current_channel:
             send_vendor_setup(
                 self._handle, CrazyradioConfigurationRequest.SET_RADIO_CHANNEL, channel
@@ -635,12 +634,11 @@ class Crazyradio:
 
     def _scan(
         self,
-        targets: Optional[List[RadioConfigurationLike]] = None,
-        address: Optional[
-            Union[CrazyradioAddressLike, Iterable[CrazyradioAddressLike]]
-        ] = None,
+        targets: list[RadioConfigurationLike] | None = None,
+        address: None
+        | (CrazyradioAddressLike | Iterable[CrazyradioAddressLike]) = None,
         packet: bytes = b"\xff\xff\xff",
-    ) -> List[RadioConfiguration]:
+    ) -> list[RadioConfiguration]:
         """Scans a selected combination of channels and data rates to detect
         devices listening on these channels.
 
@@ -722,7 +720,7 @@ class Crazyradio:
 
     def _scan_channels(
         self, first: int = 0, last: int = 125, packet: bytes = b"\xff\xff\xff"
-    ) -> List[int]:
+    ) -> list[int]:
         """Scans all channels in the given channel range to detect devices
         listening on these channels.
 
@@ -777,7 +775,7 @@ class Crazyradio:
                     result.append(i)
             return result
 
-    def _send_and_receive_bytes(self, data: bytes) -> Optional[Acknowledgment]:
+    def _send_and_receive_bytes(self, data: bytes) -> Acknowledgment | None:
         """Sends some data via the radio connection in a synchronous manner.
 
         This function is executed in the worker thread.
@@ -802,7 +800,7 @@ class Crazyradio:
 
     def _configure_send_and_receive_bytes(
         self, configuration: RadioConfiguration, data: bytes
-    ) -> Optional[Acknowledgment]:
+    ) -> Acknowledgment | None:
         """Shortcut for a common use-case that arises frequently: configure the
         radio link, then send a single packet and wait for the acknowledgment.
 
@@ -850,7 +848,7 @@ class _CfRadioCommunicator:
                 try:
                     return await sender(target, *args, **kwds)
                 except Full:
-                    raise IOError(
+                    raise OSError(
                         "Request queue to radio outbound thread is full"
                     ) from None
 
@@ -889,7 +887,7 @@ class _CfRadioCommunicator:
             try:
                 await self._sender(self._radio._configure, configuration)
             except Full:
-                raise IOError(
+                raise OSError(
                     "Request queue to radio outbound thread is full"
                 ) from None
             yield

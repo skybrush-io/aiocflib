@@ -1,9 +1,9 @@
-from typing import Generator, Tuple
+from collections.abc import Generator
 
 
 def chunkify(
     addr: int, length: int, step: int
-) -> Generator[Tuple[int, int], None, None]:
+) -> Generator[tuple[int, int], None, None]:
     """Calculates the start addresses and the sizes of individual chunks
     when trying to read some data from (or write some data to) a given start
     address with the given total length, and each individual request may

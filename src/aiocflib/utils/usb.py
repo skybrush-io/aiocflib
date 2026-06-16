@@ -2,7 +2,7 @@
 
 from anyio import Lock
 from contextlib import asynccontextmanager
-from typing import Any, List
+from typing import Any
 from weakref import WeakValueDictionary
 
 import os
@@ -58,7 +58,7 @@ async def claim_device(device: USBDevice):
         yield
 
 
-def find_devices(vid: int, pid: int) -> List[USBDevice]:
+def find_devices(vid: int, pid: int) -> list[USBDevice]:
     """Helper function that finds all USB devices with a given vendor and
     product ID on all available USB buses.
     """

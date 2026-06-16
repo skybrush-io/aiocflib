@@ -5,15 +5,9 @@ from struct import Struct
 from typing import (
     Any,
     ClassVar,
-    Dict,
-    FrozenSet,
-    Iterable,
-    List,
-    Optional,
-    Tuple,
-    Type,
     cast,
 )
+from collections.abc import Iterable
 
 from aiocflib.crtp.crtpstack import MemoryType
 
@@ -23,8 +17,8 @@ from .mem import MemoryHandler
 __all__ = ("LighthouseBsCalibration", "LighthouseBsGeometry", "LighthouseConfiguration")
 
 
-Vector3D = Tuple[float, float, float]
-Matrix3D = Tuple[Vector3D, Vector3D, Vector3D]
+Vector3D = tuple[float, float, float]
+Matrix3D = tuple[Vector3D, Vector3D, Vector3D]
 
 
 @dataclass(frozen=True)
@@ -58,7 +52,7 @@ class LighthouseBsGeometry:
         return result
 
     @classmethod
-    def from_json(cls, obj: Dict[str, Any]):
+    def from_json(cls, obj: dict[str, Any]):
         """Constructs a Lighthouse base station geometry object from its JSON
         object representation created earlier with `to_json()`.
         """
@@ -74,8 +68,8 @@ class LighthouseBsGeometry:
 
     @classmethod
     def unpack_from_bytes(
-        cls: Type["LighthouseBsGeometry"], data: bytes, offset: int = 0
-    ) -> Tuple["LighthouseBsGeometry", int]:
+        cls: type["LighthouseBsGeometry"], data: bytes, offset: int = 0
+    ) -> tuple["LighthouseBsGeometry", int]:
         """Constructs a Lighthouse sweep calibration object from its raw
         byte-level representation from the Lighthouse memory of a Crazyflie.
 
@@ -106,13 +100,13 @@ class LighthouseBsGeometry:
         """Converts the Lighthouse base station geometry object into a raw
         byte-level representation used in the Lighthouse memory.
         """
-        items: List[Any] = []
+        items: list[Any] = []
         items.extend(self.origin)
         items.extend(sum(self.rotation_matrix, ()))
         items.append(self.valid)
         return self._struct.pack(*items)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Converts the Lighthouse base station data into a Python object that
         can be written directly into a JSON or YAML file.
         """
@@ -156,7 +150,7 @@ class LighthouseCalibrationSweep:
         return obj
 
     @classmethod
-    def from_json(cls, obj: Dict[str, Any]):
+    def from_json(cls, obj: dict[str, Any]):
         """Constructs a Lighthouse sweep calibration object from its JSON
         object representation created earlier with `to_json()`.
         """
@@ -216,7 +210,7 @@ class LighthouseCalibrationSweep:
             self.ogeephase,
         )
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Converts the Lighthouse sweep calibration data into a Python object that
         can be written directly into a JSON or YAML file.
         """
@@ -235,7 +229,7 @@ class LighthouseCalibrationSweep:
 class LighthouseBsCalibration:
     """Container for calibration data of one Lighthouse base station."""
 
-    sweeps: Tuple[LighthouseCalibrationSweep, LighthouseCalibrationSweep] = field(
+    sweeps: tuple[LighthouseCalibrationSweep, LighthouseCalibrationSweep] = field(
         default=(LighthouseCalibrationSweep(), LighthouseCalibrationSweep())
     )
     uid: int = 0
@@ -266,7 +260,7 @@ class LighthouseBsCalibration:
         return obj
 
     @classmethod
-    def from_json(cls, obj: Dict[str, Any]):
+    def from_json(cls, obj: dict[str, Any]):
         """Constructs a Lighthouse base station calibration object from its JSON
         object representation created earlier with `to_json()`.
         """
@@ -318,7 +312,7 @@ class LighthouseBsCalibration:
             ]
         )
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Converts the Lighthouse base station calibration data into a Python
         object that can be written directly into a JSON or YAML file.
         """
@@ -352,20 +346,20 @@ class LighthouseConfiguration:
     """
 
     system_type: LighthouseSystemType = LighthouseSystemType.UNKNOWN
-    calibrations: Dict[int, LighthouseBsCalibration] = field(default_factory=dict)
-    geometries: Dict[int, LighthouseBsGeometry] = field(default_factory=dict)
+    calibrations: dict[int, LighthouseBsCalibration] = field(default_factory=dict)
+    geometries: dict[int, LighthouseBsGeometry] = field(default_factory=dict)
 
     @property
-    def bs_ids(self) -> FrozenSet[int]:
+    def bs_ids(self) -> frozenset[int]:
         return frozenset(self.calibrations.keys()) | frozenset(self.geometries.keys())
 
     @property
-    def valid_bs_ids(self) -> FrozenSet[int]:
+    def valid_bs_ids(self) -> frozenset[int]:
         return frozenset(
             k for k, v in self.calibrations.items() if v.valid
         ) & frozenset(k for k, v in self.geometries.items() if v.valid)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Converts the Lighthouse configuration into a Python object that can
         be written directly into a JSON or YAML file.
         """
@@ -402,7 +396,7 @@ class Lighthouse:
     PAGE_SIZE: ClassVar[int] = 0x100
 
     _crazyflie: Crazyflie
-    _mem: Optional[MemoryHandler]
+    _mem: MemoryHandler | None
 
     number_of_base_stations: int
 
@@ -427,7 +421,7 @@ class Lighthouse:
         """Clears the calibration data of a single base station on the Crazyflie."""
         await self.set_calibration(index, LighthouseBsCalibration())
 
-    async def clear_calibrations(self, indices: Optional[Iterable[int]] = None) -> None:
+    async def clear_calibrations(self, indices: Iterable[int] | None = None) -> None:
         """Clears the calibration data of multiple base stations on the Crazyflie.
 
         Parameters:
@@ -443,7 +437,7 @@ class Lighthouse:
         for index in indices:
             try:
                 await self.clear_calibration(index)
-            except IOError as ex:
+            except OSError as ex:
                 if ex.errno == EIO and ignore_errors:
                     # Probably just an invalid base station ID
                     continue
@@ -455,7 +449,7 @@ class Lighthouse:
         await self.set_geometry(index, LighthouseBsGeometry())
 
     async def clear_geometries(
-        self, indices: Optional[Iterable[int]] = None, *, ignore_errors: bool = False
+        self, indices: Iterable[int] | None = None, *, ignore_errors: bool = False
     ) -> None:
         """Clears the geometry data of multiple base stations on the Crazyflie.
 
@@ -472,14 +466,14 @@ class Lighthouse:
         for index in indices:
             try:
                 await self.clear_geometry(index)
-            except IOError as ex:
+            except OSError as ex:
                 if ex.errno == EIO and ignore_errors:
                     # Probably just an invalid base station ID
                     continue
                 else:
                     raise
 
-    async def get_calibration(self, index: int) -> Optional[LighthouseBsCalibration]:
+    async def get_calibration(self, index: int) -> LighthouseBsCalibration | None:
         """Retrieves the calibration data of a single base station from the
         Crazyflie.
 
@@ -496,7 +490,7 @@ class Lighthouse:
                 self._get_address_of_bs_calibration(index),
                 LighthouseBsCalibration.size_in_bytes,
             )
-        except IOError as ex:
+        except OSError as ex:
             if ex.errno == EIO:
                 # This is okay, probably the base station index is invalid
                 return None
@@ -506,9 +500,9 @@ class Lighthouse:
         calibration = LighthouseBsCalibration.from_bytes(data)
         return calibration if calibration.valid else None
 
-    async def get_calibrations(self) -> Dict[int, LighthouseBsCalibration]:
+    async def get_calibrations(self) -> dict[int, LighthouseBsCalibration]:
         """Returns the calibration data of all the base stations from the Crazyflie."""
-        result: Dict[int, LighthouseBsCalibration] = {}
+        result: dict[int, LighthouseBsCalibration] = {}
         for i in range(self.number_of_base_stations):
             calibration = await self.get_calibration(i)
             if calibration:
@@ -524,7 +518,7 @@ class Lighthouse:
             system_type=system_type, calibrations=calib, geometries=geos
         )
 
-    async def get_geometry(self, index: int) -> Optional[LighthouseBsGeometry]:
+    async def get_geometry(self, index: int) -> LighthouseBsGeometry | None:
         """Retrieves the geometry of a single base station from the Crazyflie.
 
         Parameters:
@@ -539,7 +533,7 @@ class Lighthouse:
                 self._get_address_of_bs_geometry(index),
                 LighthouseBsGeometry.size_in_bytes,
             )
-        except IOError as ex:
+        except OSError as ex:
             if ex.errno == EIO:
                 # This is okay, probably the base station index is invalid
                 return None
@@ -549,9 +543,9 @@ class Lighthouse:
         geometry = LighthouseBsGeometry.from_bytes(data)
         return geometry if geometry.valid else None
 
-    async def get_geometries(self) -> Dict[int, LighthouseBsGeometry]:
+    async def get_geometries(self) -> dict[int, LighthouseBsGeometry]:
         """Returns the geometries of all the base stations from the Crazyflie."""
-        result: Dict[int, LighthouseBsGeometry] = {}
+        result: dict[int, LighthouseBsGeometry] = {}
         for i in range(self.number_of_base_stations):
             geometry = await self.get_geometry(i)
             if geometry:
@@ -592,7 +586,7 @@ class Lighthouse:
             self._get_address_of_bs_calibration(index), calibration.to_bytes()
         )
 
-    async def set_calibrations(self, data: Dict[int, LighthouseBsCalibration]) -> None:
+    async def set_calibrations(self, data: dict[int, LighthouseBsCalibration]) -> None:
         """Sets the calibration data of multiple base stations.
 
         Parameters:
@@ -640,7 +634,7 @@ class Lighthouse:
         mem = await self._get_memory()
         await mem.write(self._get_address_of_bs_geometry(index), geometry.to_bytes())
 
-    async def set_geometries(self, data: Dict[int, LighthouseBsGeometry]) -> None:
+    async def set_geometries(self, data: dict[int, LighthouseBsGeometry]) -> None:
         """Sets the geometry data of multiple base stations.
 
         Parameters:

@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from typing import Any, List, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 from aiocflib.crtp.crtpstack import CRTPPacket
@@ -30,7 +30,7 @@ class USBDriver(CRTPDriver):
         try:
             index = int(parts.netloc)
         except ValueError:
-            raise WrongURIType("Invalid USB URI: {0!r}".format(uri)) from None
+            raise WrongURIType(f"Invalid USB URI: {uri!r}") from None
 
         if index < 0:
             raise WrongURIType("USB port index must be non-negative")
@@ -45,7 +45,7 @@ class USBDriver(CRTPDriver):
             self._device = None
 
     @property
-    def index(self) -> Optional[int]:
+    def index(self) -> int | None:
         """The index of the USB device on the USB hub, or `None` if not known."""
         if not self.uri:
             return None
@@ -89,7 +89,7 @@ class USBDriver(CRTPDriver):
         await self._device.send_bytes(packet.to_bytes())
 
     @classmethod
-    async def scan_interfaces(cls) -> List[str]:
+    async def scan_interfaces(cls) -> list[str]:
         """Scans all interfaces of this type for available Crazyflie quadcopters
         and returns a list with appropriate connection URIs that could be used
         to connect to them.

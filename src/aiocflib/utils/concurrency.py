@@ -18,17 +18,10 @@ from sys import exc_info, version_info
 from typing import (
     cast,
     Any,
-    Awaitable,
-    Callable,
-    Generator,
     Generic,
-    Iterable,
-    List,
-    Optional,
-    Tuple,
     TypeVar,
-    Union,
 )
+from collections.abc import Awaitable, Callable, Generator, Iterable
 
 __all__ = (
     "AwaitableValue",
@@ -90,7 +83,7 @@ class AwaitableValue(Generic[T]):
     """
 
     _event: Event
-    _value: Optional[T]
+    _value: T | None
 
     def __init__(self):
         """Constructor."""
@@ -150,7 +143,7 @@ create_daemon_task_group = DaemonTaskGroup
 
 
 async def _gather_execute(
-    func: Callable[..., Awaitable[T]], args: Any, result: List[T], index: int
+    func: Callable[..., Awaitable[T]], args: Any, result: list[T], index: int
 ) -> None:
     result[index] = await func(*args)
 
@@ -159,7 +152,7 @@ async def _gather_execute_limited(
     limiter: CapacityLimiter,
     func: Callable[..., Awaitable[T]],
     args: Any,
-    result: List[T],
+    result: list[T],
     index: int,
 ):
     async with limiter:
@@ -167,13 +160,13 @@ async def _gather_execute_limited(
 
 
 async def gather(
-    funcs: Iterable[Union[Callable[[], T], Tuple[Callable[..., T], ...]]],
-    limiter: Optional[Union[CapacityLimiter, int]] = None,
-) -> List[T]:
+    funcs: Iterable[Callable[[], T] | tuple[Callable[..., T], ...]],
+    limiter: CapacityLimiter | int | None = None,
+) -> list[T]:
     to_execute = [
         (func, ()) if callable(func) else (func[0], func[1:]) for func in funcs
     ]
-    result: List[Optional[T]] = []
+    result: list[T | None] = []
 
     if isinstance(limiter, int):
         limiter = CapacityLimiter(limiter)
@@ -193,7 +186,7 @@ async def gather(
                 result.append(func(*args))
 
     # At this point all None instances from result should be gone
-    return cast(List[T], result)
+    return cast(list[T], result)
 
 
 class ObservableValue(Generic[T]):
@@ -294,9 +287,9 @@ class ThreadContext(Generic[T]):
     #: Type alias for the target function of a ThreadContext
     Target = Callable[[Queue, Callable[[Any], None]], None]
 
-    _queue: Optional[Queue]
-    _task_group: Optional[TaskGroup]
-    _value: Optional[AwaitableValue[T]]
+    _queue: Queue | None
+    _task_group: TaskGroup | None
+    _value: AwaitableValue[T] | None
 
     @classmethod
     def create_reader(
@@ -458,7 +451,7 @@ class ThreadContext(Generic[T]):
         await self._task_group.__aenter__()
 
         success = False
-        result: Optional[T] = None
+        result: T | None = None
         try:
             self._task_group.start_soon(
                 to_thread.run_sync,

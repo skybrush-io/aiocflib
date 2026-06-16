@@ -9,17 +9,10 @@ from itertools import count, zip_longest
 from struct import Struct, error as StructError
 from typing import (
     Any,
-    AsyncIterable,
-    Awaitable,
-    Callable,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
     Optional,
-    Tuple,
     Union,
 )
+from collections.abc import AsyncIterable, Awaitable, Callable, Iterable, Iterator
 
 from aiocflib.crtp import CRTPPacket, CRTPPort
 from aiocflib.errors import error_to_string
@@ -119,7 +112,7 @@ class VariableType(IntEnum):
             return VariableType(value)
 
     @property
-    def aliases(self) -> Tuple[str]:
+    def aliases(self) -> tuple[str]:
         """Returns the registered type aliases of this type."""
         return (_type_properties[self][0],) + _type_properties[self][2]
 
@@ -242,7 +235,7 @@ class LogMessage:
 
     timestamp: int
     block: "LogBlock"
-    items: Tuple
+    items: tuple
     handler: Optional["LogMessageHandler"]
 
     @classmethod
@@ -268,7 +261,7 @@ class LogMessage:
         if self.handler:
             return self.handler(self, *args, **kwds)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Converts the items in the log message to a dictionary based on the
         log items in the associated block.
         """
@@ -281,9 +274,9 @@ LogMessageHandler = Callable[[LogMessage], Union[None, Awaitable[None]]]
 
 def _process_period_and_frequency(
     *,
-    period: Optional[float] = None,
-    frequency: Optional[float] = None,
-    period_msec: Optional[int] = None,
+    period: float | None = None,
+    frequency: float | None = None,
+    period_msec: int | None = None,
     default: int = 100,
 ) -> int:
     """Processes `period` and `frequency` keyword arguments from a
@@ -315,9 +308,9 @@ class LogBlock:
 
     _owner: "Log"
 
-    _id: Optional[int]
-    _items: List[LogBlockItem]
-    _struct: Optional[Struct]
+    _id: int | None
+    _items: list[LogBlockItem]
+    _struct: Struct | None
 
     def __init__(self, owner: "Log"):
         """Constructor.
@@ -333,14 +326,14 @@ class LogBlock:
         self._struct = None
 
     @property
-    def id(self) -> Optional[int]:
+    def id(self) -> int | None:
         """The numeric ID of the block when it is already submitted to the
         Crazyflie, or `None` if it is not submitted yet.
         """
         return self._id
 
     @id.setter
-    def id(self, value: Optional[int]) -> None:
+    def id(self, value: int | None) -> None:
         if self._id == value:
             return
 
@@ -368,15 +361,13 @@ class LogBlock:
         """
         return sum(item.fetch_as.length for item in self._items)
 
-    def add_variable(
-        self, name: str, type: Optional[Union[int, VariableType]] = None
-    ) -> None:
+    def add_variable(self, name: str, type: int | VariableType | None = None) -> None:
         """Adds a new variable to this logging block."""
         toc = self._owner._variables_by_name
         try:
             spec = toc[name]
         except KeyError:
-            raise KeyError("no such variable in log TOC: {0!r}".format(name)) from None
+            raise KeyError(f"no such variable in log TOC: {name!r}") from None
 
         if type is None:
             type = spec.type
@@ -392,9 +383,9 @@ class LogBlock:
     async def receive(
         self,
         *,
-        period: Optional[float] = None,
-        period_msec: Optional[int] = None,
-        frequency: Optional[float] = None,
+        period: float | None = None,
+        period_msec: int | None = None,
+        frequency: float | None = None,
     ) -> AsyncIterable[LogMessage]:
         """Async generator that yields log messages according to the
         specification from the Crazyflie.
@@ -425,9 +416,9 @@ class LogBlock:
     async def start(
         self,
         *,
-        period: Optional[float] = None,
-        period_msec: Optional[int] = None,
-        frequency: Optional[float] = None,
+        period: float | None = None,
+        period_msec: int | None = None,
+        frequency: float | None = None,
     ) -> Disposer:
         """Starts this log specification on the Crazyflie.
 
@@ -460,9 +451,9 @@ class LogBlock:
     async def started(
         self,
         *,
-        period: Optional[float] = None,
-        period_msec: Optional[int] = None,
-        frequency: Optional[float] = None,
+        period: float | None = None,
+        period_msec: int | None = None,
+        frequency: float | None = None,
     ):
         """Asynchronous context manager that starts the log block with the given
         logging period upon entering the context and stops it upon exiting.
@@ -540,7 +531,7 @@ class LogBlock:
         self._validate_packet_size()
         return b"".join(item.to_bytes() for item in self._items)
 
-    def _decode_values(self, data: bytes) -> Tuple:
+    def _decode_values(self, data: bytes) -> tuple:
         """Decodes the values received in a log message from the Crazyflie.
 
         Parameters:
@@ -565,7 +556,7 @@ class LogBlock:
                 pass
             self._disposer = None
 
-    def _to_dict(self, values: Iterable[Any]) -> Dict[str, Any]:
+    def _to_dict(self, values: Iterable[Any]) -> dict[str, Any]:
         return {
             item.name: value
             for item, value in zip_longest(self._items, values, fillvalue=None)
@@ -582,7 +573,7 @@ class LogBlock:
         size = self.packet_size
         if size > MAX_LOG_DATA_PACKET_SIZE:
             raise ValueError(
-                "log packet too large ({0} bytes, max is {1})".format(
+                "log packet too large ({} bytes, max is {})".format(
                     size, MAX_LOG_DATA_PACKET_SIZE
                 )
             )
@@ -620,10 +611,10 @@ class LogSession:
         self,
         block: LogBlock,
         *,
-        period: Optional[float] = None,
-        period_msec: Optional[int] = None,
-        frequency: Optional[float] = None,
-        handler: Optional[LogMessageHandler] = None,
+        period: float | None = None,
+        period_msec: int | None = None,
+        frequency: float | None = None,
+        handler: LogMessageHandler | None = None,
     ) -> None:
         """Adds a new block to the session.
 
@@ -663,8 +654,8 @@ class LogSession:
     def configure(
         self,
         *,
-        graceful_cleanup: Optional[bool] = None,
-        remove_existing_log_blocks: Optional[bool] = None,
+        graceful_cleanup: bool | None = None,
+        remove_existing_log_blocks: bool | None = None,
     ) -> None:
         """Conifigures the behaviour of the log session during startup and
         cleanup.
@@ -686,10 +677,10 @@ class LogSession:
     def create_block(
         self,
         *args,
-        period: Optional[float] = None,
-        period_msec: Optional[int] = None,
-        frequency: Optional[float] = None,
-        handler: Optional[LogMessageHandler] = None,
+        period: float | None = None,
+        period_msec: int | None = None,
+        frequency: float | None = None,
+        handler: LogMessageHandler | None = None,
     ) -> LogBlock:
         """Shorthand function for creating a log block and adding it immediately
         to the session.
@@ -796,12 +787,12 @@ class Log:
     """
 
     _block_id_generator: Iterator[int]
-    _cache: Optional[TOCCache]
+    _cache: TOCCache | None
     _crazyflie: Crazyflie
     _operation_lock: Lock
 
-    _variables: List[VariableSpecification]
-    _variables_by_name: Dict[str, VariableSpecification]
+    _variables: list[VariableSpecification]
+    _variables_by_name: dict[str, VariableSpecification]
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
@@ -893,7 +884,7 @@ class Log:
         status = int(response[0])
         if status:
             raise RuntimeError(
-                "Log block creation request returned error code {0} ({1})".format(
+                "Log block creation request returned error code {} ({})".format(
                     status, error_to_string(status)
                 )
             )
@@ -910,7 +901,7 @@ class Log:
         status = int(response[0])
         if status:
             raise RuntimeError(
-                "Log block deletion request returned error code {0} ({1})".format(
+                "Log block deletion request returned error code {} ({})".format(
                     status, error_to_string(status)
                 )
             )
@@ -936,7 +927,7 @@ class Log:
             raise IndexError("parameter index out of range")
         return VariableSpecification.from_bytes(response, id=index)
 
-    async def _get_table_of_contents_info(self) -> Tuple[int, int]:
+    async def _get_table_of_contents_info(self) -> tuple[int, int]:
         """Returns basic information about the table of contents of the
         log variable list, including the number of log variables and the CRC32
         hash of the parameter table.
@@ -973,7 +964,7 @@ class Log:
         status = int(response[0])
         if status:
             raise RuntimeError(
-                "Log block start request returned error code {0} ({1})".format(
+                "Log block start request returned error code {} ({})".format(
                     status, error_to_string(status)
                 )
             )
@@ -990,12 +981,12 @@ class Log:
         status = int(response[0])
         if status:
             raise RuntimeError(
-                "Log block stop request returned error code {0} ({1})".format(
+                "Log block stop request returned error code {} ({})".format(
                     status, error_to_string(status)
                 )
             )
 
-    async def _submit_block(self, block: LogBlock) -> Tuple[int, Disposer]:
+    async def _submit_block(self, block: LogBlock) -> tuple[int, Disposer]:
         """Submits a log block to the Crazyflie for registration.
 
         Returns:

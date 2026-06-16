@@ -4,7 +4,8 @@ from contextlib import asynccontextmanager
 from enum import IntEnum
 from math import radians
 from struct import Struct
-from typing import AsyncIterator, ClassVar, Optional
+from typing import ClassVar
+from collections.abc import AsyncIterator
 
 from aiocflib.crtp import CRTPCommandLike, CRTPDataLike, CRTPPort
 from aiocflib.errors import CRTPCommandError
@@ -180,10 +181,10 @@ class HighLevelCommander:
         self,
         height: float,
         *,
-        duration: Optional[float] = None,
-        velocity: Optional[float] = None,
-        relative: Optional[bool] = False,
-        yaw: Optional[float] = None,
+        duration: float | None = None,
+        velocity: float | None = None,
+        relative: bool | None = False,
+        yaw: float | None = None,
         group_mask: int = ALL_GROUPS,
     ) -> None:
         """Sends a landing command to the Crazyflie.
@@ -299,10 +300,10 @@ class HighLevelCommander:
         self,
         height: float,
         *,
-        duration: Optional[float] = None,
-        velocity: Optional[float] = None,
-        relative: Optional[bool] = False,
-        yaw: Optional[float] = None,
+        duration: float | None = None,
+        velocity: float | None = None,
+        relative: bool | None = False,
+        yaw: float | None = None,
         group_mask: int = ALL_GROUPS,
     ) -> None:
         """Sends a takeoff command to the Crazyflie.
@@ -365,8 +366,8 @@ class HighLevelCommander:
     async def _run_command(
         self,
         *,
-        command: Optional[CRTPCommandLike] = None,
-        data: Optional[CRTPDataLike] = None,
+        command: CRTPCommandLike | None = None,
+        data: CRTPDataLike | None = None,
         **kwds,
     ) -> None:
         """Sends a command packet to the high-level commander port and channel

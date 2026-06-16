@@ -1,7 +1,6 @@
 """Statistics-related utility classes and functions."""
 
 from collections import deque
-from typing import Optional
 
 __all__ = ("SlidingWindowMean",)
 
@@ -9,7 +8,7 @@ __all__ = ("SlidingWindowMean",)
 class SlidingWindowMean:
     """Sliding window mean calculator."""
 
-    def __init__(self, window_size: int, fill: Optional[float] = None):
+    def __init__(self, window_size: int, fill: float | None = None):
         """Constructor."""
         self._fill = fill
         self._window_size = window_size

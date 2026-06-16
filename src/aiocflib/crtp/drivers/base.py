@@ -2,7 +2,7 @@
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 from contextlib import asynccontextmanager
-from typing import AsyncContextManager, List, Optional
+from typing import AsyncContextManager
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.utils.concurrency import ObservableValue
@@ -44,9 +44,7 @@ class CRTPDriver(metaclass=ABCMeta):
         try:
             driver_factory = find_driver(scheme)
         except KeyError:
-            raise WrongURIType(
-                "Unknown CRTP driver URI: {0!r}".format(scheme)
-            ) from None
+            raise WrongURIType(f"Unknown CRTP driver URI: {scheme!r}") from None
 
         driver = driver_factory(*args, **kwds)
         driver.uri = uri
@@ -56,7 +54,7 @@ class CRTPDriver(metaclass=ABCMeta):
                 middleware = find_middleware(middleware_name)
             except KeyError:
                 raise WrongURIType(
-                    "Unknown middleware in URI: {0!r}".format(middleware_name)
+                    f"Unknown middleware in URI: {middleware_name!r}"
                 ) from None
             driver = middleware(driver)
 
@@ -125,7 +123,7 @@ class CRTPDriver(metaclass=ABCMeta):
         raise NotImplementedError
 
     @classmethod
-    async def scan_interfaces(cls) -> List[str]:
+    async def scan_interfaces(cls) -> list[str]:
         """Scans all interfaces of this type for available Crazyflie quadcopters
         and returns a list with appropriate connection URIs that could be used
         to connect to them.
@@ -146,7 +144,7 @@ class CRTPDriver(metaclass=ABCMeta):
         raise NotImplementedError
 
     @property
-    def uri(self) -> Optional[str]:
+    def uri(self) -> str | None:
         """The URI with which the driver was created, if known."""
         return getattr(self, "_uri", None)
 

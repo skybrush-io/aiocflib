@@ -1,7 +1,7 @@
 """Enumeration types related to the bootloader of the Crazyflie."""
 
 from enum import IntEnum
-from typing import Callable
+from collections.abc import Callable
 
 __all__ = ("BootloaderProtocolVersion",)
 

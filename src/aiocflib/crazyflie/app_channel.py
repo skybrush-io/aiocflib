@@ -1,6 +1,6 @@
 """Classes related to handling platform service messages of a Crazyflie."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from aiocflib.crtp.crtpstack import CRTPPacket, CRTPPort
 

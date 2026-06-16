@@ -1,4 +1,5 @@
-from typing import Callable, Generic, Optional, TypeVar, Union, overload
+from typing import Generic, TypeVar, overload
+from collections.abc import Callable
 
 
 T = TypeVar("T")
@@ -45,9 +46,7 @@ class Registry(Generic[T]):
     @overload
     def register(self, key: str, value: T) -> T: ...
 
-    def register(
-        self, key: str, value: Optional[T] = None
-    ) -> Union[T, Callable[[T], T]]:
+    def register(self, key: str, value: T | None = None) -> T | Callable[[T], T]:
         """When called with two arguments, associates an item to the given key
         and checks for duplicates to ensure that already registered items cannot
         be overridden. When called with a single argument, returns a decorator
@@ -60,9 +59,7 @@ class Registry(Generic[T]):
         if value is not None:
             existing = self._items.get(key)
             if existing:
-                raise ValueError(
-                    "Name {0!r} is already registered for {1!r}".format(key, existing)
-                )
+                raise ValueError(f"Name {key!r} is already registered for {existing!r}")
             self._items[key] = value
             return value
         else:

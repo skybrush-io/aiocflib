@@ -3,7 +3,7 @@
 from anyio import move_on_after
 from contextlib import AsyncExitStack
 from sys import exc_info
-from typing import AsyncIterable, Iterable, Optional, Union
+from collections.abc import AsyncIterable, Iterable
 
 from .crtpstack import (
     CRTPDispatcher,
@@ -29,8 +29,8 @@ class CRTPDevice:
 
     _dispatcher: CRTPDispatcher
     _driver: CRTPDriver
-    _exit_stack: Optional[AsyncExitStack]
-    _task_group: Optional[DaemonTaskGroup]
+    _exit_stack: AsyncExitStack | None
+    _task_group: DaemonTaskGroup | None
     _uri: str
 
     def __init__(self, uri: str):
@@ -121,7 +121,7 @@ class CRTPDevice:
         return self._dispatcher
 
     async def packets(
-        self, port: Optional[CRTPPortLike] = None, *, queue_size: int = 0
+        self, port: CRTPPortLike | None = None, *, queue_size: int = 0
     ) -> AsyncIterable[CRTPPacket]:
         """Asynchronous generator that yields incoming packets matching the
         given port.
@@ -145,8 +145,8 @@ class CRTPDevice:
         *,
         port: CRTPPortLike,
         channel: int = 0,
-        command: Optional[CRTPCommandLike] = None,
-        data: Optional[CRTPDataLike] = None,
+        command: CRTPCommandLike | None = None,
+        data: CRTPDataLike | None = None,
         timeout: float = 0.2,
         attempts: int = 3,
     ) -> bytes:
@@ -233,7 +233,7 @@ class CRTPDevice:
         *,
         port: CRTPPortLike,
         channel: int = 0,
-        data: Optional[Union[int, bytes, Iterable[Union[int, bytes]]]] = None,
+        data: int | bytes | Iterable[int | bytes] | None = None,
     ):
         """Sends a packet to the device with the given CRTP port, channel and
         the given body.
@@ -248,7 +248,7 @@ class CRTPDevice:
         await self._driver.send_packet(packet)
 
 
-def _handle_data_argument(command: Optional[CRTPCommandLike] = None) -> bytes:
+def _handle_data_argument(command: CRTPCommandLike | None = None) -> bytes:
     """Helper function to handle the conversion of the `command` argument in
     `CRTPDevice.run_command()` to a `bytes` object.
     """

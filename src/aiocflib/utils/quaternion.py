@@ -1,11 +1,15 @@
 """Functions related to rotations and quaternions."""
 
 from math import sqrt
-from typing import List, NamedTuple
+from typing import NamedTuple
 
-QuaternionXYZW = NamedTuple(
-    "QuaternionXYZW", [("x", float), ("y", float), ("z", float), ("w", float)]
-)
+
+class QuaternionXYZW(NamedTuple):
+    x: float
+    y: float
+    z: float
+    w: float
+
 
 SQRT1_2 = 1.0 / sqrt(2)
 
@@ -78,7 +82,7 @@ def decompress_unit_quaternion(quat_compressed: int) -> QuaternionXYZW:
     mask: int = (1 << 9) - 1
     largest_index: int = (quat_compressed >> 30) & 0x3
     sum_squares: float = 0.0
-    result: List[float] = [0.0] * 4
+    result: list[float] = [0.0] * 4
 
     for index in range(3, -1, -1):
         if index != largest_index:

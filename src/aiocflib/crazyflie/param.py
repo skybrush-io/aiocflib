@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 from errno import ENOENT
 from struct import Struct, error as StructError
-from typing import cast, Dict, List, Optional, Tuple, Union
+from typing import cast, Union
 
 from aiocflib.crtp import CRTPPort
 from aiocflib.errors import error_to_string
@@ -93,7 +93,7 @@ class ParameterType(IntEnum):
     UINT64 = 11
 
     @classmethod
-    def to_type(cls, value: Union[int, str, "ParameterType"]):
+    def to_type(cls, value: int | str | ParameterType):
         """Converts an integer, string or ParameterType_ instance to a
         ParameterType.
         """
@@ -105,7 +105,7 @@ class ParameterType(IntEnum):
             return ParameterType(value)
 
     @property
-    def aliases(self) -> Tuple[str]:
+    def aliases(self) -> tuple[str]:
         """Returns the registered type aliases of this type."""
         return (_type_properties[self][0],) + _type_properties[self][2]
 
@@ -200,7 +200,7 @@ class ParameterSpecification:
         """
         return f"{self.group}.{self.name}"
 
-    def parse_value(self, data: bytes) -> Union[int, float]:
+    def parse_value(self, data: bytes) -> int | float:
         """Parses the raw byte-level representation of a single value of this
         parameter, as received from the Crazyflie, and returns the corresponding
         Python value.
@@ -231,7 +231,7 @@ class PersistentParamState:
     default_value: float
     """The default value of the parameter in the Crazyflie firmware."""
 
-    stored_value: Optional[float]
+    stored_value: float | None
     """The value of the parameter stored in the permanent storage of the
     Crazyflie; `None` if the parameter is not persisted.
     """
@@ -249,12 +249,12 @@ class Parameters:
     subsystem of a Crazyflie instance.
     """
 
-    _cache: Optional[TOCCache]
+    _cache: TOCCache | None
     _crazyflie: Crazyflie
 
-    _values: Dict[str, Union[int, float]]
-    _variables: List[ParameterSpecification]
-    _variables_by_name: Dict[str, ParameterSpecification]
+    _values: dict[str, int | float]
+    _variables: list[ParameterSpecification]
+    _variables_by_name: dict[str, ParameterSpecification]
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
@@ -296,7 +296,7 @@ class Parameters:
                 f"failed to clear persisted value of parameter {name}; code = {response[0]}"
             )
 
-    async def get(self, name: str, fetch: bool = False) -> Union[int, float]:
+    async def get(self, name: str, fetch: bool = False) -> int | float:
         """Returns the current value of a parameter, given its fully-qualified
         name.
 
@@ -319,7 +319,7 @@ class Parameters:
             value = self._values[name] = await self._fetch(name)
         return value
 
-    async def get_default(self, name: str) -> Union[int, float]:
+    async def get_default(self, name: str) -> int | float:
         """Returns the default value of a parameter, given its fully-qualified
         name.
 
@@ -479,7 +479,7 @@ class Parameters:
 
         parameter = self._variables_by_name[name]
         if parameter.read_only:
-            raise AttributeError("{} is read only".format(name))
+            raise AttributeError(f"{name} is read only")
 
         index = parameter.id
 
@@ -552,7 +552,7 @@ class Parameters:
         code = response[0]
         if code:
             raise ValueError(
-                "Crazyflie returned error code {0} ({1})".format(
+                "Crazyflie returned error code {} ({})".format(
                     code, error_to_string(code)
                 )
             )
@@ -578,7 +578,7 @@ class Parameters:
         self._variables, self._variables_by_name = await self._validate()
         self._values = {}
 
-    async def _fetch(self, name: str) -> Union[int, float]:
+    async def _fetch(self, name: str) -> int | float:
         """Furcefully fetch the current value of a parameter, given its
         fully-qualified name.
 
@@ -628,7 +628,7 @@ class Parameters:
             raise IndexError("parameter index out of range")
         return ParameterSpecification.from_bytes(response, id=index)
 
-    async def _get_table_of_contents_info(self) -> Tuple[int, int]:
+    async def _get_table_of_contents_info(self) -> tuple[int, int]:
         """Returns basic information about the table of contents of the
         parameter list, including the number of parameters and the CRC32
         hash of the parameter table.
@@ -642,7 +642,7 @@ class Parameters:
             command=ParameterTOCCommand.READ_TOC_INFO_V2,
         )
         try:
-            return cast(Tuple[int, int], Struct("<HI").unpack(response))
+            return cast(tuple[int, int], Struct("<HI").unpack(response))
         except StructError:
             raise ValueError("invalid parameter TOC info response") from None
 

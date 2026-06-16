@@ -4,7 +4,6 @@ arguments.
 """
 
 from contextlib import asynccontextmanager
-from typing import Optional
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.crtp.drivers.base import CRTPDriver
@@ -47,7 +46,7 @@ class MiddlewareBase(CRTPDriver):
         return self._wrapped.name
 
     @property
-    def uri(self) -> Optional[str]:
+    def uri(self) -> str | None:
         return self._wrapped.uri
 
     @property

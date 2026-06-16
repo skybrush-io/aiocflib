@@ -4,7 +4,6 @@ from anyio import open_file
 from enum import IntEnum
 from math import ceil
 from struct import Struct
-from typing import Optional, Union
 
 from aiocflib.utils import chunkify
 
@@ -27,7 +26,7 @@ class BootloaderTargetType(IntEnum):
         return _target_descriptions.get(self, "Unknown")
 
     @classmethod
-    def from_string(cls, name: Union[str, "BootloaderTargetType"]):
+    def from_string(cls, name: str | BootloaderTargetType):
         if isinstance(name, cls):
             return name
 
@@ -38,7 +37,7 @@ class BootloaderTargetType(IntEnum):
             if value.lower() == name:
                 return key
 
-        raise ValueError("no such bootloader target: {0!r}".format(name))
+        raise ValueError(f"no such bootloader target: {name!r}")
 
 
 _target_descriptions = {
@@ -126,7 +125,7 @@ class BootloaderTarget:
 
     def __str__(self):
         result = [
-            "Target info: {0} (0x{1:X})".format(self.id.description, self.id),
+            f"Target info: {self.id.description} (0x{self.id:X})",
             "Flash pages: {0.flash_pages} | Page size: {0.page_size} | "
             "Buffer pages: {0.buffer_pages} | Start page: {0.start_page}".format(self),
             "{0.max_firmware_size_in_kbytes} KBytes of flash available for firmware image.".format(
@@ -178,7 +177,7 @@ class BootloaderTarget:
         address: int = 0,
         length: int = -1,
         *,
-        on_progress: Optional[ProgressHandler] = None,
+        on_progress: ProgressHandler | None = None,
     ) -> bytes:
         """Reads the given number of bytes from the given address of the flash
         memory of the target.
@@ -227,7 +226,7 @@ class BootloaderTarget:
         return b"".join(result)
 
     async def read_firmware(
-        self, length: int = -1, *, on_progress: Optional[ProgressHandler] = None
+        self, length: int = -1, *, on_progress: ProgressHandler | None = None
     ) -> bytes:
         """Reads the given number of bytes from the firmware area of the flash
         memory of the target.
@@ -250,7 +249,7 @@ class BootloaderTarget:
         address: int,
         data: bytes,
         *,
-        on_progress: Optional[ProgressHandler] = None,
+        on_progress: ProgressHandler | None = None,
     ) -> None:
         """Writes some data at the given address into the flash memory of the
         target.
@@ -280,9 +279,9 @@ class BootloaderTarget:
 
     async def write_firmware(
         self,
-        firmware: Union[bytes, str],
+        firmware: bytes | str,
         *,
-        on_progress: Optional[ProgressHandler] = None,
+        on_progress: ProgressHandler | None = None,
     ) -> None:
         """Writes the given data to the firmware area of the flash memory of
         the target.
@@ -307,7 +306,7 @@ class BootloaderTarget:
         data: bytes,
         *,
         validate: bool = False,
-        on_progress: Optional[ProgressHandler] = None,
+        on_progress: ProgressHandler | None = None,
     ) -> None:
         """Fills the upload buffer on the target with the given data.
 
@@ -363,7 +362,7 @@ class BootloaderTarget:
 
             if errors:
                 print(repr(errors))
-                raise IOError("failed to update buffer")
+                raise OSError("failed to update buffer")
 
     async def _flush_buffer_to_flash(self, start: int, size: int) -> None:
         start, remainder = divmod(start, self.page_size)
@@ -385,18 +384,18 @@ class BootloaderTarget:
         )
 
         if len(result) < 2:
-            raise IOError("invalid response from flash write request")
+            raise OSError("invalid response from flash write request")
 
         done = result[0] > 0
         status = result[1]
 
         if status == 1:
-            raise IOError("invalid write request sent to target")
+            raise OSError("invalid write request sent to target")
         elif status == 2:
-            raise IOError("failed to erase sector in flash memory")
+            raise OSError("failed to erase sector in flash memory")
         elif status == 3:
-            raise IOError("failed to write new data into flash memory")
+            raise OSError("failed to write new data into flash memory")
         elif status > 0:
-            raise IOError("unknown error (code = {0})".format(status))
+            raise OSError(f"unknown error (code = {status})")
         elif not done:
-            raise IOError("target says write is not done but returned no error code")
+            raise OSError("target says write is not done but returned no error code")

@@ -2,7 +2,8 @@
 Crazyflie drones using a single radio.
 """
 
-from typing import Sequence, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
+from collections.abc import Sequence
 
 from aiocflib.crtp import CRTPPort
 from aiocflib.utils.quaternion import QuaternionXYZW
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 
 
 async def broadcast_external_position_packed(
-    broadcaster: "_Broadcaster", items: Sequence[Tuple[int, Tuple[float, float, float]]]
+    broadcaster: "_Broadcaster", items: Sequence[tuple[int, tuple[float, float, float]]]
 ) -> None:
     """Broadcasts a packet containing external position information for multiple
     Crazyflies using the given broadcaster.
@@ -36,7 +37,7 @@ async def broadcast_external_position_packed(
 
 async def broadcast_external_pose_packed(
     broadcaster: "_Broadcaster",
-    items: Sequence[Tuple[int, Tuple[float, float, float], QuaternionXYZW]],
+    items: Sequence[tuple[int, tuple[float, float, float], QuaternionXYZW]],
 ) -> None:
     """Broadcasts a packet containing external pose (position + attitude)
     information for multiple Crazyflies using the given broadcaster.
