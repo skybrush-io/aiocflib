@@ -37,7 +37,7 @@ class Console:
             timeout: maximum number of seconds to wait for a newline character
                 after a console message. If no newline character is received
                 in this timeframe after a console message, the message will
-                be posted separately, followd by a partial message marker
+                be posted separately, followed by a partial message marker
             partial_message_marker: marker to append to messages if a newline
                 was not received in time after having received the message
         """
@@ -101,8 +101,9 @@ async def test():
 
 
 if __name__ == "__main__":
-    from aiocflib.crtp import init_drivers
     import trio
+
+    from aiocflib.crtp import init_drivers
 
     init_drivers()
     try:
