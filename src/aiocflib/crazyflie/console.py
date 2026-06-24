@@ -1,30 +1,20 @@
 """Classes related to handling console messages of a Crazyflie."""
 
-from collections.abc import AsyncIterator
-
 from anyio import fail_after
 
-from aiocflib.crtp import CRTPPacket, CRTPPort
+from aiocflib.crtp import CRTPPort
 from aiocflib.utils.concurrency import aclosing
 
+from .base import CrazyflieSubsystem
 from .crazyflie import Crazyflie
 
 __all__ = ("Console",)
 
 
-class Console:
+class Console(CrazyflieSubsystem):
     """Class representing the handler of console messages for a Crazyflie
     instance.
     """
-
-    def __init__(self, crazyflie: Crazyflie):
-        """Constructor.
-
-        Parameters:
-            crazyflie: the Crazyflie for which we need to handle the console
-                messages
-        """
-        self._crazyflie = crazyflie
 
     async def messages(self, timeout: float = 1, partial_message_marker: str = "…"):
         """Async generator that yields full console messages from a
@@ -82,12 +72,8 @@ class Console:
                     else:
                         break
 
-    async def packets(self) -> AsyncIterator[CRTPPacket]:
-        """Async generator that yields console message packets from a Crazyflie,
-        without reassembling them to full messages.
-        """
-        async for packet in self._crazyflie.packets(port=CRTPPort.CONSOLE):
-            yield packet
+    def get_port(self) -> CRTPPort:
+        return CRTPPort.CONSOLE
 
 
 async def test():

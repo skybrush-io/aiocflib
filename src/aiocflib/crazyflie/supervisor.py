@@ -1,32 +1,18 @@
 """Classes related to accessing the supervisor subsystem of a Crazyflie."""
 
-from collections.abc import AsyncIterator
+from aiocflib.crtp import CRTPPort
 
-from aiocflib.crtp import CRTPPacket, CRTPPort
-
+from .base import CrazyflieSubsystem
 from .crazyflie import Crazyflie
 
 __all__ = ("Supervisor",)
 
 
-class Supervisor:
+class Supervisor(CrazyflieSubsystem):
     """Class representing the handler of supervisor messages of a Crazyflie instance."""
 
-    def __init__(self, crazyflie: Crazyflie):
-        """Constructor.
-
-        Parameters:
-            crazyflie: the Crazyflie for which we need to handle the supervisor
-                messages
-        """
-        self._crazyflie = crazyflie
-
-    async def packets(self) -> AsyncIterator[CRTPPacket]:
-        """Async generator that yields supervisor message packets from a Crazyflie,
-        without reassembling them to full messages.
-        """
-        async for packet in self._crazyflie.packets(port=CRTPPort.SUPERVISOR):
-            yield packet
+    def get_port(self) -> CRTPPort:
+        return CRTPPort.SUPERVISOR
 
 
 async def test():

@@ -1,15 +1,16 @@
 """Classes related to sending high-level navigation commands to a Crazyflie."""
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from enum import IntEnum
 from math import radians
 from struct import Struct
 from typing import ClassVar
-from collections.abc import AsyncIterator
 
 from aiocflib.crtp import CRTPCommandLike, CRTPDataLike, CRTPPort
 from aiocflib.errors import CRTPCommandError
 
+from .base import CrazyflieSubsystem
 from .crazyflie import Crazyflie
 
 __all__ = ("HighLevelCommander", "HighLevelCommanderError")
@@ -63,12 +64,10 @@ class TrajectoryLocation(IntEnum):
 ALL_GROUPS = 0
 
 
-class HighLevelCommander:
+class HighLevelCommander(CrazyflieSubsystem):
     """Class responsible for sending high-level navigation commands to a
     Crazyflie.
     """
-
-    _crazyflie: Crazyflie
 
     _define_trajectory_struct: ClassVar[Struct] = Struct("<BBIB")
     _go_to_struct: ClassVar[Struct] = Struct("<Bfffff")
@@ -84,7 +83,10 @@ class HighLevelCommander:
         Parameters:
             crazyflie: the Crazyflie to which we need to send the messages
         """
-        self._crazyflie = crazyflie
+        super().__init__(crazyflie)
+
+    def get_port(self) -> CRTPPort:
+        return CRTPPort.HIGH_LEVEL_COMMANDER
 
     async def define_trajectory(
         self,

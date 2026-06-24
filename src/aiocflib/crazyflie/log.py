@@ -1,6 +1,13 @@
 """Classes related to accessing the logging subsystem of a Crazyflie."""
 
-from collections.abc import AsyncIterable, Awaitable, Callable, Iterable, Iterator
+from collections.abc import (
+    AsyncIterable,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Iterable,
+    Iterator,
+)
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from enum import IntEnum
@@ -24,6 +31,7 @@ from aiocflib.utils.concurrency import aclosing
 from aiocflib.utils.toc import TOCCache, fetch_table_of_contents_gracefully
 from aiocflib.utils.typing import Disposer
 
+from .base import CrazyflieSubsystem
 from .crazyflie import Crazyflie
 
 __all__ = ("Log", "LogBlock")
@@ -789,14 +797,13 @@ class LogSession:
                 message.process()
 
 
-class Log:
+class Log(CrazyflieSubsystem):
     """Class representing the handler of messages related to the logging
     subsystem of a Crazyflie instance.
     """
 
     _block_id_generator: Iterator[int]
     _cache: TOCCache | None
-    _crazyflie: Crazyflie
     _operation_lock: Lock
 
     _variables: list[VariableSpecification]
@@ -809,8 +816,8 @@ class Log:
             crazyflie: the Crazyflie for which we need to handle the parameter
                 subsystem related messages
         """
+        super().__init__(crazyflie)
         self._cache = crazyflie._get_cache_for("log_toc")
-        self._crazyflie = crazyflie
 
         self._block_id_generator = count()
 
@@ -818,6 +825,9 @@ class Log:
         self._variables_by_name = None  # type: ignore
 
         self._operation_lock = Lock()
+
+    def get_port(self) -> CRTPPort:
+        return CRTPPort.LOGGING
 
     def create_block(self) -> LogBlock:
         """Creates a new, empty log block specification object that can be
@@ -835,7 +845,7 @@ class Log:
         """
         return LogSession(self)
 
-    async def data_packets(self) -> AsyncIterable[CRTPPacket]:
+    async def data_packets(self) -> AsyncIterator[CRTPPacket]:
         """Async generator that yields logging-related messages from a
         Crazyflie.
 
@@ -843,11 +853,11 @@ class Log:
         not only log data. If you are interested in log data packets only,
         use ``data_packets()``.
         """
-        async for packet in self._crazyflie.packets(port=CRTPPort.LOGGING):
+        async for packet in self.packets():
             if packet.channel == LoggingChannel.DATA and len(packet.data) >= 4:
                 yield packet
 
-    async def packets(self) -> AsyncIterable[CRTPPacket]:
+    async def packets(self) -> AsyncIterator[CRTPPacket]:
         """Async generator that yields logging-related messages from a
         Crazyflie.
 
@@ -855,7 +865,7 @@ class Log:
         not only log data. If you are interested in log data packets only,
         use ``data_packets()``.
         """
-        async for packet in self._crazyflie.packets(port=CRTPPort.LOGGING):
+        async for packet in super().packets():
             yield packet
 
     async def reset(self):

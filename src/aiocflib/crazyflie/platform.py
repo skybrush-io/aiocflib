@@ -1,11 +1,11 @@
 """Classes related to handling platform service messages of a Crazyflie."""
 
-from collections.abc import AsyncIterable
 from enum import IntEnum
 from typing import Any
 
-from aiocflib.crtp import CRTPPacket, CRTPPort, LinkControlChannel
+from aiocflib.crtp import CRTPPort, LinkControlChannel
 
+from .base import CrazyflieSubsystem
 from .crazyflie import Crazyflie
 
 __all__ = ("Platform",)
@@ -41,7 +41,7 @@ class VersionCommand(IntEnum):
     GET_DEVICE_TYPE_NAME = 2
 
 
-class Platform:
+class Platform(CrazyflieSubsystem):
     """Class representing the handler of platform service messages for a Crazyflie
     instance.
     """
@@ -56,7 +56,7 @@ class Platform:
             crazyflie: the Crazyflie for which we need to handle the platform
                 service messages
         """
-        self._crazyflie = crazyflie
+        super().__init__(crazyflie)
 
         self._cache = {}
         # TODO(ntamas): clear cache when the Crazyflie disconnects
@@ -153,9 +153,5 @@ class Platform:
         )
         return response.startswith(b"Bitcraze Crazyflie")
 
-    async def packets(self) -> AsyncIterable[CRTPPacket]:
-        """Async generator that yields platform service messages from a
-        Crazyflie.
-        """
-        async for packet in self._crazyflie.packets(port=CRTPPort.PLATFORM):
-            yield packet
+    def get_port(self) -> CRTPPort:
+        return CRTPPort.PLATFORM

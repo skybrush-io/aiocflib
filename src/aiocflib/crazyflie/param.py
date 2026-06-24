@@ -15,6 +15,7 @@ from aiocflib.crtp import CRTPPort
 from aiocflib.errors import error_to_string
 from aiocflib.utils.toc import TOCCache, fetch_table_of_contents_gracefully
 
+from .base import CrazyflieSubsystem
 from .crazyflie import Crazyflie
 
 __all__ = ("Parameters",)
@@ -246,13 +247,12 @@ class PersistentParamState:
         return self.stored_value is not None
 
 
-class Parameters:
+class Parameters(CrazyflieSubsystem):
     """Class representing the handler of messages related to the parameter
     subsystem of a Crazyflie instance.
     """
 
     _cache: TOCCache | None
-    _crazyflie: Crazyflie
 
     _values: dict[str, int | float]
     _variables: list[ParameterSpecification]
@@ -265,12 +265,15 @@ class Parameters:
             crazyflie: the Crazyflie for which we need to handle the parameter
                 subsystem related messages
         """
+        super().__init__(crazyflie)
         self._cache = crazyflie._get_cache_for("param_toc")
-        self._crazyflie = crazyflie
 
         self._values = None  # type: ignore
         self._variables = None  # type: ignore
         self._variables_by_name = None  # type: ignore
+
+    def get_port(self) -> CRTPPort:
+        return CRTPPort.PARAMETERS
 
     async def clear_persisted_value(self, name: str) -> None:
         """Clears the persisted value of a parameter, given its fully-qualified

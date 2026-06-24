@@ -15,6 +15,7 @@ from aiocflib.utils import chunkify
 from aiocflib.utils.checksum import crc32
 from aiocflib.utils.registry import Registry
 
+from .base import CrazyflieSubsystem
 from .crazyflie import Crazyflie
 
 __all__ = ("Memory", "MemoryType")
@@ -273,23 +274,15 @@ class MemoryHandlerBase(MemoryHandler):
         return response[0] if response else ENODATA
 
 
-class Memory:
+class Memory(CrazyflieSubsystem):
     """Class representing the handler of messages related to the memory
     subsystem of a Crazyflie instance.
     """
 
-    _crazyflie: Crazyflie
-    _handlers: list[MemoryHandler] | None
+    _handlers: list[MemoryHandler] | None = None
 
-    def __init__(self, crazyflie: Crazyflie):
-        """Constructor.
-
-        Parameters:
-            crazyflie: the Crazyflie for which we need to handle the memory
-                subsystem related messages
-        """
-        self._crazyflie = crazyflie
-        self._handlers = None
+    def get_port(self) -> CRTPPort:
+        return CRTPPort.MEMORY
 
     async def find(self, type: MemoryType) -> MemoryHandler:
         """Finds the first memory element with the given type.

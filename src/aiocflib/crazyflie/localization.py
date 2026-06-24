@@ -1,14 +1,14 @@
 """Classes related to accessing the localization subsystem of a Crazyflie."""
 
+from collections.abc import Iterable, Sequence
 from enum import IntEnum
 from struct import Struct
 from typing import ClassVar
-from collections.abc import Iterable, Sequence
 
 from aiocflib.crtp import CRTPPort
-from aiocflib.utils.quaternion import compress_unit_quaternion, QuaternionXYZW
+from aiocflib.utils.quaternion import QuaternionXYZW, compress_unit_quaternion
 
-from .crazyflie import Crazyflie
+from .base import CrazyflieSubsystem
 
 __all__ = ("Localization",)
 
@@ -45,12 +45,10 @@ class GenericLocalizationCommand(IntEnum):
     LH_PERSIST_DATA = 11
 
 
-class Localization:
+class Localization(CrazyflieSubsystem):
     """Class representing the handler of messages related to the localization
     subsystem of a Crazyflie instance.
     """
-
-    _crazyflie: Crazyflie
 
     _external_position_struct: ClassVar[Struct] = Struct("<fff")
     _external_position_packed_item_struct: ClassVar[Struct] = Struct("<Bhhh")
@@ -111,14 +109,8 @@ class Localization:
             for id, (x, y, z), quat in items
         )
 
-    def __init__(self, crazyflie: Crazyflie):
-        """Constructor.
-
-        Parameters:
-            crazyflie: the Crazyflie for which we need to handle the localization
-                subsystem related messages
-        """
-        self._crazyflie = crazyflie
+    def get_port(self) -> CRTPPort:
+        return CRTPPort.LOCALIZATION
 
     async def _send_packet(
         self,
