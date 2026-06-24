@@ -1,8 +1,9 @@
-from aiocflib.crtp import CRTPDevice, CRTPPort, LinkControlChannel
-from aiocflib.errors import NotFoundError
-from aiocflib.drivers.crazyradio import Crazyradio
-from aiocflib.utils.addressing import BootloaderAddressSpace
 from anyio import sleep
+
+from aiocflib.crtp import CRTPDevice, CRTPPort, LinkControlChannel
+from aiocflib.drivers.crazyradio import Crazyradio
+from aiocflib.errors import NotFoundError
+from aiocflib.utils.addressing import BootloaderAddressSpace
 
 from .target import BootloaderTarget, BootloaderTargetType
 from .types import BootloaderCommand, BootloaderProtocolVersion
@@ -177,7 +178,7 @@ class Bootloader(CRTPDevice):
         return await self.run_command(
             port=CRTPPort.LINK_CONTROL,
             channel=LinkControlChannel.BOOTLOADER,
-            **new_kwds,
+            **new_kwds,  # ty:ignore[invalid-argument-type]
         )
 
     async def send_bootloader_packet(self, data, **kwds) -> None:
@@ -224,8 +225,9 @@ class Bootloader(CRTPDevice):
 
 
 async def test():
-    from aiocflib.crazyflie import Crazyflie
     from tqdm import tqdm
+
+    from aiocflib.crazyflie import Crazyflie
 
     uri = "radio://0/80/2M/E7E7E7E704"
     async with Crazyflie(uri) as cf:
@@ -242,8 +244,9 @@ async def test():
 
 
 if __name__ == "__main__":
-    from aiocflib.crtp import init_drivers
     from anyio import run
+
+    from aiocflib.crtp import init_drivers
 
     init_drivers()
     run(test)

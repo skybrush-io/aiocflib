@@ -3,7 +3,7 @@ from __future__ import annotations
 from binascii import hexlify, unhexlify
 from collections.abc import Sequence
 from enum import IntEnum
-from typing import ClassVar, TypeAlias
+from typing import ClassVar, TypeAlias, overload
 
 __all__ = (
     "AddressSpace",
@@ -342,9 +342,22 @@ class RadioAddressSpace(AddressSpace):
         """
         return self._uri_prefix
 
-    def __getitem__(self, index: int) -> str:
-        address = self.get_address_for(index)
-        return self._uri_format.format(hexlify(address).decode("ascii").upper())
+    @overload
+    def __getitem__(self, index: int) -> str: ...
+
+    @overload
+    def __getitem__(
+        self, index: slice[int | None, int | None, int | None]
+    ) -> Sequence[str]: ...
+
+    def __getitem__(
+        self, index: int | slice[int | None, int | None, int | None]
+    ) -> str | Sequence[str]:
+        if isinstance(index, slice):
+            return [self[i] for i in range(*index.indices(self._length))]
+        else:
+            address = self.get_address_for(index)
+            return self._uri_format.format(hexlify(address).decode("ascii").upper())
 
     def __len__(self) -> int:
         return self._length
@@ -380,7 +393,20 @@ class USBAddressSpace(AddressSpace):
         self._length = max(0, int(length))
         self._format_str = f"{scheme}://" + "{0}"
 
-    def __getitem__(self, index: int) -> str:
+    @overload
+    def __getitem__(self, index: int) -> str: ...
+
+    @overload
+    def __getitem__(
+        self, index: slice[int | None, int | None, int | None]
+    ) -> Sequence[str]: ...
+
+    def __getitem__(
+        self, index: int | slice[int | None, int | None, int | None]
+    ) -> str | Sequence[str]:
+        if isinstance(index, slice):
+            return [self[i] for i in range(*index.indices(self._length))]
+
         if index >= 0 and index < self._length:
             return self._format_str.format(index)
         else:

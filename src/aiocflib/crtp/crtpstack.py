@@ -145,6 +145,12 @@ _memory_type_descriptions: dict[int, str] = {
 class CRTPPacket:
     """A single packet that can be sent or received via a CRTP connection."""
 
+    _header: int
+    """The header of the packet."""
+
+    _data: bytes
+    """The data of the packet."""
+
     @classmethod
     def from_bytes(cls, data: CRTPDataLike):
         """Constructs a CRTP packet from its raw representation that includes

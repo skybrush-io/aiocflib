@@ -451,6 +451,8 @@ class RadioDriver(CRTPDriver):
         """Worker task that ensures that the radio is in safe link mode when it
         should be in safe link mode.
         """
+        assert self._configuration is not None
+
         async for state in self._safe_link_state.observe():
             if state.enabled and not state.acquired:
                 success = False
@@ -485,6 +487,8 @@ class RadioDriver(CRTPDriver):
         Parameters:
             radio: the Crazyradio instance to use
         """
+        assert self._configuration is not None
+
         if self._safe_link_state.enabled:
             # Wait at most 2 seconds for safe-link mode before proceeding
             # without it
@@ -492,7 +496,6 @@ class RadioDriver(CRTPDriver):
                 await self._safe_link_state.wait_until_acquired()
 
         null_packet = outbound_packet = CRTPPacket.null()
-        delay_before_next_null_packet = 0.01
 
         link_quality_estimator = SlidingWindowMean(100)
 

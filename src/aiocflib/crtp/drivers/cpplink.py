@@ -47,7 +47,7 @@ class CppRadioDriver(CRTPDriver):
             last packet if it failed or whether we should drop the connection
     """
 
-    _connection: cflinkcpp.Connection
+    _connection: cflinkcpp.Connection | None = None
     _packet_factory: Callable[[], cflinkcpp.Packet]
 
     @asynccontextmanager
@@ -119,6 +119,7 @@ class CppRadioDriver(CRTPDriver):
         Returns:
             the next CRTP packet that was received
         """
+        assert self._connection is not None
         while True:
             native_packet = await to_thread.run_sync(self._connection.recv, 100)
             if native_packet.valid:
@@ -134,6 +135,7 @@ class CppRadioDriver(CRTPDriver):
         Parameters:
             packet: the packet to send
         """
+        assert self._connection is not None
         native_packet = self._packet_factory()
         native_packet.port = packet.port
         native_packet.channel = packet.channel
