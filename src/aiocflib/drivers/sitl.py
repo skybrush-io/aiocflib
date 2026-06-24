@@ -1,12 +1,13 @@
 """Asynchronous USB driver for the Crazyflie."""
 
-from anyio import connect_tcp
-from anyio.abc import ByteStream
-from anyio.streams.buffered import BufferedByteReceiveStream
 from array import array
 from contextlib import AsyncExitStack
 from functools import partial
+from types import TracebackType
 
+from anyio import connect_tcp
+from anyio.abc import ByteStream
+from anyio.streams.buffered import BufferedByteReceiveStream
 
 __author__ = "CollMot Robotics Ltd"
 __all__ = ("SITL",)
@@ -24,6 +25,8 @@ class SITL:
             await sitl.receive_bytes()
     """
 
+    _exit_stack: AsyncExitStack | None
+
     def __init__(self, host: str = "localhost", port: int = 5432):
         """Constructor.
 
@@ -35,7 +38,7 @@ class SITL:
             port: the port to connect to
         """
         self._address = host, port
-        self._exit_stack = None  # type: Optional[AsyncExitStack]
+        self._exit_stack = None
         self._client = None
 
     async def __aenter__(self):
@@ -53,10 +56,15 @@ class SITL:
             partial(self._send_bytes, client), partial(self._receive_bytes, client)
         )
 
-    async def __aexit__(self, exc_type, exc_value, tb) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool | None:
         assert self._exit_stack is not None
         try:
-            return await self._exit_stack.__aexit__(exc_type, exc_value, tb)
+            return await self._exit_stack.__aexit__(exc_type, exc_val, exc_tb)
         finally:
             self._exit_stack = None
 

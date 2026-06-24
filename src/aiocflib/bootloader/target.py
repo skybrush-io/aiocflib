@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from anyio import open_file
 from enum import IntEnum
 from math import ceil
 from struct import Struct
+
+from anyio import open_file
 
 from aiocflib.utils import chunkify
 
@@ -62,6 +63,14 @@ class BootloaderTarget:
         cpu_id: the CPU ID of the target CPU
     """
 
+    id: BootloaderTargetType
+    protocol_version: BootloaderProtocolVersion
+    page_size: int
+    buffer_pages: int
+    flash_pages: int
+    start_page: int
+    cpu_id: bytes
+
     _load_buffer_command_struct = Struct("<BBHH")
     _read_buffer_command_struct = Struct("<BBHH")
     _read_command_struct = Struct("<BBHH")
@@ -117,10 +126,10 @@ class BootloaderTarget:
 
         self.id = id
         self.protocol_version = BootloaderProtocolVersion.UNKNOWN
-        self.page_size = 0  # type: int
-        self.buffer_pages = 0  # type: int
-        self.flash_pages = 0  # type: int
-        self.start_page = 0  # type: int
+        self.page_size = 0
+        self.buffer_pages = 0
+        self.flash_pages = 0
+        self.start_page = 0
         self.cpu_id = b""
 
     def __str__(self):

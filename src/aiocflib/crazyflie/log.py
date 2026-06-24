@@ -8,6 +8,7 @@ from functools import partial
 from itertools import count, zip_longest
 from struct import Struct
 from struct import error as StructError
+from types import TracebackType
 from typing import (
     Any,
     Optional,
@@ -739,10 +740,15 @@ class LogSession:
 
         self._id_mapping = id_mapping
 
-    async def __aexit__(self, exc_type, exc, tb) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool | None:
         try:
             assert self._exit_stack is not None
-            return await self._exit_stack.__aexit__(exc_type, exc, tb)
+            return await self._exit_stack.__aexit__(exc_type, exc_val, exc_tb)
         except Exception as ex:
             if not self._cleanup_gracefully:
                 raise ex

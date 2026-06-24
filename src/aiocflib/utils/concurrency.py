@@ -6,6 +6,7 @@ from functools import partial
 from inspect import iscoroutinefunction
 from queue import Full, Queue
 from sys import exc_info, version_info
+from types import TracebackType
 from typing import (
     Any,
     Generic,
@@ -123,12 +124,17 @@ class DaemonTaskGroup(TaskGroup):
         self._spawner = await self._task_group.__aenter__()
         return self
 
-    async def __aexit__(self, exc_type, exc_value, tb) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool:
         self._spawner = None
 
         self._task_group.cancel_scope.cancel()
         with collapse_excgroups():
-            return bool(await self._task_group.__aexit__(exc_type, exc_value, tb))
+            return bool(await self._task_group.__aexit__(exc_type, exc_val, exc_tb))
 
     def start_soon(self, func, *args, **kwds):
         if self._spawner is None:
@@ -185,7 +191,7 @@ async def gather(
                 result.append(None)
                 group.start_soon(run, func, args, result, len(result) - 1)
             else:
-                result.append(func(*args))
+                result.append(func(*args))  # ty:ignore[call-top-callable, invalid-argument-type]
 
     # At this point all None instances from result should be gone
     return cast(list[T], result)
@@ -470,7 +476,12 @@ class ThreadContext(Generic[T]):
 
         return result if result is not None else self._queue.put_nowait  # type: ignore
 
-    async def __aexit__(self, exc_type, exc_value, tb) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool | None:
         if self._queue:
             self._queue.put(None)
             self._queue = None
@@ -480,7 +491,7 @@ class ThreadContext(Generic[T]):
                 try:
                     with collapse_excgroups():
                         return bool(
-                            await self._task_group.__aexit__(exc_type, exc_value, tb)
+                            await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
                         )
                 finally:
                     self._task_group = None

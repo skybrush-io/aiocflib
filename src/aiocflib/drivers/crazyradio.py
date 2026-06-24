@@ -1,12 +1,15 @@
 """Asynchronous USB driver for the Crazyradio USB dongle."""
 
+from __future__ import annotations
+
 from array import array
 from binascii import hexlify
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 from enum import IntEnum
 from functools import total_ordering, wraps
 from sys import exc_info
+from types import TracebackType
 from typing import TypeAlias
 
 from anyio import Lock, to_thread
@@ -153,7 +156,7 @@ class RadioConfiguration:
     """
 
     @classmethod
-    def ensure(cls, value: "RadioConfigurationLike"):
+    def ensure(cls, value: RadioConfigurationLike) -> RadioConfiguration:
         """When the input is a string, converts it into a RadioConfiguration_
         object, assuming that it contains a ``radio://`` URI. When the input
         is a RadioConfiguration_, it returns the object intact.
@@ -169,7 +172,7 @@ class RadioConfiguration:
             raise TypeError("expected string or {0}, got {1!r}", cls.__name__, value)
 
     @classmethod
-    def from_uri(cls, uri: str):
+    def from_uri(cls, uri: str) -> RadioConfiguration:
         """Creates a RadioConfiguration_ object from a ``radio://`` URI.
 
         The scheme of the supplied URI is ignored; it is assumed that the rest
@@ -324,8 +327,16 @@ class Crazyradio:
     context blocks upon entering until the device becomes available.
     """
 
+    _arc: int
+    _current_address: CrazyradioAddress | None
+    _current_channel: int | None
+    _current_configuration: RadioConfiguration | None
+    _current_data_rate: CrazyradioDataRate | None
+    _version: float | None
+    _exit_stack: AsyncExitStack | None
+
     @classmethod
-    async def detect_all(cls):
+    async def detect_all(cls) -> Sequence[Crazyradio]:
         """Creates a list of low-level driver objects by scanning the USB buses
         for a suitable USB dongle.
         """
@@ -333,7 +344,7 @@ class Crazyradio:
         return [cls(device) for device in devices]
 
     @classmethod
-    async def detect_one(cls, *, index: int = 0):
+    async def detect_one(cls, *, index: int = 0) -> Crazyradio:
         """Creates a low-level driver object by scanning the USB buses for a
         suitable USB dongle, and selecting one based on the provided device
         index.
@@ -353,7 +364,7 @@ class Crazyradio:
         return cls(device)
 
     @classmethod
-    async def from_uri(cls, uri: str):
+    async def from_uri(cls, uri: str) -> Crazyradio:
         """Creates a low-level driver object from its URI representation.
 
         Only the device index is used from the URI; the remaining parts are
@@ -374,18 +385,18 @@ class Crazyradio:
         """
         self._device = device
 
-        self._arc = -1  # type: int
-        self._current_address = None  # type: Optional[CrazyradioAddress]
-        self._current_channel = None  # type: Optional[int]
-        self._current_configuration = None  # type: Optional[RadioConfiguration]
-        self._current_data_rate = None  # type: Optional[CrazyradioDataRate]
-        self._version = None  # type: Optional[float]
+        self._arc = -1
+        self._current_address = None
+        self._current_channel = None
+        self._current_configuration = None
+        self._current_data_rate = None
+        self._version = None
 
         self._sender_thread_context = ThreadContext.create_worker(
             setup=self._configure_device, teardown=self._teardown_device
         )
 
-        self._exit_stack = None  # type: Optional[AsyncExitStack]
+        self._exit_stack = None
 
     @property
     def version(self) -> float | None:
@@ -419,11 +430,16 @@ class Crazyradio:
 
         return _CfRadioCommunicator(sender, self)
 
-    async def __aexit__(self, exc_type, exc_value, tb) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool | None:
         assert self._exit_stack is not None
         exit_stack = self._exit_stack
         self._exit_stack = None
-        return await exit_stack.__aexit__(exc_type, exc_value, tb)
+        return await exit_stack.__aexit__(exc_type, exc_val, exc_tb)
 
     def _configure_device(self):
         """Configures the USB device when the worker thread starts.
@@ -503,12 +519,15 @@ class Crazyradio:
         step will be skipped to save some USB bandwidth.
         """
         if configuration is not self._current_configuration:
+            assert configuration.channel is not None
+            assert configuration.address is not None
+
             self._set_data_rate(configuration.data_rate)
             self._set_channel(configuration.channel)
             self._set_address(configuration.address)
             self._current_configuration = configuration
 
-    def _has_fw_scan(self):
+    def _has_fw_scan(self) -> bool:
         """Returns whether the Crazyradio supports accelerated firmware-driven
         channel scans.
         """
@@ -665,12 +684,12 @@ class Crazyradio:
 
         # If no targets are given, scan all channels and all data rates
         if targets is None:
-            targets = [
+            resolved_targets = [
                 RadioConfiguration(data_rate=data_rate)
                 for data_rate in CrazyradioDataRate
             ]
         else:
-            targets = [RadioConfiguration.ensure(target) for target in targets]
+            resolved_targets = [RadioConfiguration.ensure(target) for target in targets]
 
         # If an address is given, replace all address-less targets with the
         # given address. If multiple addresses are given, replace all address-less
@@ -683,8 +702,8 @@ class Crazyradio:
             )
             addresses = [Crazyradio.to_address(address) for address in addresses]
 
-            new_targets = []
-            for target in targets:
+            new_targets: list[RadioConfiguration] = []
+            for target in resolved_targets:
                 if target.address is None:
                     new_targets.extend(
                         target.replace(address=address) for address in addresses
@@ -692,20 +711,21 @@ class Crazyradio:
                 else:
                     new_targets.append(target)
 
-            targets = new_targets
+            resolved_targets = new_targets
             address = None
 
         # Check whether the target list contains a mixture of address-less and
         # address-based targets as this is not allowed
-        has_addresses = any(target.address is not None for target in targets)
+        has_addresses = any(target.address is not None for target in resolved_targets)
         if has_addresses:
-            if any(target.address is None for target in targets):
+            if any(target.address is None for target in resolved_targets):
                 raise ValueError(
                     "mixing address-less targets with address-based targets is not supported"
                 )
 
-        for target in sorted(targets):
+        for target in sorted(resolved_targets):
             if has_addresses:
+                assert target.address is not None
                 self._set_address(target.address)
 
             self._set_data_rate(target.data_rate)
@@ -790,13 +810,16 @@ class Crazyradio:
         Raises:
             IOError: when the Crazyflie was disconnected
         """
+        handle = self._handle
+        assert handle is not None
+
         try:
             if is_pyusb1:
-                self._handle.write(endpoint=1, data=data, timeout=1000)
-                response = self._handle.read(0x81, 64, timeout=1000)
+                handle.write(endpoint=1, data=data, timeout=1000)
+                response = handle.read(0x81, 64, timeout=1000)
             else:
-                self._handle.bulkWrite(1, data, 1000)
-                response = self._handle.bulkRead(0x81, 64, 1000)
+                handle.bulkWrite(1, data, 1000)
+                response = handle.bulkRead(0x81, 64, 1000)
             return Acknowledgment.from_array(response, arc=self._arc)
         except USBError:
             return None

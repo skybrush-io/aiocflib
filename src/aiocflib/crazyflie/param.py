@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from enum import IntEnum
@@ -106,7 +107,7 @@ class ParameterType(IntEnum):
             return ParameterType(value)
 
     @property
-    def aliases(self) -> tuple[str]:
+    def aliases(self) -> Sequence[str]:
         """Returns the registered type aliases of this type."""
         return (_type_properties[self][0],) + _type_properties[self][2]
 

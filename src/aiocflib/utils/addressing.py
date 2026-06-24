@@ -25,10 +25,10 @@ CrazyradioAddress: TypeAlias = bytes
 CrazyradioAddressLike: TypeAlias = int | bytes | str
 
 #: The default Crazyradio address
-DEFAULT_RADIO_ADDRESS = b"\xe7\xe7\xe7\xe7\xe7"  # type: CrazyradioAddress
+DEFAULT_RADIO_ADDRESS: CrazyradioAddress = b"\xe7\xe7\xe7\xe7\xe7"
 
 #: The default Crazyradio broadcast address
-DEFAULT_RADIO_BROADCAST_ADDRESS = b"\xff\xe7\xe7\xe7\xe7"  # type: CrazyradioAddress
+DEFAULT_RADIO_BROADCAST_ADDRESS: CrazyradioAddress = b"\xff\xe7\xe7\xe7\xe7"
 
 
 class CrazyradioDataRate(IntEnum):

@@ -1,11 +1,11 @@
 """USB-related low-level utility functions."""
 
-from anyio import Lock
+import os
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, TypeAlias
 from weakref import WeakValueDictionary
 
-import os
+from anyio import Lock
 
 __all__ = (
     "claim_device",
@@ -20,7 +20,7 @@ __all__ = (
 )
 
 #: Type variable to represent a USB device
-USBDevice = Any
+USBDevice: TypeAlias = Any
 
 #: Module-level variable to hold a mapping from unique USB device IDs to their
 #: locks that prevent concurrent access to these devices
@@ -64,12 +64,12 @@ def find_devices(vid: int, pid: int) -> list[USBDevice]:
     """
     if is_pyusb1:
         return list(
-            usb.core.find(idVendor=vid, idProduct=pid, find_all=1, backend=_backend)  # type: ignore
+            usb.core.find(idVendor=vid, idProduct=pid, find_all=1, backend=_backend)
         )
     else:
         return [
             device
-            for bus in usb.busses()  # type: ignore
+            for bus in usb.busses()
             for device in bus.devices
             if device.idVendor == vid and device.idProduct == pid
         ]
@@ -78,7 +78,7 @@ def find_devices(vid: int, pid: int) -> list[USBDevice]:
 def get_vendor_setup(handle, request, value, index, length, timeout=1000):
     if is_pyusb1:
         return handle.ctrl_transfer(
-            usb.TYPE_VENDOR | 0x80,  # type: ignore
+            usb.TYPE_VENDOR | 0x80,
             request,
             wValue=value,
             wIndex=index,
@@ -87,7 +87,7 @@ def get_vendor_setup(handle, request, value, index, length, timeout=1000):
         )
     else:
         return handle.controlMsg(
-            usb.TYPE_VENDOR | 0x80,  # type: ignore
+            usb.TYPE_VENDOR | 0x80,
             request,
             length,
             value=value,
@@ -116,7 +116,7 @@ def release_device(device: USBDevice):
 def send_vendor_setup(handle, request, value, index=0, data=(), timeout=1000):
     if is_pyusb1:
         handle.ctrl_transfer(
-            usb.TYPE_VENDOR,  # type: ignore
+            usb.TYPE_VENDOR,
             request,
             wValue=value,
             wIndex=index,
@@ -125,7 +125,7 @@ def send_vendor_setup(handle, request, value, index=0, data=(), timeout=1000):
         )
     else:
         handle.controlMsg(
-            usb.TYPE_VENDOR,  # type: ignore
+            usb.TYPE_VENDOR,
             request,
             data,
             value=value,
@@ -148,4 +148,4 @@ def use_libusb_package():
     is_pyusb1 = True
 
 
-USBError = usb.core.USBError  # type: ignore
+USBError = usb.core.USBError

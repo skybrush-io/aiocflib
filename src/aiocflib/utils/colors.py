@@ -1,5 +1,7 @@
 """Functions and classes related to color handling."""
 
+from collections.abc import Sequence
+
 from colour import Color as ColorBase
 
 __all__ = ("Color", "ColorLike", "to_color")
@@ -10,20 +12,20 @@ ColorLike = str | tuple[float, float, float]
 
 
 class Color(ColorBase):
-    def get_intrgb(self):
+    def get_intrgb(self) -> Sequence[int]:
         return tuple(max(0, min(255, round(x * 255))) for x in self.rgb)
 
-    def set_intrgb(self, value):
-        value = tuple(x / 255.0 for x in value)
-        self.set_rgb(value)
+    def set_intrgb(self, value: Sequence[int]) -> None:
+        value_float = tuple(x / 255.0 for x in value)
+        self.set_rgb(value_float)
 
-    def get_rgb888(self):
+    def get_rgb888(self) -> int:
         r, g, b = self.get_intrgb()
         return (r << 16) | (g << 8) | b
 
-    def set_rgb888(self, value):
+    def set_rgb888(self, value) -> None:
         r, g, b = ((value >> 16) & 0xFF), ((value >> 8) & 0xFF), (value & 0xFF)
-        self.set_intrgb(r, g, b)
+        self.set_intrgb((r, g, b))
 
 
 def to_color(value: ColorLike) -> Color:

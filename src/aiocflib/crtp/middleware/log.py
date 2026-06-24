@@ -2,15 +2,15 @@
 instance.
 """
 
-from aiocflib.crtp.crtpstack import CRTPPacket, CRTPPort
 from hexdump import dump, hexdump
+
+from aiocflib.crtp.crtpstack import CRTPPacket, CRTPPort
 
 from .base import MiddlewareBase
 from .registry import register
 
-
 try:
-    from colorama import init, Fore, Back, Style
+    from colorama import Back, Fore, Style, init
 
     _has_colors = True
 except ImportError:
@@ -19,7 +19,7 @@ except ImportError:
         def __getattr__(self, attr):
             return ""
 
-    Fore = Back = Style = Unstyled()
+    Fore = Back = Style = Unstyled()  # ty:ignore[invalid-assignment]
 
     def init():
         pass

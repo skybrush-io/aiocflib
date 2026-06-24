@@ -1,24 +1,24 @@
 """Asynchronous USB driver for the Crazyflie."""
 
-from anyio import create_memory_object_stream, to_thread
-from anyio.streams.stapled import StapledObjectStream
 from contextlib import AsyncExitStack
 from functools import partial
+from types import TracebackType
 
 import usb
+from anyio import create_memory_object_stream, to_thread
+from anyio.streams.stapled import StapledObjectStream
 
-from aiocflib.utils.concurrency import Full, ThreadContext
 from aiocflib.errors import NotFoundError
+from aiocflib.utils.concurrency import Full, ThreadContext
 from aiocflib.utils.usb import (
+    USBDevice,
+    USBError,
     claim_device,
     find_devices,
     is_pyusb1,
     release_device,
     send_vendor_setup,
-    USBDevice,
-    USBError,
 )
-
 
 __author__ = "CollMot Robotics Ltd"
 __all__ = ("CfUsb",)
@@ -64,6 +64,7 @@ class CfUsb:
     """
 
     _handle: USBDevice | None
+    _exit_stack: AsyncExitStack | None
 
     @classmethod
     async def detect_all(cls):
@@ -112,7 +113,7 @@ class CfUsb:
         )
         self._sender_thread_context = ThreadContext.create_worker()
 
-        self._exit_stack = None  # type: Optional[AsyncExitStack]
+        self._exit_stack = None
         self._version = None
 
     async def get_serial(self) -> str:
@@ -156,10 +157,15 @@ class CfUsb:
 
         return _CfUsbCommunicator(sender, receiver)
 
-    async def __aexit__(self, exc_type, exc_value, tb) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool | None:
         assert self._exit_stack is not None
         try:
-            return await self._exit_stack.__aexit__(exc_type, exc_value, tb)
+            return await self._exit_stack.__aexit__(exc_type, exc_val, exc_tb)
         finally:
             self._exit_stack = None
 

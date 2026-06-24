@@ -1,25 +1,27 @@
 """Superclass for devices that use the CRTP protocol for communication."""
 
-from anyio import move_on_after
+from collections.abc import AsyncIterable, Iterable
 from contextlib import AsyncExitStack
 from sys import exc_info
-from collections.abc import AsyncIterable, Iterable
+from types import TracebackType
 
-from .crtpstack import (
-    CRTPDispatcher,
-    CRTPPacket,
-    CRTPCommandLike,
-    CRTPDataLike,
-    CRTPPortLike,
-)
-from .drivers import CRTPDriver
+from anyio import move_on_after
 
 from aiocflib.errors import TimeoutError
 from aiocflib.utils.concurrency import (
-    create_daemon_task_group,
     DaemonTaskGroup,
     TaskStartedNotifier,
+    create_daemon_task_group,
 )
+
+from .crtpstack import (
+    CRTPCommandLike,
+    CRTPDataLike,
+    CRTPDispatcher,
+    CRTPPacket,
+    CRTPPortLike,
+)
+from .drivers import CRTPDriver
 
 __all__ = ("CRTPDevice",)
 
@@ -65,11 +67,16 @@ class CRTPDevice:
 
         return self
 
-    async def __aexit__(self, exc_type, exc_value, tb) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool | None:
         assert self._exit_stack is not None
         exit_stack = self._exit_stack
         self._exit_stack = None
-        return await exit_stack.__aexit__(exc_type, exc_value, tb)
+        return await exit_stack.__aexit__(exc_type, exc_val, exc_tb)
 
     async def _message_handler(self, driver):
         """Worker task that receives incoming messages from the device and
