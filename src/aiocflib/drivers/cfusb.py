@@ -102,7 +102,7 @@ class CfUsb:
             device: the USB device to use
         """
         self._device = device
-        self._in_queue = StapledObjectStream(*create_memory_object_stream(256))
+        self._in_queue = StapledObjectStream(*create_memory_object_stream[bytes](256))
         self._use_crtp_to_usb = bool(crtp_to_usb)
 
         self._receiver_thread_context = ThreadContext.create_reader(
@@ -110,6 +110,7 @@ class CfUsb:
             self._in_queue,
             setup=self._configure_device,
             teardown=self._teardown_device,
+            skip=None,
         )
         self._sender_thread_context = ThreadContext.create_worker()
 
@@ -276,7 +277,7 @@ class CfUsb:
             self._handle = None
             self._version = None
 
-    def _set_crtp_to_usb(self, value):
+    def _set_crtp_to_usb(self, value: bool) -> None:
         send_vendor_setup(self._handle, 0x01, 0x01, int(bool(value)))
 
 

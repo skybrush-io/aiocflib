@@ -4,10 +4,16 @@ arguments.
 """
 
 from contextlib import asynccontextmanager
+from typing import Protocol, runtime_checkable
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.crtp.drivers.base import CRTPDriver
 from aiocflib.utils.concurrency import ObservableValue
+
+
+@runtime_checkable
+class CRTPDriverWithMiddleware(Protocol):
+    wrapped: CRTPDriver
 
 
 class MiddlewareBase(CRTPDriver):

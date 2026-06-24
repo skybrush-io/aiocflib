@@ -115,7 +115,7 @@ class VariableType(IntEnum):
             return VariableType(value)
 
     @property
-    def aliases(self) -> tuple[str]:
+    def aliases(self) -> tuple[str, ...]:
         """Returns the registered type aliases of this type."""
         return (_type_properties[self][0],) + _type_properties[self][2]
 

@@ -68,7 +68,7 @@ class SITL:
         finally:
             self._exit_stack = None
 
-    async def _receive_bytes(self, client: BufferedByteReceiveStream) -> array | None:
+    async def _receive_bytes(self, client: BufferedByteReceiveStream) -> bytes:
         """Receives some data from the SITL connection in a synchronous manner.
 
         Parameters:
@@ -95,7 +95,7 @@ class SITL:
         """
         length = len(data)
         assert length <= 64
-        await client.send_all(bytes((length,)) + data)
+        await client.send(bytes((length,)) + data)
 
 
 class _SITLCommunicator:

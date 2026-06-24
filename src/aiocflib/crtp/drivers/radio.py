@@ -409,10 +409,11 @@ class RadioDriver(CRTPDriver):
             list is returned for interfaces that do not support scanning
         """
         devices = await Crazyradio.detect_all()
-        results: list[str] = await gather(
-            (cls._scan_single_interface, device, address) for device in devices
+        results: list[list[str]] = await gather(
+            partial(cls._scan_single_interface, device, address) for device in devices
         )
-        return sum(results, [])
+        empty_list: list[str] = []
+        return sum(results, empty_list)
 
     async def use_safe_link(self) -> None:
         """Instructs the driver to start using safe-link mode to ensure
@@ -446,7 +447,7 @@ class RadioDriver(CRTPDriver):
         async with radio as device:
             return await device.scan(address=address)
 
-    async def _safe_link_supervisor(self, radio: Crazyradio) -> None:
+    async def _safe_link_supervisor(self, radio: _CfRadioCommunicator) -> None:
         """Worker task that ensures that the radio is in safe link mode when it
         should be in safe link mode.
         """
@@ -459,7 +460,7 @@ class RadioDriver(CRTPDriver):
                     if not success:
                         await sleep(0.25)
 
-    async def _try_to_acquire_safe_link_mode(self, radio: Crazyradio):
+    async def _try_to_acquire_safe_link_mode(self, radio: _CfRadioCommunicator):
         """Attempts to acquire safe link mode on the Crazyflie found at the
         address, channel and data rate that the radio is currently configured to.
 
@@ -476,7 +477,7 @@ class RadioDriver(CRTPDriver):
 
         return False
 
-    async def _worker(self, radio: Crazyradio) -> None:
+    async def _worker(self, radio: _CfRadioCommunicator) -> None:
         """Worker task that runs continuously and handles the sending and
         receiving of packets between a given Crazyradio instance and a single
         Crazyflie (or other CRTP device).
@@ -539,7 +540,7 @@ class RadioDriver(CRTPDriver):
                     except WouldBlock:
                         outbound_packet = null_packet
                 continue
-            elif action > 0:
+            elif isinstance(action, (int, float)) and action > 0:
                 # Wait a bit before resending. If the packet that we are trying
                 # to send is a filler (null) packet, poll the outbound packet
                 # queue after the delay and check whether we can send something

@@ -11,6 +11,7 @@ from functools import total_ordering, wraps
 from sys import exc_info
 from types import TracebackType
 from typing import TypeAlias
+from collections.abc import Awaitable, Callable
 
 from anyio import Lock, to_thread
 
@@ -483,7 +484,9 @@ class Crazyradio:
             self._set_ard_bytes(32)
             self._set_ack_enable(True)
 
-    def _teardown_device(self, exc_type, exc_value, tb):
+    def _teardown_device(
+        self, exc_type: type[BaseException], exc_value: BaseException, tb: TracebackType
+    ):
         """Tears down the connection to the USB device when the worker thread
         exits.
 
@@ -494,13 +497,6 @@ class Crazyradio:
         self._current_configuration = None
         self._current_data_rate = None
         self._version = None
-
-        try:
-            if self._use_crtp_to_usb:
-                self._set_crtp_to_usb(False)
-        except Exception:
-            # maybe the device was disconnected already?
-            pass
 
         try:
             release_device(self._handle)
@@ -852,6 +848,11 @@ class _CfRadioCommunicator:
 
     This is an internal class; you do not need to construct it yourself.
     """
+
+    configure_send_and_receive_bytes: Callable[
+        [RadioConfiguration, bytes], Awaitable[Acknowledgment | None]
+    ]
+    send_and_receive_bytes: Callable[[bytes], Awaitable[Acknowledgment | None]]
 
     def __init__(self, sender, radio: Crazyradio):
         """Constructor.

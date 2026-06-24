@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import IntEnum
 from errno import EIO
@@ -7,7 +8,6 @@ from typing import (
     ClassVar,
     cast,
 )
-from collections.abc import Iterable
 
 from aiocflib.crtp.crtpstack import MemoryType
 
@@ -61,7 +61,7 @@ class LighthouseBsGeometry:
             len(row) == 3 for row in obj["rotation"]
         )
         return cls(
-            origin=tuple(obj["origin"]),  # type: ignore
+            origin=tuple(obj["origin"]),
             rotation_matrix=tuple(tuple(row) for row in obj["rotation"]),  # type: ignore
             valid=True,
         )
@@ -267,7 +267,7 @@ class LighthouseBsCalibration:
         assert len(obj["sweeps"]) == 2
         return cls(
             uid=int(obj["uid"]),
-            sweeps=tuple(  # type: ignore
+            sweeps=tuple(
                 LighthouseCalibrationSweep.from_json(item) for item in obj["sweeps"]
             ),
             valid=True,
@@ -663,8 +663,9 @@ class Lighthouse:
 
 
 async def test():
-    from aiocflib.utils.usb import use_libusb_package
     from pprint import pprint
+
+    from aiocflib.utils.usb import use_libusb_package
 
     use_libusb_package()
 
@@ -696,8 +697,9 @@ async def test():
 
 
 if __name__ == "__main__":
-    from aiocflib.crtp import init_drivers
     import trio
+
+    from aiocflib.crtp import init_drivers
 
     init_drivers()
     try:

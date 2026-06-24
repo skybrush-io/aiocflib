@@ -405,11 +405,11 @@ class CRTPDispatcher:
         if predicate:
 
             def matcher(packet: CRTPPacket) -> None:
-                if predicate(packet):  # type: ignore
+                if predicate(packet):
                     value.set(packet)
 
         else:
-            matcher = value.set  # type: ignore
+            matcher = value.set
 
         with self.registered(matcher, port=port):
             yield value

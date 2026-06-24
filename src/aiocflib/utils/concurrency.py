@@ -3,7 +3,6 @@
 from collections.abc import Awaitable, Callable, Generator, Iterable
 from contextlib import contextmanager
 from functools import partial
-from inspect import iscoroutinefunction
 from queue import Full, Queue
 from sys import exc_info, version_info
 from types import TracebackType
@@ -23,7 +22,7 @@ from anyio import (
     from_thread,
     to_thread,
 )
-from anyio.abc import TaskGroup
+from anyio.abc import ObjectStream, TaskGroup
 from outcome import capture
 
 __all__ = (
@@ -151,47 +150,40 @@ create_daemon_task_group = DaemonTaskGroup
 
 
 async def _gather_execute(
-    func: Callable[..., Awaitable[T]], args: Any, result: list[T], index: int
+    func: Callable[[], Awaitable[T]], result: list[T], index: int
 ) -> None:
-    result[index] = await func(*args)
+    result[index] = await func()
 
 
 async def _gather_execute_limited(
     limiter: CapacityLimiter,
-    func: Callable[..., Awaitable[T]],
-    args: Any,
+    func: Callable[[], Awaitable[T]],
     result: list[T],
     index: int,
 ):
     async with limiter:
-        result[index] = await func(*args)
+        result[index] = await func()
 
 
 async def gather(
-    funcs: Iterable[Callable[[], T] | tuple[Callable[..., T], ...]],
+    funcs: Iterable[Callable[[], Awaitable[T]]],
     limiter: CapacityLimiter | int | None = None,
 ) -> list[T]:
-    to_execute = [
-        (func, ()) if callable(func) else (func[0], func[1:]) for func in funcs
-    ]
     result: list[T | None] = []
 
     if isinstance(limiter, int):
         limiter = CapacityLimiter(limiter)
 
-    run: Callable[..., Awaitable[Any]] = (
+    run = (
         _gather_execute
         if limiter is None
         else partial(_gather_execute_limited, limiter)
     )
 
     async with create_task_group() as group:
-        for func, args in to_execute:
-            if iscoroutinefunction(func):
-                result.append(None)
-                group.start_soon(run, func, args, result, len(result) - 1)
-            else:
-                result.append(func(*args))  # ty:ignore[call-top-callable, invalid-argument-type]
+        for func in funcs:
+            result.append(None)
+            group.start_soon(run, func, result, len(result) - 1)
 
     # At this point all None instances from result should be gone
     return cast(list[T], result)
@@ -292,8 +284,16 @@ class ThreadContext(Generic[T]):
     kills the thread upon exiting the context.
     """
 
-    #: Type alias for the target function of a ThreadContext
     Target: TypeAlias = Callable[[Queue, Callable[[Any], None]], None]
+    """Type alias for the target function of a ThreadContext."""
+
+    SetupFunc: TypeAlias = Callable[[], None]
+    """Type alias for the setup function of a ThreadContext."""
+
+    TeardownFunc: TypeAlias = Callable[
+        [type[BaseException], BaseException, TracebackType], None
+    ]
+    """Type alias for the teardown function of a ThreadContext."""
 
     _queue: Queue | None
     _task_group: TaskGroup | None
@@ -301,8 +301,15 @@ class ThreadContext(Generic[T]):
 
     @classmethod
     def create_reader(
-        cls, reader, queue_to_caller, *, setup=None, teardown=None, skip=None, **kwds
-    ):
+        cls,
+        reader: Callable[[], T],
+        queue_to_caller: ObjectStream[T],
+        *,
+        setup: SetupFunc | None = None,
+        teardown: TeardownFunc | None = None,
+        skip: T | None = None,
+        **kwds,
+    ) -> "ThreadContext":
         """Convenience constructor for a common use-case: the thread is
         executing a blocking reader function in an infinite loop and sends the
         return values of the function in a queue back to the caller.
@@ -327,7 +334,7 @@ class ThreadContext(Generic[T]):
         constructor.
         """
 
-        def respond_from_reader(value: Any) -> None:
+        def respond_from_reader(value: T) -> None:
             from_thread.run(queue_to_caller.send, value)
 
         def reader_thread(queue: Queue, on_started: Callable[[Any], None]) -> None:
@@ -349,12 +356,22 @@ class ThreadContext(Generic[T]):
 
             finally:
                 if teardown:
-                    teardown(*exc_info())
+                    exc_type, exc, exc_tb = exc_info()
+                    assert exc_type is not None
+                    assert exc is not None
+                    assert exc_tb is not None
+                    teardown(exc_type, exc, exc_tb)
 
         return cls(target=reader_thread, **kwds)
 
     @classmethod
-    def create_worker(cls, *, setup=None, teardown=None, **kwds):
+    def create_worker(
+        cls,
+        *,
+        setup: SetupFunc | None = None,
+        teardown: TeardownFunc | None = None,
+        **kwds,
+    ) -> "ThreadContext":
         """Convenience constructor for a common use-case: the thread is
         executing an infinite loop that receives functions to call via a queue,
         executes the functions sequentially, and passes the return values
@@ -417,7 +434,11 @@ class ThreadContext(Generic[T]):
 
             finally:
                 if teardown:
-                    teardown(*exc_info())
+                    exc_type, exc, exc_tb = exc_info()
+                    assert exc_type is not None
+                    assert exc is not None
+                    assert exc_tb is not None
+                    teardown(exc_type, exc, exc_tb)
 
         return cls(target=worker_thread, **kwds)
 

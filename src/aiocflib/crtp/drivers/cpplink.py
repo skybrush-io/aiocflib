@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from anyio import to_thread
-
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
-from collections.abc import Callable
+
+from anyio import to_thread
 
 from aiocflib.crtp.crtpstack import CRTPPacket
 from aiocflib.utils.addressing import CrazyradioAddress, parse_radio_uri
@@ -68,7 +68,7 @@ class CppRadioDriver(CRTPDriver):
             yield self
         finally:
             self._packet_factory = None  # type: ignore
-            self._connection = None  # type: ignore
+            self._connection = None
             # TODO(ntamas): why does connection.close() never return when
             # called on a worker thread???
             # await to_thread.run_sync(connection.close)
@@ -76,7 +76,7 @@ class CppRadioDriver(CRTPDriver):
 
     def __init__(self):
         """Constructor."""
-        self._connection = None  # type: ignore
+        self._connection = None
         self._link_quality = ObservableValue(0.0)
         self._packet_factory = None  # type: ignore
 
