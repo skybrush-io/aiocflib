@@ -92,7 +92,6 @@ class Console:
 
 async def test():
     uri = "radio+log://0/80/2M/E7E7E7E709"
-    # uri = "sitl+log://"
     # uri = "usb+log://0"
 
     async with Crazyflie(uri) as cf:

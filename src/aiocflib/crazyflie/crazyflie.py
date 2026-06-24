@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from anyio import sleep
 from binascii import hexlify
 from typing import TYPE_CHECKING
 
-from aiocflib.bootloader.types import BootloaderCommand
+from anyio import sleep
+
 from aiocflib.bootloader.target import BootloaderTargetType
+from aiocflib.bootloader.types import BootloaderCommand
 from aiocflib.crtp import (
-    CRTPDispatcher,
     CRTPDevice,
+    CRTPDispatcher,
     CRTPDriver,
     CRTPPort,
     LinkControlChannel,
@@ -342,7 +343,6 @@ async def test():
 
     # uri = "cppradio://0/80/2M/E7E7E7E701"
     uri = "radio://0/80/2M/E7E7E7E701"
-    # uri = "sitl://"
     # uri = "usb://0"
 
     if logging:
@@ -416,8 +416,9 @@ async def test():
 
 
 if __name__ == "__main__":
-    from aiocflib.crtp import init_drivers
     import trio
+
+    from aiocflib.crtp import init_drivers
 
     init_drivers()
     try:

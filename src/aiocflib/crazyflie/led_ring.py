@@ -2,10 +2,11 @@
 Crazyflie.
 """
 
-from anyio import sleep
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from enum import IntEnum
-from collections.abc import AsyncIterator
+
+from anyio import sleep
 
 from aiocflib.utils.colors import ColorLike, to_color
 
@@ -132,7 +133,6 @@ async def test():
     from anyio import sleep
 
     uri = "radio+log://0/80/2M/E7E7E7E701"
-    # uri = "sitl+log://"
     # uri = "usb+log://0"
 
     async with Crazyflie(uri, cache="/tmp/cfcache") as cf:
@@ -159,8 +159,9 @@ async def test():
 
 
 if __name__ == "__main__":
-    from aiocflib.crtp import init_drivers
     import trio
+
+    from aiocflib.crtp import init_drivers
 
     init_drivers()
     try:

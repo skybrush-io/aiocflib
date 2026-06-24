@@ -14,7 +14,6 @@ def init_drivers():
     """
     from .cpplink import CppRadioDriver  # noqa
     from .radio import RadioDriver  # noqa
-    from .sitl import SITLDriver  # noqa
     from .usb import USBDriver  # noqa
 
     from ..middleware.log import LoggingMiddleware  # noqa

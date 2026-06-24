@@ -108,7 +108,6 @@ class LoggingMiddleware(MiddlewareBase):
     def _init(self) -> None:
         from aiocflib.crtp.drivers.cpplink import CppRadioDriver
         from aiocflib.crtp.drivers.radio import RadioDriver
-        from aiocflib.crtp.drivers.sitl import SITLDriver
         from aiocflib.crtp.drivers.usb import USBDriver
 
         self._num_null_packets = 0
@@ -123,8 +122,6 @@ class LoggingMiddleware(MiddlewareBase):
         elif isinstance(driver, CppRadioDriver):
             address = driver.address
             abbreviation = dump(address[-2:], sep="") if address else "rdio"
-        elif isinstance(driver, SITLDriver):
-            abbreviation = "sitl"
         else:
             abbreviation = "????"
 
