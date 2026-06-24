@@ -515,10 +515,6 @@ class LogBlock:
         self.id = id
 
         format_strings = [item.fetch_as.struct.format[1:] for item in self._items]
-        if format_strings and isinstance(format_strings[0], bytes):
-            # Python <3.7
-            format_strings = [fmt.decode("ascii") for fmt in format_strings]  # type: ignore
-
         self._struct = Struct("<" + "".join(format_strings))
 
         return self._dispose
