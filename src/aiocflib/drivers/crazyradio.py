@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from array import array
 from binascii import hexlify
-from collections.abc import Iterable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 from enum import IntEnum
 from functools import total_ordering, wraps
 from sys import exc_info
 from types import TracebackType
 from typing import TypeAlias
-from collections.abc import Awaitable, Callable
 
 from anyio import Lock, to_thread
 
@@ -485,7 +484,10 @@ class Crazyradio:
             self._set_ack_enable(True)
 
     def _teardown_device(
-        self, exc_type: type[BaseException], exc_value: BaseException, tb: TracebackType
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        tb: TracebackType | None,
     ):
         """Tears down the connection to the USB device when the worker thread
         exits.

@@ -3,7 +3,6 @@ from __future__ import annotations
 from enum import IntEnum
 from math import ceil
 from struct import Struct
-from typing import cast
 
 from anyio import open_file
 
@@ -421,6 +420,6 @@ class BootloaderTarget:
         on_progress: ProgressHandler | None,
     ) -> CallableProgressHandler | None:
         if isinstance(on_progress, TQDMStyleProgresdhandler):
-            return cast(CallableProgressHandler, on_progress.update)
+            return on_progress.update
         else:
             return on_progress

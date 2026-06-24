@@ -1,7 +1,7 @@
 """Enumeration types related to the bootloader of the Crazyflie."""
 
 from enum import IntEnum
-from typing import TypeAlias, runtime_checkable
+from typing import Protocol, TypeAlias, runtime_checkable
 
 __all__ = (
     "BootloaderCommand",
@@ -66,7 +66,7 @@ _bootloader_protocol_descriptions = {
 }
 
 
-class CallableProgressHandler:
+class CallableProgressHandler(Protocol):
     """Protocol for progress handler functions in BootloaderTarget_."""
 
     def __call__(self, /, count: int) -> None:
@@ -79,7 +79,7 @@ class CallableProgressHandler:
 
 
 @runtime_checkable
-class TQDMStyleProgresdhandler:
+class TQDMStyleProgresdhandler(Protocol):
     """Protocol for progress handler functions in BootloaderTarget_ that are
     compatible with the `tqdm` library.
     """

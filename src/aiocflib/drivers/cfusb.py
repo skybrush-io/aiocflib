@@ -258,7 +258,12 @@ class CfUsb:
         except USBError as ex:
             raise OSError("Error while sending packet") from ex
 
-    def _teardown_device(self, exc_type, exc_value, tb):
+    def _teardown_device(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        tb: TracebackType | None,
+    ):
         """Tears down the connection to the USB device when the worker thread
         exits.
 

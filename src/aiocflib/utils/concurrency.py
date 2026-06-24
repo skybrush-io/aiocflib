@@ -284,7 +284,7 @@ class ThreadContext(Generic[T]):
     """Type alias for the setup function of a ThreadContext."""
 
     TeardownFunc: TypeAlias = Callable[
-        [type[BaseException], BaseException, TracebackType], None
+        [type[BaseException] | None, BaseException | None, TracebackType | None], None
     ]
     """Type alias for the teardown function of a ThreadContext."""
 
@@ -428,9 +428,6 @@ class ThreadContext(Generic[T]):
             finally:
                 if teardown:
                     exc_type, exc, exc_tb = exc_info()
-                    assert exc_type is not None
-                    assert exc is not None
-                    assert exc_tb is not None
                     teardown(exc_type, exc, exc_tb)
 
         return cls(target=worker_thread, **kwds)
