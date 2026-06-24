@@ -254,9 +254,9 @@ class Parameters(CrazyflieSubsystem):
 
     _cache: TOCCache | None
 
-    _values: dict[str, int | float]
-    _variables: list[ParameterSpecification]
-    _variables_by_name: dict[str, ParameterSpecification]
+    _values: dict[str, int | float] | None = None
+    _variables: list[ParameterSpecification] | None = None
+    _variables_by_name: dict[str, ParameterSpecification] | None = None
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
@@ -268,10 +268,6 @@ class Parameters(CrazyflieSubsystem):
         super().__init__(crazyflie)
         self._cache = crazyflie._get_cache_for("param_toc")
 
-        self._values = None  # type: ignore
-        self._variables = None  # type: ignore
-        self._variables_by_name = None  # type: ignore
-
     def get_port(self) -> CRTPPort:
         return CRTPPort.PARAMETERS
 
@@ -282,9 +278,7 @@ class Parameters(CrazyflieSubsystem):
         Parameters:
             name: the fully-qualified name of the parameter
         """
-        await self.validate()
-
-        parameter = self._variables_by_name[name]
+        parameter = await self._validate_and_get_parameter_spec_by_name(name)
         index = parameter.id
 
         response = await self._crazyflie.run_command(
@@ -321,6 +315,7 @@ class Parameters(CrazyflieSubsystem):
             else None
         )
         if value is None:
+            assert self._values is not None
             value = self._values[name] = await self._fetch(name)
         return value
 
@@ -334,9 +329,7 @@ class Parameters(CrazyflieSubsystem):
         Returns:
             the default value of the parameter
         """
-        await self.validate()
-
-        parameter = self._variables_by_name[name]
+        parameter = await self._validate_and_get_parameter_spec_by_name(name)
         if parameter.read_only:
             raise RuntimeError("read-only parameters have no default value")
 
@@ -375,9 +368,7 @@ class Parameters(CrazyflieSubsystem):
             an object storing whether the parameter is persisted, and if so,
             what is its default and persisted value
         """
-        await self.validate()
-
-        parameter = self._variables_by_name[name]
+        parameter = await self._validate_and_get_parameter_spec_by_name(name)
         index = parameter.id
         response = await self._crazyflie.run_command(
             port=CRTPPort.PARAMETERS,
@@ -446,6 +437,7 @@ class Parameters(CrazyflieSubsystem):
         Returns:
             True if the parameter is known to the Crazyflie, False otherwise
         """
+        assert self._variables_by_name is not None
         return name in self._variables_by_name
 
     async def persist(self, name: str) -> None:
@@ -455,9 +447,7 @@ class Parameters(CrazyflieSubsystem):
         Parameters:
             name: the fully-qualified name of the parameter
         """
-        await self.validate()
-
-        parameter = self._variables_by_name[name]
+        parameter = await self._validate_and_get_parameter_spec_by_name(name)
         index = parameter.id
 
         response = await self._crazyflie.run_command(
@@ -480,9 +470,7 @@ class Parameters(CrazyflieSubsystem):
             value: the new value of the parameter
         """
         # TODO(ntamas): make it possible to set by name if we have no TOC
-        await self.validate()
-
-        parameter = self._variables_by_name[name]
+        parameter = await self._validate_and_get_parameter_spec_by_name(name)
         if parameter.read_only:
             raise AttributeError(f"{name} is read only")
 
@@ -500,6 +488,7 @@ class Parameters(CrazyflieSubsystem):
         if len(response) < 1:
             raise ValueError("invalid response for parameter setting")
 
+        assert self._values is not None
         self._values[name] = parameter.parse_value(response)
 
     @asynccontextmanager
@@ -593,9 +582,7 @@ class Parameters(CrazyflieSubsystem):
         Returns:
             the current value of the parameter
         """
-        await self.validate()
-
-        parameter = self._variables_by_name[name]
+        parameter = await self._validate_and_get_parameter_spec_by_name(name)
         index = parameter.id
 
         response = await self._crazyflie.run_command(
@@ -666,3 +653,18 @@ class Parameters(CrazyflieSubsystem):
         )
         by_name = {parameter.full_name: parameter for parameter in parameters}
         return parameters, by_name
+
+    async def _validate_and_get_parameter_spec_by_name(
+        self, name: str
+    ) -> ParameterSpecification:
+        """Returns the specification of the parameter with the given name.
+
+        Parameters:
+            name: the fully-qualified name of the parameter to retrieve
+
+        Returns:
+            the specification of the parameter with the given name
+        """
+        await self.validate()
+        assert self._variables_by_name is not None
+        return self._variables_by_name[name]

@@ -98,7 +98,7 @@ class AwaitableValue(Generic[T]):
         it is populated.
         """
         await self._event.wait()
-        return self._value  # type: ignore
+        return self._value  # ty:ignore[invalid-return-type]
 
 
 class DaemonTaskGroup(TaskGroup):
@@ -288,7 +288,7 @@ class ThreadContext(Generic[T]):
     ]
     """Type alias for the teardown function of a ThreadContext."""
 
-    _queue: Queue | None
+    _queue: Queue[T | None] | None
     _task_group: TaskGroup | None
     _value: AwaitableValue[T] | None
 
@@ -435,7 +435,9 @@ class ThreadContext(Generic[T]):
 
         return cls(target=worker_thread, **kwds)
 
-    def __init__(self, target: Target, *, queue_factory: Callable[[], Queue] = Queue):
+    def __init__(
+        self, target: Target, *, queue_factory: Callable[[], Queue[T | None]] = Queue
+    ):
         """Constructor.
 
         Parameters:
@@ -456,13 +458,13 @@ class ThreadContext(Generic[T]):
         self._queue_factory = queue_factory
         self._target = target
 
-    def _notify_thread_started(self, value: Any = None) -> None:
+    def _notify_thread_started(self, value: T | None = None) -> None:
         if self._value is None:
             raise RuntimeError("self._value must not be None here")
         else:
             from_thread.run_sync(self._value.set, value)
 
-    async def __aenter__(self) -> Callable[[T], None]:
+    async def __aenter__(self) -> T | Callable[[T], None]:
         if self._task_group is not None:
             raise RuntimeError("thread is already running")
 
@@ -488,7 +490,7 @@ class ThreadContext(Generic[T]):
                 await self._task_group.__aexit__(*exc_info())
                 self._task_group = None
 
-        return result if result is not None else self._queue.put_nowait  # type: ignore
+        return result if result is not None else self._queue.put_nowait
 
     async def __aexit__(
         self,

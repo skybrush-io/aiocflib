@@ -1,10 +1,15 @@
 """Enumeration types related to the bootloader of the Crazyflie."""
 
-from collections.abc import Callable
 from enum import IntEnum
-from typing import TypeAlias
+from typing import TypeAlias, runtime_checkable
 
-__all__ = ("BootloaderProtocolVersion",)
+__all__ = (
+    "BootloaderCommand",
+    "BootloaderProtocolVersion",
+    "ProgressHandler",
+    "TQDMStyleProgresdhandler",
+    "CallableProgressHandler",
+)
 
 
 class BootloaderCommand(IntEnum):
@@ -61,5 +66,40 @@ _bootloader_protocol_descriptions = {
 }
 
 
-#: Type alias for progress handler functions in BootloaderTarget_
-ProgressHandler: TypeAlias = Callable[[float], None]
+class CallableProgressHandler:
+    """Protocol for progress handler functions in BootloaderTarget_."""
+
+    def __call__(self, /, count: int) -> None:
+        """Method that must be implemented by progress handler functions.
+
+        Parameters:
+            count: the number of bytes that have been processed so far
+        """
+        ...
+
+
+@runtime_checkable
+class TQDMStyleProgresdhandler:
+    """Protocol for progress handler functions in BootloaderTarget_ that are
+    compatible with the `tqdm` library.
+    """
+
+    def reset(self, /, count: int) -> None:
+        """Method that must be implemented by progress handler functions.
+
+        Parameters:
+            count: the total number of bytes to process
+        """
+        ...
+
+    def update(self, /, count: int) -> None:
+        """Method that must be implemented by progress handler functions.
+
+        Parameters:
+            count: the number of bytes that have been processed so far
+        """
+        ...
+
+
+ProgressHandler: TypeAlias = CallableProgressHandler | TQDMStyleProgresdhandler
+"""Type alias for progress handler functions in BootloaderTarget_"""

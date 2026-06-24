@@ -30,7 +30,7 @@ class CRTPDevice:
     """Superclass for devices that use the CRTP protocol for communication."""
 
     _dispatcher: CRTPDispatcher
-    _driver: CRTPDriver
+    _driver: CRTPDriver | None
     _exit_stack: AsyncExitStack | None
     _task_group: DaemonTaskGroup | None
     _uri: str
@@ -46,7 +46,7 @@ class CRTPDevice:
         self._uri = uri
         self._dispatcher = CRTPDispatcher()
 
-        self._driver = None  # type: ignore
+        self._driver = None
         self._task_group = None
         self._exit_stack = None
 
@@ -109,7 +109,7 @@ class CRTPDevice:
                 notify_started()
                 await self._message_handler(driver)
             finally:
-                self._driver = None  # type: ignore
+                self._driver = None
 
     async def _prepare_link(self, driver: CRTPDriver) -> None:
         """Performs initial setup on the CRTP driver before the connection is
@@ -206,6 +206,8 @@ class CRTPDevice:
 
         response = None
 
+        assert self._driver is not None
+
         # Send the packet and wait for the corresponding response
         with self.dispatcher.wait_for_next_packet(
             matching_response, port=port
@@ -250,6 +252,7 @@ class CRTPDevice:
             channel: the CRTP channel to send the packet to
             data: the body of the request packet
         """
+        assert self._driver is not None
         packet = CRTPPacket(port=port, channel=channel)
         packet.data = _handle_data_argument(data)
         await self._driver.send_packet(packet)

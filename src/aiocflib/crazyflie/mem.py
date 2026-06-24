@@ -7,7 +7,7 @@ from enum import IntEnum
 from errno import ENODATA
 from struct import Struct
 from struct import error as StructError
-from typing import ClassVar
+from typing import ClassVar, Protocol
 
 from aiocflib.crtp import CRTPPort, MemoryType
 from aiocflib.errors import error_to_string
@@ -80,9 +80,15 @@ class MemoryElement:
             raise ValueError("invalid memory description") from None
 
 
-_memory_handler_registry: Registry[
-    Callable[[MemoryElement, Crazyflie], "MemoryHandler"]
-] = Registry()
+class MemoryHandlerFactory(Protocol):
+    """Protocol for a factory function that constructs a memory handler for a
+    given memory element.
+    """
+
+    def __call__(self, element: MemoryElement, owner: Crazyflie) -> "MemoryHandler": ...
+
+
+_memory_handler_registry: Registry[MemoryHandlerFactory] = Registry()
 
 
 class MemoryHandler(ABC):
@@ -107,7 +113,7 @@ class MemoryHandler(ABC):
         """
         key = str(element.type)
         cls = _memory_handler_registry.find(key, default=MemoryHandlerBase)
-        return cls(element, owner=owner)  # type: ignore
+        return cls(element, owner=owner)
 
     @abstractmethod
     async def dump(self, strip: bool = False) -> bytes:

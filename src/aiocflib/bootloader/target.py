@@ -3,12 +3,19 @@ from __future__ import annotations
 from enum import IntEnum
 from math import ceil
 from struct import Struct
+from typing import cast
 
 from anyio import open_file
 
 from aiocflib.utils import chunkify
 
-from .types import BootloaderCommand, BootloaderProtocolVersion, ProgressHandler
+from .types import (
+    BootloaderCommand,
+    BootloaderProtocolVersion,
+    CallableProgressHandler,
+    ProgressHandler,
+    TQDMStyleProgresdhandler,
+)
 
 __all__ = ("BootloaderTarget", "BootloaderTargetType")
 
@@ -208,9 +215,9 @@ class BootloaderTarget:
         to_read = length if length >= 0 else (self.flash_size - address)
 
         # Special support for tqdm progress bars
-        if hasattr(on_progress, "reset") and hasattr(on_progress, "update"):
-            on_progress.reset(to_read)  # type: ignore
-            on_progress = on_progress.update  # type: ignore
+        if isinstance(on_progress, TQDMStyleProgresdhandler):
+            on_progress.reset(to_read)
+        update_progress = self._get_progress_handler(on_progress)
 
         while to_read > 0:
             page, offset = divmod(address, self.page_size)
@@ -225,8 +232,8 @@ class BootloaderTarget:
             address += bytes_read
             to_read -= bytes_read
 
-            if on_progress:
-                on_progress(bytes_read)
+            if update_progress:
+                update_progress(bytes_read)
 
             if bytes_read < self._READ_FLASH_CHUNK_SIZE:
                 # end of flash
@@ -274,13 +281,13 @@ class BootloaderTarget:
             raise ValueError("write_flash() address must point to the start of a page")
 
         # Special support for tqdm progress bars
-        if hasattr(on_progress, "reset") and hasattr(on_progress, "update"):
-            on_progress.reset(len(data))  # type: ignore
-            on_progress = on_progress.update  # type: ignore
+        if isinstance(on_progress, TQDMStyleProgresdhandler):
+            on_progress.reset(len(data))
+        update_progress = self._get_progress_handler(on_progress)
 
         for start, size in chunkify(0, len(data), step=self.buffer_size):
             await self._fill_buffer_with(
-                data[start : (start + size)], on_progress=on_progress
+                data[start : (start + size)], on_progress=update_progress
             )
             await self._flush_buffer_to_flash(address, size)
 
@@ -315,7 +322,7 @@ class BootloaderTarget:
         data: bytes,
         *,
         validate: bool = False,
-        on_progress: ProgressHandler | None = None,
+        on_progress: CallableProgressHandler | None = None,
     ) -> None:
         """Fills the upload buffer on the target with the given data.
 
@@ -408,3 +415,12 @@ class BootloaderTarget:
             raise OSError(f"unknown error (code = {status})")
         elif not done:
             raise OSError("target says write is not done but returned no error code")
+
+    @staticmethod
+    def _get_progress_handler(
+        on_progress: ProgressHandler | None,
+    ) -> CallableProgressHandler | None:
+        if isinstance(on_progress, TQDMStyleProgresdhandler):
+            return cast(CallableProgressHandler, on_progress.update)
+        else:
+            return on_progress

@@ -375,6 +375,7 @@ class LogBlock:
     def add_variable(self, name: str, type: int | VariableType | None = None) -> None:
         """Adds a new variable to this logging block."""
         toc = self._owner._variables_by_name
+        assert toc is not None
         try:
             spec = toc[name]
         except KeyError:
@@ -548,7 +549,8 @@ class LogBlock:
         Returns:
             the decoded values
         """
-        return self._struct.unpack_from(data, offset=4)  # type: ignore
+        assert self._struct is not None
+        return self._struct.unpack_from(data, offset=4)
 
     async def _dispose(self):
         """Removes this log block from the Crazyflie."""
@@ -802,8 +804,8 @@ class Log(CrazyflieSubsystem):
     _cache: TOCCache | None
     _operation_lock: Lock
 
-    _variables: list[VariableSpecification]
-    _variables_by_name: dict[str, VariableSpecification]
+    _variables: list[VariableSpecification] | None = None
+    _variables_by_name: dict[str, VariableSpecification] | None = None
 
     def __init__(self, crazyflie: Crazyflie):
         """Constructor.
@@ -814,12 +816,7 @@ class Log(CrazyflieSubsystem):
         """
         super().__init__(crazyflie)
         self._cache = crazyflie._get_cache_for("log_toc")
-
         self._block_id_generator = count()
-
-        self._variables = None  # type: ignore
-        self._variables_by_name = None  # type: ignore
-
         self._operation_lock = Lock()
 
     def get_port(self) -> CRTPPort:

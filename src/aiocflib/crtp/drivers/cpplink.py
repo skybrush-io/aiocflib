@@ -48,7 +48,7 @@ class CppRadioDriver(CRTPDriver):
     """
 
     _connection: cflinkcpp.Connection | None = None
-    _packet_factory: Callable[[], cflinkcpp.Packet]
+    _packet_factory: Callable[[], cflinkcpp.Packet] | None = None
 
     @asynccontextmanager
     async def _connected_to(self, uri: str):
@@ -67,7 +67,7 @@ class CppRadioDriver(CRTPDriver):
             self._packet_factory = cflinkcpp.Packet
             yield self
         finally:
-            self._packet_factory = None  # type: ignore
+            self._packet_factory = None
             self._connection = None
             # TODO(ntamas): why does connection.close() never return when
             # called on a worker thread???
@@ -78,7 +78,7 @@ class CppRadioDriver(CRTPDriver):
         """Constructor."""
         self._connection = None
         self._link_quality = ObservableValue(0.0)
-        self._packet_factory = None  # type: ignore
+        self._packet_factory = None
 
     @property
     def address(self) -> CrazyradioAddress | None:
@@ -136,6 +136,7 @@ class CppRadioDriver(CRTPDriver):
             packet: the packet to send
         """
         assert self._connection is not None
+        assert self._packet_factory is not None
         native_packet = self._packet_factory()
         native_packet.port = packet.port
         native_packet.channel = packet.channel

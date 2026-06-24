@@ -62,7 +62,7 @@ class LighthouseBsGeometry:
         )
         return cls(
             origin=tuple(obj["origin"]),
-            rotation_matrix=tuple(tuple(row) for row in obj["rotation"]),  # type: ignore
+            rotation_matrix=tuple(tuple(row) for row in obj["rotation"]),  # ty:ignore[invalid-argument-type]
             valid=True,
         )
 
