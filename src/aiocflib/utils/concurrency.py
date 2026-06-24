@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable, Generator, Iterable
 from contextlib import contextmanager
 from functools import partial
 from queue import Full, Queue
-from sys import exc_info, version_info
+from sys import exc_info
 from types import TracebackType
 from typing import (
     Any,
@@ -23,6 +23,7 @@ from anyio import (
     to_thread,
 )
 from anyio.abc import ObjectStream, TaskGroup
+from exceptiongroup import BaseExceptionGroup
 from outcome import capture
 
 __all__ = (
@@ -38,13 +39,6 @@ T = TypeVar("T")
 
 TaskStartedNotifier = Callable[[], None]
 
-has_exceptiongroups = True
-if version_info < (3, 11):
-    try:
-        from exceptiongroup import BaseExceptionGroup
-    except ImportError:
-        has_exceptiongroups = False
-
 
 @contextmanager
 def collapse_excgroups() -> Generator[None, None, None]:
@@ -55,9 +49,8 @@ def collapse_excgroups() -> Generator[None, None, None]:
     try:
         yield
     except BaseException as exc:
-        if has_exceptiongroups:
-            while isinstance(exc, BaseExceptionGroup) and len(exc.exceptions) == 1:
-                exc = exc.exceptions[0]
+        while isinstance(exc, BaseExceptionGroup) and len(exc.exceptions) == 1:
+            exc = exc.exceptions[0]
 
         raise exc from None
 

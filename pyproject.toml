@@ -13,6 +13,7 @@ dependencies = [
   "hexdump>=3.3",
   "colour>=0.1.5",
   "exceptiongroup>=1.2.0 ; python_version < '3.11'",
+  "exceptiongroup>=1.3.0",
 ]
 
 [dependency-groups]

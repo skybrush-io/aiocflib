@@ -1,6 +1,10 @@
 version = 1
 revision = 3
 requires-python = ">=3.10"
+resolution-markers = [
+    "python_full_version >= '3.11'",
+    "python_full_version < '3.11'",
+]
 
 [[package]]
 name = "aiocflib"
@@ -10,7 +14,7 @@ dependencies = [
     { name = "anyio" },
     { name = "colorama" },
     { name = "colour" },
-    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
+    { name = "exceptiongroup" },
     { name = "hexdump" },
     { name = "outcome" },
     { name = "pyusb" },
@@ -33,6 +37,7 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.1.0" },
     { name = "colorama", specifier = ">=0.4.6" },
     { name = "colour", specifier = ">=0.1.5" },
+    { name = "exceptiongroup", specifier = ">=1.3.0" },
     { name = "exceptiongroup", marker = "python_full_version < '3.11'", specifier = ">=1.2.0" },
     { name = "hexdump", specifier = ">=3.3" },
     { name = "outcome", specifier = ">=1.3.0.post0" },
