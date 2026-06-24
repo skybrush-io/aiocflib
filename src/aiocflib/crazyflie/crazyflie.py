@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from .motors import Motors
     from .param import Parameters
     from .platform import Platform
+    from .supervisor import Supervisor
 
 
 class Crazyflie(CRTPDevice):
@@ -100,6 +101,7 @@ class Crazyflie(CRTPDevice):
         from .motors import Motors
         from .param import Parameters
         from .platform import Platform
+        from .supervisor import Supervisor
 
         self._app_channel = AppChannel(self)
         self._commander = Commander(self)
@@ -113,6 +115,7 @@ class Crazyflie(CRTPDevice):
         self._motors = Motors(self)
         self._parameters = Parameters(self)
         self._platform = Platform(self)
+        self._supervisor = Supervisor(self)
 
     def _get_cache_for(self, namespace: str) -> TOCCache | None:
         """Returns a namespaced TOC cache instance to be used by submodules
@@ -215,6 +218,11 @@ class Crazyflie(CRTPDevice):
     def platform(self) -> Platform:
         """The platform-related message handler module of the Crazyflie."""
         return self._platform
+
+    @property
+    def supervisor(self) -> Supervisor:
+        """The supervisor subsystem of the Crazyflie."""
+        return self._supervisor
 
     @property
     def uri(self):

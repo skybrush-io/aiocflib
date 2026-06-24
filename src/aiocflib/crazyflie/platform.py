@@ -1,9 +1,10 @@
 """Classes related to handling platform service messages of a Crazyflie."""
 
+from collections.abc import AsyncIterable
 from enum import IntEnum
 from typing import Any
 
-from aiocflib.crtp import CRTPPort, LinkControlChannel
+from aiocflib.crtp import CRTPPacket, CRTPPort, LinkControlChannel
 
 from .crazyflie import Crazyflie
 
@@ -152,7 +153,7 @@ class Platform:
         )
         return response.startswith(b"Bitcraze Crazyflie")
 
-    async def packets(self):
+    async def packets(self) -> AsyncIterable[CRTPPacket]:
         """Async generator that yields platform service messages from a
         Crazyflie.
         """
