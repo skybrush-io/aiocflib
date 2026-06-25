@@ -75,7 +75,11 @@ class Supervisor(CrazyflieSubsystem):
         return CRTPPort.SUPERVISOR
 
     async def arm(self) -> None:
-        """Arms the Crazyflie."""
+        """Arms the Crazyflie.
+
+        Raises:
+            RuntimeError: if the Crazyflie failed to arm
+        """
         return await self.arm_or_disarm(arm=True)
 
     async def arm_or_disarm(self, arm: bool) -> None:
@@ -89,8 +93,7 @@ class Supervisor(CrazyflieSubsystem):
         )
         if len(response) < 1:
             raise RuntimeError(
-                f"Supervisor command {SupervisorCommand.ARM_DISARM} returned "
-                f"an invalid response: {response.hex(' ')}"
+                f"Arming/disarming command returned an invalid response: {response.hex(' ')}"
             )
         if not response[0]:
             raise RuntimeError(
@@ -109,8 +112,63 @@ class Supervisor(CrazyflieSubsystem):
             await self.disarm()
 
     async def disarm(self) -> None:
-        """Disarmd the Crazyflie."""
+        """Disarmd the Crazyflie.
+
+        Raises:
+            RuntimeError: if the Crazyflie failed to disarm
+        """
         return await self.arm_or_disarm(arm=False)
+
+    async def emergency_stop(self) -> None:
+        """Sends an emergency stop command to the Crazyflie.
+
+        This command will immediately stop the motors of the Crazyflie and put it in a
+        safe state. The Crazyflie will not be able to fly again until it is rebooted.
+        """
+        # No response is expected
+        await self._crazyflie.run_command(
+            port=self.get_port(),
+            channel=SupervisorChannel.COMMANDS,
+            data=[SupervisorCommand.EMERGENCY_STOP],
+        )
+
+    async def reset_emergency_stop_watchdog(self) -> None:
+        """Sends a commaan to the Crazyflie to reset the emergency stop watchdog.
+
+        When this packet is received by the Crazyflie at least once, it will expect
+        the watchdog to be reset at least once per second. When such a command is not
+        received again in time, all motors will be stopped.
+        """
+        # No response is expected
+        await self._crazyflie.run_command(
+            port=self.get_port(),
+            channel=SupervisorChannel.COMMANDS,
+            data=[SupervisorCommand.EMERGENCY_STOP_WATCHDOG],
+        )
+
+    async def request_crash_recovery(self) -> None:
+        """Requests the Crazyflie to recover from a crash.
+
+        When the Crazyflie is in a crashed state, it cannot be armed or flown. This
+        command requests the Crazyflie to clear the "crashed" flag in its state if it
+        is not tumbled any more. If the Crazyflie is still tumbled, it will not recover
+        from the crash and the request will fail.
+
+        Raises:
+            RuntimeError: if the Crazyflie failed to recover from a crash
+        """
+        response = await self._crazyflie.run_command(
+            port=self.get_port(),
+            channel=SupervisorChannel.COMMANDS,
+            command=SupervisorCommand.RECOVER_SYSTEM,
+            flip_msb=True,
+        )
+        if len(response) < 1:
+            raise RuntimeError(
+                f"Crash recovery command returned an invalid response: {response.hex(' ')}"
+            )
+        if not response[0]:
+            raise RuntimeError("Failed to recover the Crazyflie from a crash.")
 
     async def can_be_armed(self) -> bool:
         """Returns whether the Crazyflie can be armed."""

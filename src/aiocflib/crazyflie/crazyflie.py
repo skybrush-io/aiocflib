@@ -390,6 +390,8 @@ async def test():
                 f"/!\\ Supervisor state mismatch, individual bits: {bits}, overall state: {state}",
             )
 
+        await cf.supervisor.request_crash_recovery()
+
         with timing("Reading from memory"):
             memory = await cf.memory.find(MemoryType.LED)
             data = b"\xfc\x00" * 8
