@@ -4,6 +4,7 @@ from collections.abc import AsyncIterable, Iterable
 from contextlib import AsyncExitStack
 from sys import exc_info
 from types import TracebackType
+from typing import TypeVar
 
 from anyio import move_on_after
 
@@ -24,6 +25,8 @@ from .crtpstack import (
 from .drivers import CRTPDriver
 
 __all__ = ("CRTPDevice",)
+
+C = TypeVar("C", bound="CRTPDevice")
 
 
 class CRTPDevice:
@@ -50,7 +53,7 @@ class CRTPDevice:
         self._task_group = None
         self._exit_stack = None
 
-    async def __aenter__(self):
+    async def __aenter__(self: C) -> C:
         assert self._exit_stack is None
 
         exit_stack = AsyncExitStack()
@@ -154,6 +157,7 @@ class CRTPDevice:
         channel: int = 0,
         command: CRTPCommandLike | None = None,
         data: CRTPDataLike | None = None,
+        flip_msb: bool = False,
         timeout: float = 0.2,
         attempts: int = 3,
     ) -> bytes:
@@ -175,10 +179,13 @@ class CRTPDevice:
             command: the command byte(s) to insert before the data bytes in
                 the data section of the packet. When this is not `None`, the
                 matching response packet is expected to have the same prefix as
-                the command itself.
+                the command itself (see also the `flip_bits` argument).
             data: the data of the request packet. When a command is present, the
                 command is inserted before the data in the body of the CRTP
                 packet.
+            flip_msb: when the command is not `None` and `flip_bits` is `True`, the
+                MSB of the first command byte is expected to be flipped in the prefix of
+                the response
             timeout: maximum number of seconds to wait for a response
             attempts: maximum number of attempts to send the command and wait
                 for the response
@@ -191,6 +198,12 @@ class CRTPDevice:
             packet = CRTPPacket(port=port, channel=channel)
             request = (encoded_command + bytes(data)) if data else encoded_command
             packet.data = request
+
+            if flip_msb and encoded_command:
+                # Flip the MSB of the first command byte in the expected response
+                encoded_command = (
+                    bytes((encoded_command[0] ^ 0x80,)) + encoded_command[1:]
+                )
 
             def matching_response(packet: CRTPPacket) -> bool:
                 return packet.channel == channel and packet.data.startswith(

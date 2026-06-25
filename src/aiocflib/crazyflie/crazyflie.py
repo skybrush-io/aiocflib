@@ -369,6 +369,27 @@ async def test():
         async with cf.parameters.set_and_restore("ring.effect", 6, 0):
             await sleep(1)
 
+        state = await cf.supervisor.get_state()
+        print("Supervisor state:", state)
+
+        bits = [
+            await cf.supervisor.can_be_armed(),
+            await cf.supervisor.is_armed(),
+            await cf.supervisor.is_auto_armed(),
+            await cf.supervisor.can_fly(),
+            await cf.supervisor.is_flying(),
+            await cf.supervisor.is_tumbled(),
+            await cf.supervisor.is_locked(),
+            await cf.supervisor.is_crashed(),
+            await cf.supervisor.is_high_level_control_active(),
+            await cf.supervisor.is_high_level_trajectory_finished(),
+            await cf.supervisor.is_high_level_control_disabled(),
+        ]
+        if int("".join("1" if bit else "0" for bit in reversed(bits)), 2) != state:
+            print(
+                f"/!\\ Supervisor state mismatch, individual bits: {bits}, overall state: {state}",
+            )
+
         with timing("Reading from memory"):
             memory = await cf.memory.find(MemoryType.LED)
             data = b"\xfc\x00" * 8
