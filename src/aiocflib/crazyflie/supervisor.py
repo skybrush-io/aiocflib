@@ -1,5 +1,6 @@
 """Classes related to accessing the supervisor subsystem of a Crazyflie."""
 
+from contextlib import asynccontextmanager
 from enum import IntEnum, IntFlag
 
 from aiocflib.crtp import CRTPPort
@@ -16,6 +17,18 @@ class SupervisorChannel(IntEnum):
 
     STATE_INFO = 0
     COMMANDS = 1
+
+
+class SupervisorCommand(IntEnum):
+    """Enum representing the names of the commands in the command channel of the
+    supervisor service of
+    the CRTP protocol.
+    """
+
+    ARM_DISARM = 1
+    RECOVER_SYSTEM = 2
+    EMERGENCY_STOP = 3
+    EMERGENCY_STOP_WATCHDOG = 4
 
 
 class StateInfoCommand(IntEnum):
@@ -60,6 +73,44 @@ class Supervisor(CrazyflieSubsystem):
 
     def get_port(self) -> CRTPPort:
         return CRTPPort.SUPERVISOR
+
+    async def arm(self) -> None:
+        """Arms the Crazyflie."""
+        return await self.arm_or_disarm(arm=True)
+
+    async def arm_or_disarm(self, arm: bool) -> None:
+        """Arms or disarms the Crazyflie."""
+        response = await self._crazyflie.run_command(
+            port=self.get_port(),
+            channel=SupervisorChannel.COMMANDS,
+            command=SupervisorCommand.ARM_DISARM,
+            data=[1 if arm else 0],
+            flip_msb=True,
+        )
+        if len(response) < 1:
+            raise RuntimeError(
+                f"Supervisor command {SupervisorCommand.ARM_DISARM} returned "
+                f"an invalid response: {response.hex(' ')}"
+            )
+        if not response[0]:
+            raise RuntimeError(
+                "Failed to arm the Crazyflie."
+                if arm
+                else "Failed to disarm the Crazyflie."
+            )
+
+    @asynccontextmanager
+    async def armed(self):
+        """Context manager that arms the Crazyflie on entry and disarms it on exit."""
+        await self.arm()
+        try:
+            yield
+        finally:
+            await self.disarm()
+
+    async def disarm(self) -> None:
+        """Disarmd the Crazyflie."""
+        return await self.arm_or_disarm(arm=False)
 
     async def can_be_armed(self) -> bool:
         """Returns whether the Crazyflie can be armed."""

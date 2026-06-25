@@ -347,7 +347,7 @@ async def test():
     from aiocflib.crtp import MemoryType
     from aiocflib.utils import timing
 
-    logging = False
+    logging = True
 
     # uri = "cppradio://0/80/2M/E7E7E7E701"
     uri = "radio://0/80/2M/E7E7E7E701"
