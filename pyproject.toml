@@ -1,6 +1,6 @@
 [project]
 name = "aiocflib"
-version = "4.1.0"
+version = "5.0.0"
 description = "Python async API for Crazyflie drones"
 authors = [{ name = "Tamas Nepusz", email = "tamas@collmot.com>" }]
 license = "GPL-3.0-or-later"
