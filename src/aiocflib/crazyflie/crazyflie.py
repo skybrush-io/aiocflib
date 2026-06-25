@@ -393,17 +393,17 @@ async def test():
         await cf.supervisor.request_crash_recovery()
 
         with timing("Reading from memory"):
-            memory = await cf.memory.find(MemoryType.LED)
+            memory = await cf.memory.find(MemoryType.TRAJECTORY)
             data = b"\xfc\x00" * 8
             await memory.write(0, data)
             await memory.read(0, len(data))
 
         with timing("Writing to memory with checksum"):
             await cf.memory.write_with_checksum(
-                MemoryType.LED, 0, b"\xde\xad\xbe\xef", only_if_changed=True
+                MemoryType.TRAJECTORY, 0, b"\xde\xad\xbe\xef", only_if_changed=True
             )
             await cf.memory.write_with_checksum(
-                MemoryType.LED, 0, b"\xde\xad\xbe\xef", only_if_changed=True
+                MemoryType.TRAJECTORY, 0, b"\xde\xad\xbe\xef", only_if_changed=True
             )
 
         await cf.led_ring.flash()

@@ -40,9 +40,10 @@ class ParameterTOCCommand(IntEnum):
     channel 0).
     """
 
-    RESET = 0
-    READ_PARAMETER_DETAILS_V2 = 2
-    READ_TOC_INFO_V2 = 3
+    GET_ITEM_V2 = 2
+    GET_INFO_V2 = 3
+    READ_PARAMETER_DETAILS_V2 = 2  # deprecated alias
+    READ_TOC_INFO_V2 = 3  # deprecated alias
 
 
 class ParameterCommand(IntEnum):
@@ -54,11 +55,13 @@ class ParameterCommand(IntEnum):
 
     SET_BY_NAME = 0
     VALUE_UPDATED = 1
-    GET_EXTENDED_TYPE = 2
+    GET_EXTENDED_TYPE = 2  # deprecated
     PERSISTENT_STORE = 3
     PERSISTENT_GET_STATE = 4
     PERSISTENT_CLEAR = 5
-    GET_DEFAULT_VALUE = 6
+    GET_DEFAULT_VALUE = 6  # deprecated
+    GET_EXTENDED_TYPE_V2 = 7
+    GET_DEFAULT_VALUE_V2 = 8
 
 
 #: Dictionary mapping integer type codes to their C types, Python structs and
@@ -337,7 +340,7 @@ class Parameters(CrazyflieSubsystem):
         response = await self._crazyflie.run_command(
             port=CRTPPort.PARAMETERS,
             channel=ParameterChannel.MISC,
-            command=(ParameterCommand.GET_DEFAULT_VALUE, index & 0xFF, index >> 8),
+            command=(ParameterCommand.GET_DEFAULT_VALUE_V2, index & 0xFF, index >> 8),
         )
 
         if not response:
@@ -611,7 +614,7 @@ class Parameters(CrazyflieSubsystem):
             port=CRTPPort.PARAMETERS,
             channel=ParameterChannel.TABLE_OF_CONTENTS,
             command=(
-                ParameterTOCCommand.READ_PARAMETER_DETAILS_V2,
+                ParameterTOCCommand.GET_ITEM_V2,
                 index & 0xFF,
                 index >> 8,
             ),
@@ -631,7 +634,7 @@ class Parameters(CrazyflieSubsystem):
         response = await self._crazyflie.run_command(
             port=CRTPPort.PARAMETERS,
             channel=ParameterChannel.TABLE_OF_CONTENTS,
-            command=ParameterTOCCommand.READ_TOC_INFO_V2,
+            command=ParameterTOCCommand.GET_INFO_V2,
         )
         try:
             return cast(tuple[int, int], Struct("<HI").unpack(response))
