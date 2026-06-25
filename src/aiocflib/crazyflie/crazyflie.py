@@ -3,7 +3,7 @@ from __future__ import annotations
 from binascii import hexlify
 from typing import TYPE_CHECKING
 
-from anyio import sleep
+from anyio import move_on_after, sleep
 
 from aiocflib.bootloader.target import BootloaderTargetType
 from aiocflib.bootloader.types import BootloaderCommand
@@ -344,6 +344,7 @@ class Crazyflie(CRTPDevice):
 
 
 async def test():
+    from aiocflib.crazyflie.log import LogMessage
     from aiocflib.crtp import MemoryType
     from aiocflib.utils import timing
 
@@ -430,7 +431,10 @@ async def test():
             if persistence_state.is_stored:
                 raise RuntimeError("ring.effect should not be persisted")
 
-        """
+        def print_log_entry(message: LogMessage):
+            vbat, x, y, z = message.items
+            print(f"vbat={vbat}, pos=({x}, {y}, {z})")
+
         session = cf.log.create_session()
         session.create_block(
             "pm.vbat",
@@ -438,12 +442,12 @@ async def test():
             "stateEstimate.y",
             "stateEstimate.z",
             frequency=5,
+            handler=print_log_entry,
         )
 
         async with session:
             with move_on_after(3):
                 await session.process_messages()
-        """
 
 
 if __name__ == "__main__":

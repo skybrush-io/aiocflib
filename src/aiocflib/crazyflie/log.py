@@ -34,7 +34,7 @@ from aiocflib.utils.typing import Disposer
 from .base import CrazyflieSubsystem
 from .crazyflie import Crazyflie
 
-__all__ = ("Log", "LogBlock")
+__all__ = ("Log", "LogBlock", "LogMessage")
 
 #: The maximum size of a CRTP packet payload
 MAX_LOG_DATA_PACKET_SIZE = 28
@@ -58,8 +58,6 @@ class LoggingTOCCommand(IntEnum):
     channel 0).
     """
 
-    GET_ITEM = 0
-    GET_INFO = 1
     GET_ITEM_V2 = 2
     GET_INFO_V2 = 3
 
@@ -71,14 +69,16 @@ class LoggingControlCommand(IntEnum):
     These commands are valid for LoggingChannel.CONTROL (i.e. channel 1).
     """
 
-    CREATE_BLOCK = 0
-    APPEND_BLOCK = 1
     DELETE_BLOCK = 2
-    START_LOGGING = 3
-    STOP_LOGGING = 4
+    START_BLOCK = 3  # deprecated
+    STOP_BLOCK = 4
     RESET = 5
     CREATE_BLOCK_V2 = 6
     APPEND_BLOCK_V2 = 7
+    START_BLOCK_V2 = 8
+
+    START_LOGGING = 3  # deprecated alias
+    STOP_LOGGING = 4  # deprecated alias
 
 
 #: Dictionary mapping integer type codes to their C types, Python structs and
@@ -960,16 +960,15 @@ class Log(CrazyflieSubsystem):
 
     async def _start_log_block_by_id(self, id: int, period_msec: int) -> None:
         """Starts streaming messages from the log block with the given ID."""
-        period_byte = int(period_msec / 10)
-        if period_byte < 0 or period_byte > 255:
-            raise ValueError("logging period must be between 0 and 2.55 seconds")
+        if period_msec < 0 or period_msec > 65535:
+            raise ValueError("logging period must be between 0 and 65.535 seconds")
 
         async with self._operation_lock:
             response = await self._crazyflie.run_command(
                 port=CRTPPort.LOGGING,
                 channel=LoggingChannel.CONTROL,
-                command=(LoggingControlCommand.START_LOGGING, id),
-                data=(period_byte,),
+                command=(LoggingControlCommand.START_BLOCK_V2, id),
+                data=period_msec.to_bytes(2, byteorder="little"),
             )
 
         status = int(response[0])
@@ -986,7 +985,7 @@ class Log(CrazyflieSubsystem):
             response = await self._crazyflie.run_command(
                 port=CRTPPort.LOGGING,
                 channel=LoggingChannel.CONTROL,
-                command=(LoggingControlCommand.STOP_LOGGING, id),
+                command=(LoggingControlCommand.STOP_BLOCK, id),
             )
 
         status = int(response[0])
