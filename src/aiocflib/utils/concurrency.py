@@ -1,6 +1,6 @@
 """Utility functions related to concurrency management."""
 
-from collections.abc import Awaitable, Callable, Generator, Iterable
+from collections.abc import Awaitable, Callable, Coroutine, Generator, Iterable
 from contextlib import contextmanager
 from functools import partial
 from queue import Full, Queue
@@ -18,6 +18,7 @@ from anyio import (
     CapacityLimiter,
     Condition,
     Event,
+    TaskHandle,
     create_task_group,
     from_thread,
     to_thread,
@@ -101,11 +102,15 @@ class AwaitableValue(Generic[T]):
         return self._value  # ty:ignore[invalid-return-type]
 
 
+T_co = TypeVar("T_co", covariant=True)
+
+
 class DaemonTaskGroup(TaskGroup):
     """Task group that cancels all its child tasks when the execution is about
     to leave the context (instead of waiting for the child tasks to finish).
     """
 
+    _spawner: TaskGroup | None = None
     _task_group: TaskGroup
 
     def __init__(self):
@@ -128,10 +133,11 @@ class DaemonTaskGroup(TaskGroup):
         with collapse_excgroups():
             return bool(await self._task_group.__aexit__(exc_type, exc_val, exc_tb))
 
-    def start_soon(self, func, *args, **kwds):
+    def create_task(self, coro: Coroutine[Any, Any, T_co], **kwds) -> TaskHandle[T_co]:
         if self._spawner is None:
-            raise RuntimeError("DaemonTaskGroup is not running yet")
-        return self._spawner.start_soon(func, *args, **kwds)
+            raise RuntimeError("task group is not running")
+
+        return self._spawner.create_task(coro, **kwds)
 
     async def start(self, func, *args, **kwds):
         on_opened = Event()
