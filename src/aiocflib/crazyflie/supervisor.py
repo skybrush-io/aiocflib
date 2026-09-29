@@ -112,7 +112,7 @@ class Supervisor(CrazyflieSubsystem):
             await self.disarm()
 
     async def disarm(self) -> None:
-        """Disarmd the Crazyflie.
+        """Disarm the Crazyflie.
 
         Raises:
             RuntimeError: if the Crazyflie failed to disarm
