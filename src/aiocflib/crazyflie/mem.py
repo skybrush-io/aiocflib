@@ -56,10 +56,10 @@ class MemoryElement:
     size: int
     """Size of the memory element, in bytes."""
 
-    address: int
-    """Offset of the memory element in its address space."""
+    serial_nr: bytes
+    """Serial number of the memory element, as a bytes object."""
 
-    _struct: ClassVar[Struct] = Struct("<BIQ")
+    _struct: ClassVar[Struct] = Struct("<BI")
 
     @classmethod
     def from_bytes(cls, index: int, data: bytes):
@@ -75,7 +75,11 @@ class MemoryElement:
             ValueError: if the data section cannot be parsed
         """
         try:
-            return cls(index, *cls._struct.unpack(data))
+            return cls(
+                index,
+                *cls._struct.unpack(data[: cls._struct.size]),
+                serial_nr=data[cls._struct.size :],
+            )
         except StructError:
             raise ValueError("invalid memory description") from None
 
