@@ -54,7 +54,7 @@ class Localization(CrazyflieSubsystem):
     _external_position_packed_item_struct: ClassVar[Struct] = Struct("<Bhhh")
     _external_pose_struct: ClassVar[Struct] = Struct("<Bfffffff")
     _external_pose_packed_item_struct: ClassVar[Struct] = Struct("<BhhhL")
-    _lpp_short_packet_struct: ClassVar[Struct] = Struct("<BB")
+    _lpp_short_packet_struct: ClassVar[Struct] = Struct("<B")
     _lighthouse_angle_struct: ClassVar[Struct] = Struct("<Bfhhhfhhh")
     _lighthouse_persist_struct: ClassVar[Struct] = Struct("<HH")
 
@@ -178,7 +178,7 @@ class Localization(CrazyflieSubsystem):
             data: the raw LPP short packet to send
 
         Returns:
-            whether the LPP short packet response indicated a success or a failure
+            whether the Crazyflie accepted the LPP short packet for sending
         """
         response = await self._crazyflie.run_command(
             port=CRTPPort.LOCALIZATION,
@@ -186,7 +186,8 @@ class Localization(CrazyflieSubsystem):
             command=GenericLocalizationCommand.LPP_SHORT_PACKET,
             data=self._lpp_short_packet_struct.pack(dest_id) + data,
         )
-        return len(response) > 0 and bool(response[0])
+        # The response contains the destination ID and a success flag
+        return len(response) > 1 and bool(response[1])
 
     async def enable_emergency_stop(self) -> None:
         """Sends an "enable emergency stop" packet to the Crazyflie."""
