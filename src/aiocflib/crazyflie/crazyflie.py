@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from .lighthouse import Lighthouse
     from .localization import Localization
     from .log import Log
+    from .loco import Loco
     from .mem import Memory
     from .motors import Motors
     from .param import Parameters
@@ -96,6 +97,7 @@ class Crazyflie(CRTPDevice):
         from .led_ring import LEDRing
         from .lighthouse import Lighthouse
         from .localization import Localization
+        from .loco import Loco
         from .log import Log
         from .mem import Memory
         from .motors import Motors
@@ -110,6 +112,7 @@ class Crazyflie(CRTPDevice):
         self._led_ring = LEDRing(self)
         self._lighthouse = Lighthouse(self)
         self._localization = Localization(self)
+        self._loco = Loco(self)
         self._log = Log(self)
         self._memory = Memory(self)
         self._motors = Motors(self)
@@ -177,6 +180,11 @@ class Crazyflie(CRTPDevice):
     def localization(self) -> Localization:
         """The localization subsystem of the Crazyflie."""
         return self._localization
+
+    @property
+    def loco(self) -> Loco:
+        """The Loco positioning subsystem of the Crazyflie."""
+        return self._loco
 
     @property
     def log(self) -> Log:
