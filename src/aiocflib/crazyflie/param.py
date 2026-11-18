@@ -318,8 +318,9 @@ class Parameters(CrazyflieSubsystem):
             else None
         )
         if value is None:
+            value = await self._fetch(name)
             assert self._values is not None
-            value = self._values[name] = await self._fetch(name)
+            self._values[name] = value
         return value
 
     async def get_default(self, name: str) -> int | float:
