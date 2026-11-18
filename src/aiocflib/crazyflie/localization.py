@@ -43,6 +43,7 @@ class GenericLocalizationCommand(IntEnum):
     EXT_POSE_PACKED = 9
     LH_ANGLE_STREAM = 10
     LH_PERSIST_DATA = 11
+    LH_MATCHED_ANGLE_STREAM = 12
 
 
 class Localization(CrazyflieSubsystem):

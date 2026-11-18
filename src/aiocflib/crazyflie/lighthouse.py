@@ -1,4 +1,5 @@
-from collections.abc import Iterable
+from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator, Iterable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import IntEnum
 from errno import EIO
@@ -9,12 +10,22 @@ from typing import (
     cast,
 )
 
+from anyio import move_on_after
+
+from aiocflib.crtp import CRTPPort
 from aiocflib.crtp.crtpstack import MemoryType
 
 from .crazyflie import Crazyflie
+from .localization import GenericLocalizationCommand, LocalizationChannel
 from .mem import MemoryHandler
 
-__all__ = ("LighthouseBsCalibration", "LighthouseBsGeometry", "LighthouseConfiguration")
+__all__ = (
+    "LighthouseBsCalibration",
+    "LighthouseBsGeometry",
+    "LighthouseConfiguration",
+    "LighthouseSweepAngles",
+    "group_matched_sweep_angles",
+)
 
 
 Vector3D = tuple[float, float, float]
@@ -388,8 +399,126 @@ class LighthouseConfiguration:
         )
 
 
+@dataclass(frozen=True)
+class LighthouseSweepAngles:
+    """Sweep angles of a single base station, measured by the sensors of the
+    Lighthouse deck at the same time.
+
+    The angles are corrected with the calibration data of the base station. For
+    Lighthouse V2 base stations, they are converted to the angles that a
+    Lighthouse V1 base station would measure.
+    """
+
+    base_station: int
+    """Index of the base station."""
+
+    angles: tuple[tuple[float, float], ...]
+    """The horizontal and the vertical sweep angle measured by each sensor, in
+    radians.
+    """
+
+    group: int | None = None
+    """Identifier of the group of measurements that this measurement belongs
+    to in the matched sweep angle stream; ``None`` for measurements of the
+    regular sweep angle stream. Identifiers wrap around after 15.
+    """
+
+    group_size: int = 1
+    """Number of base stations in the group of this measurement."""
+
+    _struct: ClassVar[Struct] = Struct("<BBfeeefeee")
+    _matched_struct: ClassVar[Struct] = Struct("<BBfeeefeeeB")
+
+    @classmethod
+    def from_packet_data(cls, data: bytes):
+        """Parses a packet of the regular or the matched sweep angle stream.
+
+        The firmware sends the angle of the first sensor in single precision
+        and the differences between the first and the other sensors in half
+        precision.
+
+        Parameters:
+            data: the data of the packet, starting with the type of the packet
+
+        Raises:
+            ValueError: if the packet cannot be parsed
+        """
+        if not data:
+            raise ValueError("empty packet")
+
+        if data[0] == GenericLocalizationCommand.LH_ANGLE_STREAM:
+            struct = cls._struct
+        elif data[0] == GenericLocalizationCommand.LH_MATCHED_ANGLE_STREAM:
+            struct = cls._matched_struct
+        else:
+            raise ValueError(f"not a sweep angle packet: type {data[0]}")
+
+        if len(data) != struct.size:
+            raise ValueError(
+                f"invalid length, expected {struct.size} bytes, got {len(data)}"
+            )
+
+        values = struct.unpack(data)
+        base_station = values[1]
+        horizontal, *horizontal_diffs = values[2:6]
+        vertical, *vertical_diffs = values[6:10]
+        angles = ((horizontal, vertical),) + tuple(
+            (horizontal - h_diff, vertical - v_diff)
+            for h_diff, v_diff in zip(horizontal_diffs, vertical_diffs)
+        )
+
+        if struct is cls._matched_struct:
+            group_info = values[10]
+            return cls(
+                base_station=base_station,
+                angles=angles,
+                group=group_info >> 4,
+                group_size=group_info & 0x0F,
+            )
+        else:
+            return cls(base_station=base_station, angles=angles)
+
+
+async def group_matched_sweep_angles(
+    measurements: AsyncIterable[LighthouseSweepAngles],
+) -> AsyncIterator[dict[int, LighthouseSweepAngles]]:
+    """Collects the measurements of the matched sweep angle stream into groups
+    of measurements taken at the same time.
+
+    Groups with lost packets are dropped.
+
+    Parameters:
+        measurements: the measurements of the matched sweep angle stream
+
+    Yields:
+        the measurements of each complete group, keyed by base station index
+    """
+    group: int | None = None
+    pending: dict[int, LighthouseSweepAngles] = {}
+
+    async for measurement in measurements:
+        if measurement.group is None:
+            continue
+
+        if measurement.group != group:
+            group = measurement.group
+            pending = {}
+
+        pending[measurement.base_station] = measurement
+        if len(pending) == measurement.group_size:
+            yield pending
+            group, pending = None, {}
+
+
 class Lighthouse:
     """Class representing the Lighthouse subsystem of a Crazyflie instance."""
+
+    SWEEP_ANGLE_QUEUE_SIZE: ClassVar[int] = 256
+    """Number of sweep angle packets that may wait in the queue of a sweep
+    angle stream. The firmware sends tens of packets per second for each base
+    station; packets that do not fit in the queue hold up the processing of
+    all incoming packets.
+    """
 
     CALIB_START_ADDR: ClassVar[int] = 0x1000
     GEO_START_ADDR: ClassVar[int] = 0
@@ -559,6 +688,79 @@ class Lighthouse:
             return LighthouseSystemType(int(value))
         except Exception:
             return LighthouseSystemType.UNKNOWN
+
+    @asynccontextmanager
+    async def stream_sweep_angles(
+        self,
+        *,
+        matched: bool = False,
+        min_base_stations: int = 2,
+        max_time_ms: int = 25,
+    ) -> AsyncGenerator[AsyncIterator[LighthouseSweepAngles]]:
+        """Asynchronous context manager that turns on a stream of sweep angles
+        on the Crazyflie while the context is active.
+
+        The regular stream contains every measurement of every base station.
+        The matched stream contains measurements of several base stations
+        taken at approximately the same time; see
+        `group_matched_sweep_angles()` to collect them into groups.
+
+        Parameters:
+            matched: whether to turn on the matched stream instead of the
+                regular one. The matched stream needs firmware 2025.09 or
+                later.
+            min_base_stations: minimum number of base stations in a group of
+                the matched stream; at most 4 base stations fit in a group
+            max_time_ms: maximum time between the first and the last
+                measurement of a group of the matched stream, in milliseconds
+
+        Yields:
+            an asynchronous iterator of the incoming measurements
+        """
+        crazyflie = self._crazyflie
+        if matched:
+            parameter = "locSrv.enLhMtchStm"
+            enabled_value = 255  # keep on sending until turned off
+        else:
+            parameter = "locSrv.enLhAngleStream"
+            enabled_value = 1
+
+        # Start listening before turning on the stream to avoid missing packets
+        async with crazyflie.dispatcher.create_packet_queue(
+            port=CRTPPort.LOCALIZATION, queue_size=self.SWEEP_ANGLE_QUEUE_SIZE
+        ) as queue:
+            try:
+                if matched:
+                    await crazyflie.param.set(
+                        "locSrv.minBsLhMtchStm", min_base_stations
+                    )
+                    await crazyflie.param.set("locSrv.maxTimeLhMtchStm", max_time_ms)
+                await crazyflie.param.set(parameter, enabled_value)
+                yield self._parse_sweep_angle_packets(queue)
+            finally:
+                # Turn off the stream even if the task is being cancelled
+                with move_on_after(1, shield=True):
+                    await crazyflie.param.set(parameter, 0)
+
+    @staticmethod
+    async def _parse_sweep_angle_packets(
+        packets: AsyncIterable[Any],
+    ) -> AsyncIterator[LighthouseSweepAngles]:
+        types = (
+            GenericLocalizationCommand.LH_ANGLE_STREAM,
+            GenericLocalizationCommand.LH_MATCHED_ANGLE_STREAM,
+        )
+        async for packet in packets:
+            data = packet.data
+            if (
+                packet.channel == LocalizationChannel.GENERIC
+                and data
+                and data[0] in types
+            ):
+                try:
+                    yield LighthouseSweepAngles.from_packet_data(data)
+                except ValueError:
+                    pass
 
     async def persist(self) -> None:
         """Copies the current calibration and geometry data on the Crazyflie to
