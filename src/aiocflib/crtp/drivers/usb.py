@@ -7,10 +7,8 @@ from aiocflib.drivers.cfusb import CfUsb
 from aiocflib.utils.concurrency import ObservableValue
 
 from ..exceptions import WrongURIType
-
 from .base import CRTPDriver
 from .registry import register
-
 
 _link_quality = None  # type: Optional[ObservableValue[float]]
 

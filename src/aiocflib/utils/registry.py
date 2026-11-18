@@ -1,6 +1,5 @@
-from typing import Generic, TypeVar, overload
 from collections.abc import Callable
-
+from typing import Generic, TypeVar, overload
 
 T = TypeVar("T")
 

@@ -9,9 +9,9 @@ from aiocflib.lighthouse.arrays import normalize
 from aiocflib.lighthouse.model import Pose
 from aiocflib.lighthouse.rotation import rotation_vector_to_matrix
 from aiocflib.lighthouse.simulation import (
+    get_pose_from_position_and_angles,
     get_pose_from_position_and_target,
     simulate_sample,
-    get_pose_from_position_and_angles,
 )
 
 

@@ -27,8 +27,8 @@ if TYPE_CHECKING:
     from .led_ring import LEDRing
     from .lighthouse import Lighthouse
     from .localization import Localization
-    from .log import Log
     from .loco import Loco
+    from .log import Log
     from .mem import Memory
     from .motors import Motors
     from .param import Parameters

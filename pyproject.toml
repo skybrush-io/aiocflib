@@ -44,7 +44,7 @@ show_missing = true
 
 [tool.ruff]
 lint.ignore = ["B905", "C901", "E402", "E501"]
-lint.select = ["B", "C", "E", "F", "W"]
+lint.select = ["B", "C", "E", "F", "I", "W"]
 
 [tool.ty.environment]
 extra-paths = ["./typings"]

@@ -1,7 +1,8 @@
 """Classes related to sending motor-related commands to a Crazyflie."""
 
-from anyio import sleep
 from collections.abc import Iterable
+
+from anyio import sleep
 
 from .crazyflie import Crazyflie
 

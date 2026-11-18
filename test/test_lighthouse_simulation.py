@@ -5,9 +5,9 @@ from pytest import raises
 
 from aiocflib.lighthouse.model import DECK_SENSOR_POSITIONS, Pose, predict_sweep_angles
 from aiocflib.lighthouse.simulation import (
+    get_pose_from_position_and_angles,
     get_pose_from_position_and_target,
     simulate_sample,
-    get_pose_from_position_and_angles,
 )
 
 

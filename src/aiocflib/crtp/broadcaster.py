@@ -1,11 +1,11 @@
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator, Iterable
+from contextlib import asynccontextmanager
 
-from aiocflib.drivers.crazyradio import RadioConfiguration
 from aiocflib.crtp.crtpstack import CRTPPacket, CRTPPortLike
 from aiocflib.crtp.device import _handle_data_argument
 from aiocflib.crtp.drivers.radio import SharedCrazyradio
 from aiocflib.crtp.exceptions import WrongURIType
+from aiocflib.drivers.crazyradio import RadioConfiguration
 from aiocflib.utils.addressing import DEFAULT_RADIO_BROADCAST_ADDRESS, parse_radio_uri
 
 

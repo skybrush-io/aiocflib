@@ -2,8 +2,8 @@
 Crazyflie drones using a single radio.
 """
 
-from typing import TYPE_CHECKING
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from aiocflib.crtp import CRTPPort
 from aiocflib.utils.quaternion import QuaternionXYZW
