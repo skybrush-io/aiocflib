@@ -16,7 +16,11 @@ from .arrays import normalize, to_float_array
 from .model import DECK_SENSOR_POSITIONS, Pose, predict_sweep_angles
 from .rotation import rotation_vector_to_matrix
 
-__all__ = ("look_at", "simulate_sample", "tilted_pose")
+__all__ = (
+    "get_pose_from_position_and_angles",
+    "get_pose_from_position_and_target",
+    "simulate_sample",
+)
 
 
 DEFAULT_HORIZONTAL_FIELD_OF_VIEW = radians(150.0)
@@ -26,7 +30,7 @@ DEFAULT_VERTICAL_FIELD_OF_VIEW = radians(110.0)
 """Vertical field of view of a Lighthouse V2 base station, in radians."""
 
 
-def look_at(position: ArrayLike, target: ArrayLike) -> Pose:
+def get_pose_from_position_and_target(position: ArrayLike, target: ArrayLike) -> Pose:
     """Returns the pose of a base station at the given position that faces the
     given target, with no roll.
 
@@ -49,7 +53,7 @@ def look_at(position: ArrayLike, target: ArrayLike) -> Pose:
     return Pose.create(stack((forward, left, up), axis=-1), position)
 
 
-def tilted_pose(
+def get_pose_from_position_and_angles(
     position: ArrayLike, yaw: float = 0.0, tilt: ArrayLike = (0.0, 0.0)
 ) -> Pose:
     """Returns the pose of a drone at the given position.

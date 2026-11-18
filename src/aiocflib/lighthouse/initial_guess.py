@@ -36,6 +36,7 @@ from numpy import array, float64, inf, mean, tan
 from numpy.typing import ArrayLike, NDArray
 
 from .arrays import to_float_array
+from .errors import BaseStationPlacementError
 from .ippe import PoseCandidate, estimate_planar_pose
 from .model import DECK_SENSOR_POSITIONS, Pose
 from .registration import fit_rigid_transform_robust
@@ -146,8 +147,9 @@ def estimate_initial_guess(
         fixed.
 
     Raises:
-        ValueError: if some of the base stations cannot be placed because they
-            share too few samples with the others
+        BaseStationPlacementError: if some of the base stations cannot be
+            placed because they share too few samples with the others
+        ValueError: if there are no samples or a sample has no measurements
     """
     if not samples:
         raise ValueError("At least one sample is needed")
@@ -209,10 +211,7 @@ def _place_base_stations(
                 best = (bs_id, *placement)
 
         if best is None:
-            raise ValueError(
-                "Base stations share too few samples with the others: "
-                f"{', '.join(map(str, sorted(remaining)))}"
-            )
+            raise BaseStationPlacementError(remaining)
 
         bs_id, _, pose = best
         placed[bs_id] = pose

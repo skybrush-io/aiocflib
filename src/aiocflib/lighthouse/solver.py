@@ -59,7 +59,7 @@ from .arrays import to_float_array
 from .model import DECK_SENSOR_POSITIONS, Pose
 from .rotation import rotation_vector_to_matrix, skew
 
-__all__ = ("GeometrySolution", "refine_geometry")
+__all__ = ("GeometrySolution", "Sample", "refine_geometry")
 
 
 Sample = Mapping[int, ArrayLike]

@@ -8,7 +8,11 @@ from numpy.random import Generator, default_rng
 from aiocflib.lighthouse.arrays import normalize
 from aiocflib.lighthouse.model import Pose
 from aiocflib.lighthouse.rotation import rotation_vector_to_matrix
-from aiocflib.lighthouse.simulation import look_at, simulate_sample, tilted_pose
+from aiocflib.lighthouse.simulation import (
+    get_pose_from_position_and_target,
+    simulate_sample,
+    get_pose_from_position_and_angles,
+)
 
 
 @dataclass
@@ -47,23 +51,23 @@ def create_scene(
     rng = default_rng(seed)
     corners = [(-2.0, -2.5), (2.5, -2.0), (2.0, 2.5), (-2.5, 2.0)]
     base_stations = {
-        bs_id: look_at((x, y, 2.6), (0.0, 0.0, 0.3))
+        bs_id: get_pose_from_position_and_target((x, y, 2.6), (0.0, 0.0, 0.3))
         for bs_id, (x, y) in zip(base_station_ids, corners)
     }
 
     drones = [
-        tilted_pose((0.0, 0.0, 0.0), yaw=0.3),
-        tilted_pose((0.6, 0.0, 0.0), yaw=-0.2),
-        tilted_pose((1.2, 0.0, 0.0), yaw=1.0),
-        tilted_pose((0.0, 1.0, 0.0), yaw=2.0),
-        tilted_pose((1.0, 1.0, 0.0), yaw=-1.5),
+        get_pose_from_position_and_angles((0.0, 0.0, 0.0), yaw=0.3),
+        get_pose_from_position_and_angles((0.6, 0.0, 0.0), yaw=-0.2),
+        get_pose_from_position_and_angles((1.2, 0.0, 0.0), yaw=1.0),
+        get_pose_from_position_and_angles((0.0, 1.0, 0.0), yaw=2.0),
+        get_pose_from_position_and_angles((1.0, 1.0, 0.0), yaw=-1.5),
     ]
     x_axis = slice(1, 3)
     xy_plane = slice(3, 5)
 
     while len(drones) < 5 + num_free_samples:
         drones.append(
-            tilted_pose(
+            get_pose_from_position_and_angles(
                 rng.uniform((-1.5, -1.5, 0.2), (1.5, 1.5, 1.8)),
                 yaw=rng.uniform(-pi, pi),
                 tilt=rng.normal(scale=tilt, size=2),

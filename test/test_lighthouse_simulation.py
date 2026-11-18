@@ -4,30 +4,34 @@ from numpy.random import default_rng
 from pytest import raises
 
 from aiocflib.lighthouse.model import DECK_SENSOR_POSITIONS, Pose, predict_sweep_angles
-from aiocflib.lighthouse.simulation import look_at, simulate_sample, tilted_pose
+from aiocflib.lighthouse.simulation import (
+    get_pose_from_position_and_target,
+    simulate_sample,
+    get_pose_from_position_and_angles,
+)
 
 
 def test_look_at_points_x_axis_to_target():
-    pose = look_at((3.0, 0.0, 2.0), (0.0, 0.0, 2.0))
+    pose = get_pose_from_position_and_target((3.0, 0.0, 2.0), (0.0, 0.0, 2.0))
     assert allclose(pose.rotation[:, 0], (-1.0, 0.0, 0.0))
     assert allclose(pose.rotation[:, 2], (0.0, 0.0, 1.0))
     assert allclose(det(pose.rotation), 1.0)
     assert allclose(predict_sweep_angles(pose, (0.0, 0.0, 2.0)), (0.0, 0.0))
 
     with raises(ValueError, match="straight up or down"):
-        look_at((0.0, 0.0, 2.0), (0.0, 0.0, 0.0))
+        get_pose_from_position_and_target((0.0, 0.0, 2.0), (0.0, 0.0, 0.0))
 
 
 def test_tilted_pose():
-    pose = tilted_pose((1.0, 2.0, 3.0), yaw=pi / 2)
+    pose = get_pose_from_position_and_angles((1.0, 2.0, 3.0), yaw=pi / 2)
     assert allclose(pose.translation, (1.0, 2.0, 3.0))
     assert allclose(pose.rotation[:, 0], (0.0, 1.0, 0.0))
     assert allclose(pose.rotation[:, 2], (0.0, 0.0, 1.0))
 
 
 def test_simulate_sample_without_noise():
-    base_station = look_at((2.0, 0.0, 2.0), (0.0, 0.0, 0.0))
-    drone = tilted_pose((0.0, 0.0, 0.0), yaw=0.4)
+    base_station = get_pose_from_position_and_target((2.0, 0.0, 2.0), (0.0, 0.0, 0.0))
+    drone = get_pose_from_position_and_angles((0.0, 0.0, 0.0), yaw=0.4)
 
     sample = simulate_sample({3: base_station}, drone)
 
@@ -37,8 +41,8 @@ def test_simulate_sample_without_noise():
 
 
 def test_simulate_sample_with_noise():
-    base_station = look_at((2.0, 0.0, 2.0), (0.0, 0.0, 0.0))
-    drone = tilted_pose((0.0, 0.0, 0.0))
+    base_station = get_pose_from_position_and_target((2.0, 0.0, 2.0), (0.0, 0.0, 0.0))
+    drone = get_pose_from_position_and_angles((0.0, 0.0, 0.0))
     exact = simulate_sample({0: base_station}, drone)[0]
 
     rng = default_rng(1)
@@ -52,14 +56,22 @@ def test_simulate_sample_with_noise():
 
 
 def test_simulate_sample_skips_base_stations_that_cannot_see_the_deck():
-    above = look_at((2.0, 0.0, 2.0), (0.0, 0.0, 0.0))
-    behind = look_at((-2.0, 0.0, 2.0), (-4.0, 0.0, 2.0))
+    above = get_pose_from_position_and_target((2.0, 0.0, 2.0), (0.0, 0.0, 0.0))
+    behind = get_pose_from_position_and_target((-2.0, 0.0, 2.0), (-4.0, 0.0, 2.0))
     # Drone is in front of this one, but 80 degrees to the side
-    off_to_the_side = look_at((2.0, 0.0, 2.0), (1.5, 3.0, 2.0))
-    below_the_deck = look_at((2.0, 0.0, -1.0), (0.0, 0.0, 0.0))
+    off_to_the_side = get_pose_from_position_and_target(
+        (2.0, 0.0, 2.0), (1.5, 3.0, 2.0)
+    )
+    below_the_deck = get_pose_from_position_and_target(
+        (2.0, 0.0, -1.0), (0.0, 0.0, 0.0)
+    )
     base_stations = {0: above, 1: behind, 2: off_to_the_side, 3: below_the_deck}
 
-    assert list(simulate_sample(base_stations, tilted_pose((0.0, 0.0, 0.0)))) == [0]
+    assert list(
+        simulate_sample(
+            base_stations, get_pose_from_position_and_angles((0.0, 0.0, 0.0))
+        )
+    ) == [0]
 
     # A drone lying upside down sees only the base station below the floor
     upside_down = Pose.create(diag([1.0, -1.0, -1.0]))
@@ -68,8 +80,10 @@ def test_simulate_sample_skips_base_stations_that_cannot_see_the_deck():
 
 def test_simulate_sample_checks_each_field_of_view_separately():
     # The drone is 80 degrees to the side and 80 degrees below
-    base_station = {0: look_at((2.0, 0.0, 2.0), (1.5, 3.0, 2.0))}
-    drone = tilted_pose((0.0, 0.0, 0.0))
+    base_station = {
+        0: get_pose_from_position_and_target((2.0, 0.0, 2.0), (1.5, 3.0, 2.0))
+    }
+    drone = get_pose_from_position_and_angles((0.0, 0.0, 0.0))
     narrow, wide = radians(150.0), radians(170.0)
 
     assert list(simulate_sample(base_station, drone)) == []
@@ -106,8 +120,8 @@ def test_simulate_sample_checks_each_field_of_view_separately():
 
 
 def test_simulate_sample_skips_base_stations_facing_away_with_any_field_of_view():
-    behind = {0: look_at((-2.0, 0.0, 2.0), (-4.0, 0.0, 2.0))}
-    drone = tilted_pose((0.0, 0.0, 0.0))
+    behind = {0: get_pose_from_position_and_target((-2.0, 0.0, 2.0), (-4.0, 0.0, 2.0))}
+    drone = get_pose_from_position_and_angles((0.0, 0.0, 0.0))
 
     sample = simulate_sample(
         behind,

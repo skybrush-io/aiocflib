@@ -49,12 +49,11 @@ from aiocflib.crazyflie.lighthouse import (
     group_matched_sweep_angles,
 )
 from aiocflib.crtp.drivers import init_drivers
-from aiocflib.lighthouse.alignment import find_room_transform
 from aiocflib.lighthouse.arrays import to_float_array
-from aiocflib.lighthouse.initial_guess import estimate_initial_guess
+from aiocflib.lighthouse.estimation import CalibrationSamples, estimate_geometry
 from aiocflib.lighthouse.model import Pose
 from aiocflib.lighthouse.sampling import average_sweep_angles
-from aiocflib.lighthouse.solver import refine_geometry
+from aiocflib.lighthouse.solver import Sample
 
 MAX_BASE_STATIONS = 16
 """Number of base station slots to read from the drone."""
@@ -337,7 +336,7 @@ def analyze_session(recording: Recording) -> None:
         return
 
     static_phases = ["origin", *x_axis, *xy_plane]
-    samples: list[dict[int, Any]] = []
+    samples: list[Sample] = []
     for phase in static_phases:
         sample = average_sweep_angles(
             recording.measurements(phase), min_measurements=10
@@ -357,22 +356,18 @@ def analyze_session(recording: Recording) -> None:
         f"{len(groups)} matched samples"
     )
 
-    guess = estimate_initial_guess(samples)
-    solution = refine_geometry(samples, guess.base_stations, guess.samples)
-    num_x = len(x_axis)
-    transform = find_room_transform(
-        solution.samples[0],
-        [pose.translation for pose in solution.samples[1 : 1 + num_x]],
-        [pose.translation for pose in solution.samples[1 + num_x : len(static_phases)]],
+    estimate = estimate_geometry(
+        CalibrationSamples(
+            samples,
+            num_x_axis_samples=len(x_axis),
+            num_xy_plane_samples=len(xy_plane),
+        )
     )
-    print(
-        f"  solver: {solution.iterations} iterations, converged: "
-        f"{solution.converged}, RMS error {solution.error:.2e} rad, "
-        f"worst sample {amax(solution.sample_errors):.2e} rad"
-    )
+    print(f"  converged: {estimate.converged}, RMS error {estimate.error:.2e} rad")
 
     estimated = {
-        bs_id: transform.compose(pose) for bs_id, pose in solution.base_stations.items()
+        bs_id: Pose.from_bs_geometry(geometry)
+        for bs_id, geometry in estimate.geometries.items()
     }
     stored = {
         int(bs_id): Pose.from_bs_geometry(
@@ -402,8 +397,8 @@ def analyze_session(recording: Recording) -> None:
         print(line)
 
     geometry = {
-        str(bs_id): pose.to_bs_geometry().to_json()
-        for bs_id, pose in sorted(estimated.items())
+        str(bs_id): geometry.to_json()
+        for bs_id, geometry in sorted(estimate.geometries.items())
     }
     print("\n  Estimated geometry in the format of the Crazyflie client:")
     print(json.dumps({"geos": geometry}, indent=2))

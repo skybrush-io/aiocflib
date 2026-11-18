@@ -10,7 +10,10 @@ from aiocflib.lighthouse.initial_guess import (
     estimate_initial_guess,
 )
 from aiocflib.lighthouse.model import DECK_SENSOR_POSITIONS
-from aiocflib.lighthouse.simulation import look_at, simulate_sample
+from aiocflib.lighthouse.simulation import (
+    get_pose_from_position_and_target,
+    simulate_sample,
+)
 from aiocflib.lighthouse.solver import refine_geometry
 
 
@@ -121,7 +124,7 @@ def test_base_stations_sharing_most_samples_are_placed_first():
 
 def test_initial_guess_reports_base_stations_that_cannot_be_placed():
     scene = create_scene(num_free_samples=20)
-    lonely = look_at((0.0, 4.0, 2.0), (0.0, 0.0, 0.0))
+    lonely = get_pose_from_position_and_target((0.0, 4.0, 2.0), (0.0, 0.0, 0.0))
 
     # The extra base station appears in only two samples
     for index in (5, 6):
